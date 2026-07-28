@@ -1,0 +1,48 @@
+import React from 'react';
+import { Pressable, StyleSheet, Text } from 'react-native';
+import { BagIcon, CoffeeIcon } from '../icons';
+import { colors, fonts } from '../theme';
+
+interface TypeButtonProps {
+  kind: 'dine-in' | 'takeout';
+  active: boolean;
+  onPress: () => void;
+}
+
+export function TypeButton({ kind, active, onPress }: TypeButtonProps) {
+  const iconColor = active ? colors.goldLight : colors.textMuted;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.base,
+        {
+          backgroundColor: active ? colors.chipBg : colors.cardBg,
+          borderColor: active ? 'rgba(184,147,90,0.35)' : colors.borderGold12,
+        },
+      ]}
+    >
+      {kind === 'dine-in' ? <CoffeeIcon size={17} color={iconColor} /> : <BagIcon size={17} color={iconColor} />}
+      <Text style={[styles.label, { color: active ? colors.goldBrightText : colors.textMuted }]}>
+        {kind === 'dine-in' ? 'Dine-In' : 'Takeout'}
+      </Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  base: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 13,
+    borderWidth: 1.5,
+  },
+  label: {
+    fontSize: 13.5,
+    fontFamily: fonts.sansExtraBold,
+  },
+});
