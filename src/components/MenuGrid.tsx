@@ -35,21 +35,17 @@ export function MenuGrid({
   return (
     <View onLayout={onLayout} style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
       {itemWidth &&
-        items.map((it) => {
-          const stock = stockByMenuId?.[it.id];
-          return (
-            <View key={it.id} style={{ width: itemWidth }}>
-              <MenuItemCard
-                item={it}
-                qty={cartQtyByMenuId[it.id] || 0}
-                variant={variant}
-                onPress={() => onItemPress(it.id)}
-                unavailable={stock?.unavailable}
-                lowQty={stock?.lowQty ?? null}
-              />
-            </View>
-          );
-        })}
+        items.map((it) => (
+          <View key={it.id} style={{ width: itemWidth }}>
+            <MenuItemCard
+              item={it}
+              qty={cartQtyByMenuId[it.id] || 0}
+              variant={variant}
+              onPress={() => onItemPress(it.id)}
+              stock={stockByMenuId?.[it.id]}
+            />
+          </View>
+        ))}
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { peso0 } from '../format';
 import { PlusIcon } from '../icons';
 import { catColors, colors, fonts } from '../theme';
 import { MenuItem } from '../types';
+import { MenuItemStock } from '../useCremaPos';
 import { Shot } from './Shot';
 
 interface MenuItemCardProps {
@@ -11,22 +12,21 @@ interface MenuItemCardProps {
   qty: number;
   variant?: 'phone' | 'tablet';
   onPress: () => void;
-  /** True once the master-stock ingredients backing this item's recipe can no longer cover another unit. */
-  unavailable?: boolean;
-  /** Sellable units remaining when running low (null when not low / not recipe-tracked). */
-  lowQty?: number | null;
+  /** Live master-stock status for this item — omitted/undefined for items with no recipe tracking (unlimited). */
+  stock?: MenuItemStock;
 }
 
-export function MenuItemCard({ item, qty, variant = 'phone', onPress, unavailable = false, lowQty = null }: MenuItemCardProps) {
+export function MenuItemCard({ item, qty, variant = 'phone', onPress, stock }: MenuItemCardProps) {
   const tablet = variant === 'tablet';
   const badgeBg = catColors[item.category] || '#2C3E5C';
+  const unavailable = stock?.unavailable ?? false;
   const stockPill = unavailable ? (
     <View style={[styles.stockBadge, styles.stockBadgeOut]}>
       <Text style={styles.stockBadgeText}>Out of Stock</Text>
     </View>
-  ) : lowQty !== null ? (
-    <View style={[styles.stockBadge, styles.stockBadgeLow]}>
-      <Text style={styles.stockBadgeText}>{lowQty} left</Text>
+  ) : stock && stock.qty !== null ? (
+    <View style={[styles.stockBadge, stock.low ? styles.stockBadgeLow : styles.stockBadgeOk]}>
+      <Text style={styles.stockBadgeText}>{stock.qty} left</Text>
     </View>
   ) : null;
 
@@ -42,24 +42,28 @@ export function MenuItemCard({ item, qty, variant = 'phone', onPress, unavailabl
           <View style={[styles.badge, { backgroundColor: badgeBg }]}>
             <Text style={styles.badgeText}>{item.category}</Text>
           </View>
-          {qty > 0 && (
-            <View style={styles.qtyBadge}>
-              <Text style={styles.qtyBadgeText}>{qty}</Text>
-            </View>
-          )}
-          {stockPill}
+          <View style={styles.topRightStack}>
+            {qty > 0 && (
+              <View style={styles.qtyBadge}>
+                <Text style={styles.qtyBadgeText}>{qty}</Text>
+              </View>
+            )}
+            {stockPill}
+          </View>
         </View>
       ) : (
         <Shot label="product" style={{ height: tablet ? 96 : 86, position: 'relative' as const }}>
           <View style={[styles.badge, { backgroundColor: badgeBg }]}>
             <Text style={styles.badgeText}>{item.category}</Text>
           </View>
-          {qty > 0 && (
-            <View style={styles.qtyBadge}>
-              <Text style={styles.qtyBadgeText}>{qty}</Text>
-            </View>
-          )}
-          {stockPill}
+          <View style={styles.topRightStack}>
+            {qty > 0 && (
+              <View style={styles.qtyBadge}>
+                <Text style={styles.qtyBadgeText}>{qty}</Text>
+              </View>
+            )}
+            {stockPill}
+          </View>
         </Shot>
       )}
       <View style={[styles.content, tablet && styles.contentTablet]}>
@@ -88,12 +92,16 @@ const styles = StyleSheet.create({
   cardDisabled: {
     opacity: 0.5,
   },
-  stockBadge: {
+  topRightStack: {
     position: 'absolute',
-    left: 8,
+    top: 8,
     right: 8,
-    bottom: 8,
-    paddingVertical: 4,
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  stockBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: 5,
     borderRadius: 20,
     alignItems: 'center',
     borderWidth: 1,
@@ -106,11 +114,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.heatMedBg,
     borderColor: colors.heatMedBorder,
   },
+  stockBadgeOk: {
+    backgroundColor: colors.overlay,
+    borderColor: colors.borderGold20,
+  },
   stockBadgeText: {
-    fontSize: 9,
+    fontSize: 7.5,
     fontFamily: fonts.sansExtraBold,
     color: colors.textPrimary,
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
   badge: {
@@ -127,9 +139,6 @@ const styles = StyleSheet.create({
     color: colors.goldBrightText,
   },
   qtyBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
     minWidth: 20,
     height: 20,
     paddingHorizontal: 5,

@@ -47,7 +47,9 @@ const LOW_STOCK_THRESHOLD = 5;
 
 export interface MenuItemStock {
   unavailable: boolean;
-  lowQty: number | null;
+  /** Sellable units left for recipe-tracked items; null when the item has no recipe (untracked/unlimited). */
+  qty: number | null;
+  low: boolean;
 }
 
 interface PosState {
@@ -692,13 +694,14 @@ export function useCremaPos() {
     state.menuItems.forEach((m) => {
       const hasRecipe = (state.recipesByItem[m.id]?.length ?? 0) > 0;
       if (!hasRecipe) {
-        map[m.id] = { unavailable: false, lowQty: null };
+        map[m.id] = { unavailable: false, qty: null, low: false };
         return;
       }
       const maxQty = getMaxAddableQty(m.id, cartArr, state.recipesByItem, state.ingredientStock);
       map[m.id] = {
         unavailable: maxQty <= 0,
-        lowQty: maxQty > 0 && maxQty <= LOW_STOCK_THRESHOLD ? maxQty : null,
+        qty: maxQty,
+        low: maxQty > 0 && maxQty <= LOW_STOCK_THRESHOLD,
       };
     });
     return map;
