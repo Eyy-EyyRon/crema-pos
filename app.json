@@ -10,6 +10,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.crema.pos",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +22,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7d7a9f8b-8f8e-4ee9-8324-a9ee99a72726"
+      }
+    },
+    "owner": "eyyyronne",
+    "plugins": [
+      "expo-image"
+    ]
   }
 }
