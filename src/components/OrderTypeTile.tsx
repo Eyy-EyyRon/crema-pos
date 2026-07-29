@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BagIcon, ChevronRightIcon, CoffeeIcon } from '../icons';
+import { tapMedium } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { Shot } from './Shot';
 
@@ -18,7 +19,7 @@ export function OrderTypeTile({ kind, variant = 'phone', onPress }: OrderTypeTil
   const Icon = isDineIn ? CoffeeIcon : BagIcon;
 
   return (
-    <Pressable onPress={onPress} style={[styles.card, tablet && styles.cardTablet]}>
+    <Pressable onPress={() => { tapMedium(); onPress(); }} style={[styles.card, tablet && styles.cardTablet]}>
       <Shot label={isDineIn ? 'dine-in photo' : 'takeout photo'} style={{ height: tablet ? 140 : 112 }}>
         <View
           style={[

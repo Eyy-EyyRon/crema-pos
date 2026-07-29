@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { peso0 } from '../format';
 import { BanIcon, CheckIcon, WifiOffIcon } from '../icons';
+import { tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { QueueEntry } from '../types';
 
@@ -50,11 +51,11 @@ export function QueueCard({ ticket, onComplete, onVoid }: QueueCardProps) {
       <View style={styles.footerRow}>
         <Text style={styles.total}>{peso0(ticket.total)}</Text>
         <View style={styles.actions}>
-          <Pressable onPress={onVoid} style={[styles.voidBtn, locked && styles.disabledBtn]} disabled={locked}>
+          <Pressable onPress={() => { warning(); onVoid(); }} style={[styles.voidBtn, locked && styles.disabledBtn]} disabled={locked}>
             <BanIcon size={13} color={colors.danger} strokeWidth={2} />
             <Text style={styles.voidText}>Void</Text>
           </Pressable>
-          <Pressable onPress={onComplete} style={[styles.completeBtn, locked && styles.disabledBtn]} disabled={locked}>
+          <Pressable onPress={() => { tapMedium(); onComplete(); }} style={[styles.completeBtn, locked && styles.disabledBtn]} disabled={locked}>
             <CheckIcon size={14} color={colors.success} strokeWidth={2.4} />
             <Text style={styles.completeText}>Complete</Text>
           </Pressable>

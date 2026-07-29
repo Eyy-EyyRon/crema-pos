@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BanknoteIcon, CheckIcon, SmartphoneIcon } from '../icons';
+import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 
 interface PayButtonProps {
@@ -13,7 +14,7 @@ export function PayButton({ kind, active, onPress }: PayButtonProps) {
   const iconColor = active ? colors.goldLight : colors.textMuted;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { tapLight(); onPress(); }}
       style={[
         styles.base,
         {

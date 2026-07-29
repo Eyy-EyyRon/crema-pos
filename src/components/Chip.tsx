@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
+import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 
 interface ChipProps {
@@ -11,7 +12,7 @@ interface ChipProps {
 export function Chip({ label, active, onPress }: ChipProps) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { tapLight(); onPress(); }}
       style={[
         styles.base,
         active

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { BagIcon, CoffeeIcon } from '../icons';
+import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 
 interface TypeButtonProps {
@@ -13,7 +14,7 @@ export function TypeButton({ kind, active, onPress }: TypeButtonProps) {
   const iconColor = active ? colors.goldLight : colors.textMuted;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { tapLight(); onPress(); }}
       style={[
         styles.base,
         {

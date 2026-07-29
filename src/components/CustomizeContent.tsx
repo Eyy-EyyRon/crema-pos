@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { peso0 } from '../format';
 import { AlertTriangleIcon, BagIcon, MinusIcon, PlusIcon, XIcon } from '../icons';
+import { tapLight, tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { ModGroupDef, SelectedMod, SelectedMods } from '../types';
 import { OptionChip } from './OptionChip';
@@ -58,7 +59,7 @@ export function CustomizeContent({
           <Text style={[styles.name, tablet && { fontSize: 18 }]}>{name}</Text>
           <Text style={styles.base}>Base {peso0(basePrice)}</Text>
         </View>
-        <Pressable onPress={onClose} style={[styles.closeBtn, tablet && { width: 34, height: 34 }]}>
+        <Pressable onPress={() => { tapLight(); onClose(); }} style={[styles.closeBtn, tablet && { width: 34, height: 34 }]}>
           <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
         </Pressable>
       </View>
@@ -109,16 +110,16 @@ export function CustomizeContent({
       <View style={[styles.footer, tablet && styles.footerTablet]}>
         <View style={styles.footerRow}>
           <View style={styles.stepper}>
-            <Pressable onPress={onDecQty} style={styles.stepBtn}>
+            <Pressable onPress={() => { tapLight(); onDecQty(); }} style={styles.stepBtn}>
               <MinusIcon size={14} color={colors.textSecondary} />
             </Pressable>
             <Text style={styles.qty}>{qty}</Text>
-            <Pressable onPress={onIncQty} style={[styles.stepBtn, { backgroundColor: colors.gold }]}>
+            <Pressable onPress={() => { tapLight(); onIncQty(); }} style={[styles.stepBtn, { backgroundColor: colors.gold }]}>
               <PlusIcon size={14} color={colors.screenBg} strokeWidth={3.2} />
             </Pressable>
           </View>
           <Pressable
-            onPress={addValid ? onAdd : undefined}
+            onPress={() => { if (addValid) { tapMedium(); onAdd(); } else { warning(); } }}
             style={[styles.addBtn, { opacity: addValid ? 1 : 0.4 }]}
           >
             <BagIcon size={17} color={colors.screenBg} strokeWidth={2} />

@@ -43,6 +43,9 @@ interface CheckoutScreenProps {
   service: number;
   tax: number;
   total: number;
+  taxRatePct: number;
+  isTaxInclusive: boolean;
+  serviceChargePct: number;
   canPay: boolean;
   onPay: () => void;
 }
@@ -76,6 +79,9 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     service,
     tax,
     total,
+    taxRatePct,
+    isTaxInclusive,
+    serviceChargePct,
     canPay,
     onPay,
   } = props;
@@ -114,7 +120,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         )}
 
         <SectionLabel style={styles.sectionSpacing}>Summary</SectionLabel>
-        <SummaryCard subtotal={subtotal} discount={discount} discountPct={discountPct} service={service} tax={tax} total={total} />
+        <SummaryCard
+          subtotal={subtotal} discount={discount} discountPct={discountPct} service={service} tax={tax} total={total}
+          taxRatePct={taxRatePct} isTaxInclusive={isTaxInclusive} serviceChargePct={serviceChargePct}
+        />
       </ScrollView>
       <View style={styles.footer}>
         <ProcessPaymentButton totalStr={peso(total)} disabled={!canPay} onPress={onPay} />

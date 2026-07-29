@@ -43,6 +43,9 @@ interface OrderDockProps {
   service: number;
   tax: number;
   total: number;
+  taxRatePct: number;
+  isTaxInclusive: boolean;
+  serviceChargePct: number;
   canPay: boolean;
   onPay: () => void;
 }
@@ -76,6 +79,9 @@ export function OrderDock(props: OrderDockProps) {
     service,
     tax,
     total,
+    taxRatePct,
+    isTaxInclusive,
+    serviceChargePct,
     canPay,
     onPay,
   } = props;
@@ -129,7 +135,11 @@ export function OrderDock(props: OrderDockProps) {
             )}
 
             <SectionLabel style={styles.sectionSpacing}>Summary</SectionLabel>
-            <SummaryCard subtotal={subtotal} discount={discount} discountPct={discountPct} service={service} tax={tax} total={total} dense />
+            <SummaryCard
+              subtotal={subtotal} discount={discount} discountPct={discountPct} service={service} tax={tax} total={total}
+              taxRatePct={taxRatePct} isTaxInclusive={isTaxInclusive} serviceChargePct={serviceChargePct}
+              dense
+            />
           </ScrollView>
           <View style={styles.footer}>
             <ProcessPaymentButton totalStr={peso(total)} disabled={!canPay} onPress={onPay} />

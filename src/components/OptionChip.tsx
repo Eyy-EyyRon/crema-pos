@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { peso0 } from '../format';
+import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 
 interface OptionChipProps {
@@ -15,7 +16,7 @@ export function OptionChip({ name, price, active, onPress }: OptionChipProps) {
   const priceStr = (price > 0 ? '+' : '') + peso0(price);
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { tapLight(); onPress(); }}
       style={[
         styles.base,
         {

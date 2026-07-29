@@ -1,7 +1,9 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, Image } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { peso0 } from '../format';
 import { PlusIcon } from '../icons';
+import { tapLight } from '../lib/haptics';
 import { catColors, colors, fonts } from '../theme';
 import { MenuItem } from '../types';
 import { MenuItemStock } from '../useCremaPos';
@@ -31,13 +33,14 @@ export function MenuItemCard({ item, qty, variant = 'phone', onPress, stock }: M
   ) : null;
 
   return (
-    <Pressable onPress={onPress} disabled={unavailable} style={[styles.card, unavailable && styles.cardDisabled]}>
+    <Pressable onPress={() => { tapLight(); onPress(); }} disabled={unavailable} style={[styles.card, unavailable && styles.cardDisabled]}>
       {item.image_url ? (
         <View style={{ height: tablet ? 96 : 86, position: 'relative' as const, backgroundColor: '#101d2b', overflow: 'hidden' }}>
           <Image
             source={{ uri: item.image_url }}
             style={[StyleSheet.absoluteFill, { transform: [{ scale: 1.55 }] }]}
-            resizeMode="contain"
+            contentFit="contain"
+            cachePolicy="disk"
           />
           <View style={[styles.badge, { backgroundColor: badgeBg }]}>
             <Text style={styles.badgeText}>{item.category}</Text>

@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { PinPad, PinPadKey } from '../components/PinPad';
 import { Shot } from '../components/Shot';
 import { AlertCircleIcon } from '../icons';
@@ -156,16 +157,17 @@ export function LoginScreen({
             {sorted.map((p) => (
               <Pressable key={p.id} style={s.tile} onPress={() => selectProfile(p)}>
                 {p.avatar_url ? (
-                  <Image 
-                    source={{ uri: p.avatar_url }} 
-                    style={{ 
-                      width: 76, 
-                      height: 76, 
+                  <Image
+                    source={{ uri: p.avatar_url }}
+                    cachePolicy="disk"
+                    style={{
+                      width: 76,
+                      height: 76,
                       borderRadius: 38,
                       borderWidth: p.id === lastUserId ? 2 : 1,
                       borderColor: p.id === lastUserId ? colors.goldLight : colors.borderGold25,
                       backgroundColor: colors.cardBg,
-                    }} 
+                    }}
                   />
                 ) : (
                   <Shot 
