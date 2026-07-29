@@ -69,7 +69,7 @@ export function LoginScreen({
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, full_name, role, avatar_url, pin_code')
+          .select('id, full_name, role, avatar_url')
           .eq('role', 'barista')
           .neq('status', 'inactive');
         

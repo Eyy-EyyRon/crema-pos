@@ -71,7 +71,6 @@ export interface UserProfile {
   full_name: string;
   role: 'manager' | 'barista';
   avatar_url?: string | null;
-  pin_code?: string;
 }
 
 export interface Shift {

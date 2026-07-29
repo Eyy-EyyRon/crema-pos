@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { QUICK_CASH } from './data';
 import { peso, peso0 } from './format';
@@ -168,38 +169,55 @@ export function useCremaPos() {
   // AUTH — PIN / biometric login via the shared pin-login Edge Function
   // ─────────────────────────────────────────────
   const login = useCallback(async (profileId: string, opts: { pin?: string; biometric?: boolean }, cachedProfile?: UserProfile): Promise<{ error?: string }> => {
-    // 1. FAST PATH: Optimistic local validation if we have the profile cached
+    const pinHashKey = `crema_pin_hash_${profileId}`;
+
+    // 1. FAST PATH: optimistic local validation against a SHA-256 hash of the PIN cached after
+    // a previous successful online login — never the raw PIN itself, so there's nothing to leak
+    // from this cache. Only available once this device has logged this profile in online at
+    // least once; otherwise falls through to the slow/online path below.
     if (cachedProfile) {
-      if (!opts.biometric && cachedProfile.pin_code !== opts.pin) {
-        return { error: 'Invalid PIN' };
+      let fastPathOk = opts.biometric === true;
+      if (!fastPathOk && opts.pin) {
+        const cachedHash = await AsyncStorage.getItem(pinHashKey);
+        if (cachedHash) {
+          const candidateHash = await Crypto.digestStringAsync(
+            Crypto.CryptoDigestAlgorithm.SHA256,
+            `${profileId}:${opts.pin}`
+          );
+          if (candidateHash !== cachedHash) return { error: 'Invalid PIN' };
+          fastPathOk = true;
+        }
       }
-      
-      // Instantly log the user in visually so the POS is immediately ready
-      setState((s) => ({ ...s, currentUser: cachedProfile }));
-      
-      // Perform the actual network auth and time-clock punch in the background
-      (async () => {
-        const online = await isOnline();
-        if (!online) {
-          patch({ isOffline: true });
-          return;
-        }
-        try {
-          const body = opts.biometric ? { profile_id: profileId, biometric: true } : { profile_id: profileId, pin: opts.pin };
-          const { data, error } = await supabase.functions.invoke('pin-login', { body });
-          if (!error && data?.access_token) {
-            await supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
-            await clockIn(profileId);
+
+      if (fastPathOk) {
+        // Instantly log the user in visually so the POS is immediately ready
+        setState((s) => ({ ...s, currentUser: cachedProfile }));
+
+        // Perform the actual network auth and time-clock punch in the background
+        (async () => {
+          const online = await isOnline();
+          if (!online) {
+            patch({ isOffline: true });
+            return;
           }
-        } catch (e) {
-          console.warn('Background auth failed:', e);
-        }
-      })();
-      
-      return {};
+          try {
+            const body = opts.biometric ? { profile_id: profileId, biometric: true } : { profile_id: profileId, pin: opts.pin };
+            const { data, error } = await supabase.functions.invoke('pin-login', { body });
+            if (!error && data?.access_token) {
+              await supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
+              await clockIn(profileId);
+            }
+          } catch (e) {
+            console.warn('Background auth failed:', e);
+          }
+        })();
+
+        return {};
+      }
     }
 
-    // 2. SLOW PATH: Fallback if no cache is provided (shouldn't happen normally)
+    // 2. SLOW PATH: no usable local cache (first login on this device, or no cached PIN hash
+    // yet) — requires connectivity, goes through pin-login directly.
     const online = await isOnline();
     if (!online) return { error: 'Offline and no cached profile available' };
 
@@ -230,6 +248,11 @@ export function useCremaPos() {
       .eq('id', profileId)
       .single();
     if (!profile) return { error: 'Profile not found' };
+
+    if (opts.pin) {
+      const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${profileId}:${opts.pin}`);
+      await AsyncStorage.setItem(pinHashKey, hash);
+    }
 
     await clockIn(profile.id);
     setState((s) => ({ ...s, currentUser: profile as UserProfile }));
@@ -569,13 +592,10 @@ export function useCremaPos() {
   }, [fetchQueue]);
 
   const managerVoidOrder = useCallback(async (orderId: string, reason: string, pin: string): Promise<{ error?: string }> => {
-    const { data: manager, error: pinErr } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('pin_code', pin)
-      .eq('role', 'manager')
-      .neq('status', 'inactive')
-      .single();
+    // verify_manager_pin runs server-side (never exposes pin_code to the client) and applies
+    // the same 5-attempt/15-minute lockout as login, keyed off this barista's own session.
+    const { data: managers, error: pinErr } = await supabase.rpc('verify_manager_pin', { p_pin: pin });
+    const manager = managers?.[0];
     if (pinErr || !manager) return { error: 'Invalid manager PIN' };
 
     const ticket = state.queue.find((q) => q.id === orderId);
