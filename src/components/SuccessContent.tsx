@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CheckIcon } from '../icons';
+import { tapLight, tapMedium } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { SuccessInfo } from '../types';
 
@@ -49,10 +50,10 @@ export function SuccessContent({
         )}
       </View>
       <View style={styles.buttonsRow}>
-        <Pressable onPress={onDone} style={styles.printBtn}>
+        <Pressable onPress={() => { tapLight(); onDone(); }} style={styles.printBtn}>
           <Text style={styles.printBtnText}>Print Receipt</Text>
         </Pressable>
-        <Pressable onPress={onDone} style={styles.newOrderBtn}>
+        <Pressable onPress={() => { tapMedium(); onDone(); }} style={styles.newOrderBtn}>
           <Text style={styles.newOrderBtnText}>New Order</Text>
         </Pressable>
       </View>

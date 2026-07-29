@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronLeftIcon, CoffeeIcon, SettingsIcon } from '../icons';
+import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 
 const logo = require('../../assets/images/crema.jpg');
@@ -33,7 +34,7 @@ export function MenuHeader({
   return (
     <View style={[styles.wrap, tablet && styles.wrapTablet]}>
       <View style={styles.topRow}>
-        <Pressable style={styles.brandRow} onPress={onAccount}>
+        <Pressable style={styles.brandRow} onPress={() => { tapLight(); onAccount(); }}>
           <Image source={logo} style={[styles.logo, tablet && { width: 42, height: 42 }]} />
           <View>
             <Text style={styles.brandLabel}>Crema POS</Text>
@@ -42,13 +43,13 @@ export function MenuHeader({
         </Pressable>
         <View style={styles.actionsRow}>
           {tablet && (
-            <Pressable onPress={onChangeType} style={styles.typePillTablet}>
+            <Pressable onPress={() => { tapLight(); onChangeType(); }} style={styles.typePillTablet}>
               <View style={styles.dot} />
               <Text style={styles.typePillText}>{orderTypeLabel}</Text>
               <Text style={styles.typePillChange}>Change</Text>
             </Pressable>
           )}
-          <Pressable onPress={onQueue} style={[styles.queueBtn, tablet && { width: 40, height: 40 }]}>
+          <Pressable onPress={() => { tapLight(); onQueue(); }} style={[styles.queueBtn, tablet && { width: 40, height: 40 }]}>
             <CoffeeIcon size={tablet ? 17 : 16} color={colors.textMuted} strokeWidth={1.8} />
             {queueCount > 0 && (
               <View style={styles.queueBadge}>
@@ -56,13 +57,13 @@ export function MenuHeader({
               </View>
             )}
           </Pressable>
-          <Pressable onPress={onAccount} style={[styles.queueBtn, tablet && { width: 40, height: 40 }]}>
+          <Pressable onPress={() => { tapLight(); onAccount(); }} style={[styles.queueBtn, tablet && { width: 40, height: 40 }]}>
             <SettingsIcon size={tablet ? 17 : 16} color={colors.textMuted} strokeWidth={1.8} />
           </Pressable>
         </View>
       </View>
       {!tablet && (
-        <Pressable onPress={onChangeType} style={styles.typePillPhone}>
+        <Pressable onPress={() => { tapLight(); onChangeType(); }} style={styles.typePillPhone}>
           <View style={styles.typePillLeft}>
             <View style={styles.dot} />
             <Text style={styles.typePillText}>{orderTypeLabel}</Text>
@@ -85,7 +86,7 @@ export function BackHeader({
 }) {
   return (
     <View style={styles.backHeaderWrap}>
-      <Pressable onPress={onBack} style={styles.backBtn}>
+      <Pressable onPress={() => { tapLight(); onBack(); }} style={styles.backBtn}>
         <ChevronLeftIcon size={17} color={colors.textPrimary} strokeWidth={2.2} />
       </Pressable>
       <Text style={styles.backTitle}>{title}</Text>

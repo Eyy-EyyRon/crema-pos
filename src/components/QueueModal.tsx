@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { XIcon } from '../icons';
+import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { QueueEntry } from '../types';
 import { QueueList } from './QueueList';
@@ -17,7 +18,7 @@ export function QueueModal({
   tickets: QueueEntry[];
   onClose: () => void;
   onComplete: (id: string) => void;
-  onFlagVoid: (orderId: string, reason: string) => Promise<void>;
+  onFlagVoid: (orderId: string, reason: string) => Promise<{ error?: string }>;
   onManagerVoid: (orderId: string, reason: string, pin: string) => Promise<{ error?: string }>;
   isOffline: boolean;
 }) {
@@ -32,7 +33,7 @@ export function QueueModal({
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{tickets.length} active</Text>
             </View>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
+            <Pressable onPress={() => { tapLight(); onClose(); }} style={styles.closeBtn}>
               <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
             </Pressable>
           </View>
@@ -47,8 +48,10 @@ export function QueueModal({
         isOffline={isOffline}
         onClose={() => setVoidTarget(null)}
         onFlagForManager={async (reason) => {
-          if (voidTarget) await onFlagVoid(voidTarget.id, reason);
-          setVoidTarget(null);
+          if (!voidTarget) return {};
+          const res = await onFlagVoid(voidTarget.id, reason);
+          if (!res.error) setVoidTarget(null);
+          return res;
         }}
         onPinSubmit={async (pin, reason) => {
           if (!voidTarget) return {};

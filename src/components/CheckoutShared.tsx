@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AlertCircleIcon } from '../icons';
 import { peso, peso0 } from '../format';
 import { tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
@@ -182,22 +183,40 @@ export function SummaryCard({
 export function ProcessPaymentButton({
   totalStr,
   disabled,
+  busy,
   onPress,
 }: {
   totalStr: string;
   disabled: boolean;
+  busy?: boolean;
   onPress: () => void;
 }) {
+  const blocked = disabled || !!busy;
   return (
     <Pressable
-      onPress={disabled ? () => warning() : () => { tapMedium(); onPress(); }}
-      style={[styles.payBtn, { opacity: disabled ? 0.4 : 1 }]}
+      onPress={blocked ? () => warning() : () => { tapMedium(); onPress(); }}
+      style={[styles.payBtn, { opacity: blocked ? 0.4 : 1 }]}
     >
-      <Text style={styles.payBtnLabel}>Process Payment</Text>
-      <View style={styles.payBtnAmountWrap}>
-        <Text style={styles.payBtnAmount}>{totalStr}</Text>
-      </View>
+      {busy ? (
+        <ActivityIndicator color={colors.screenBg} />
+      ) : (
+        <>
+          <Text style={styles.payBtnLabel}>Process Payment</Text>
+          <View style={styles.payBtnAmountWrap}>
+            <Text style={styles.payBtnAmount}>{totalStr}</Text>
+          </View>
+        </>
+      )}
     </Pressable>
+  );
+}
+
+export function CheckoutErrorBanner({ message }: { message: string }) {
+  return (
+    <View style={styles.checkoutErrorRow}>
+      <AlertCircleIcon size={13} color={colors.danger} strokeWidth={2} />
+      <Text style={styles.checkoutErrorText}>{message}</Text>
+    </View>
   );
 }
 
@@ -328,5 +347,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: fonts.sansExtraBold,
     color: colors.goldLight,
+  },
+  checkoutErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  checkoutErrorText: {
+    fontSize: 12.5,
+    fontFamily: fonts.sansSemiBold,
+    color: colors.danger,
+    flex: 1,
   },
 });

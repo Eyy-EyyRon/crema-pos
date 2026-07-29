@@ -17,7 +17,7 @@ export function QueueScreen({
   tickets: QueueEntry[];
   onBack: () => void;
   onComplete: (id: string) => void;
-  onFlagVoid: (orderId: string, reason: string) => Promise<void>;
+  onFlagVoid: (orderId: string, reason: string) => Promise<{ error?: string }>;
   onManagerVoid: (orderId: string, reason: string, pin: string) => Promise<{ error?: string }>;
   isOffline: boolean;
 }) {
@@ -43,8 +43,10 @@ export function QueueScreen({
         isOffline={isOffline}
         onClose={() => setVoidTarget(null)}
         onFlagForManager={async (reason) => {
-          if (voidTarget) await onFlagVoid(voidTarget.id, reason);
-          setVoidTarget(null);
+          if (!voidTarget) return {};
+          const res = await onFlagVoid(voidTarget.id, reason);
+          if (!res.error) setVoidTarget(null);
+          return res;
         }}
         onPinSubmit={async (pin, reason) => {
           if (!voidTarget) return {};

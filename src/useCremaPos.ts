@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
@@ -86,6 +86,8 @@ interface PosState {
   shift: Shift | null;
   shiftLoading: boolean;
   isOffline: boolean;
+  checkoutBusy: boolean;
+  checkoutError: string | null;
 
   // live backend data
   menuItems: { id: string; name: string; price: number; category: string }[];
@@ -121,6 +123,8 @@ const initialState: PosState = {
   shift: null,
   shiftLoading: true,
   isOffline: false,
+  checkoutBusy: false,
+  checkoutError: null,
 
   menuItems: [],
   categories: ['All'],
@@ -148,6 +152,10 @@ function extractFunctionError(error: any): string | null {
 
 export function useCremaPos() {
   const [state, setState] = useState<PosState>(initialState);
+  // Bumped on every fetchMenuData() call so a slower, now-stale response (the 3 realtime
+  // listeners below can each trigger a fetch in quick succession) can detect it's no longer
+  // the latest and skip committing its result — otherwise it could overwrite fresher state.
+  const menuFetchSeq = useRef(0);
 
   const patch = useCallback((p: Partial<PosState>) => {
     setState((s) => ({ ...s, ...p }));
@@ -206,6 +214,13 @@ export function useCremaPos() {
             if (!error && data?.access_token) {
               await supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
               await clockIn(profileId);
+            } else {
+              // Online but the real session/clock-in never happened (e.g. PIN changed or
+              // profile deactivated since this device last cached it) — the visible
+              // fast-path login can't be un-shown safely, but this is not silent: any
+              // subsequent write (checkout, etc.) will now correctly fail under RLS since
+              // there's no real authenticated session, surfacing via checkoutError.
+              console.warn('Background auth did not return a session:', error);
             }
           } catch (e) {
             console.warn('Background auth failed:', e);
@@ -354,15 +369,16 @@ export function useCremaPos() {
   // here too.
   // ─────────────────────────────────────────────
   const fetchMenuData = useCallback(async () => {
+    const seq = ++menuFetchSeq.current;
     try {
-      await fetchMenuDataFromNetwork();
+      await fetchMenuDataFromNetwork(seq);
     } catch (e) {
       console.warn('Menu data fetch failed — falling back to cached data if available:', e);
-      await hydrateMenuDataFromCache();
+      await hydrateMenuDataFromCache(seq);
     }
   }, []);
 
-  const fetchMenuDataFromNetwork = useCallback(async () => {
+  const fetchMenuDataFromNetwork = useCallback(async (seq: number) => {
     const [
       { data: items, error: itemsError },
       { data: cats },
@@ -446,6 +462,11 @@ export function useCremaPos() {
         }
       : undefined;
 
+    // A newer fetch (triggered by one of the 3 realtime listeners firing again while this one
+    // was still in flight) has already started — let it own the final state, skip committing
+    // this now-stale response.
+    if (seq !== menuFetchSeq.current) return;
+
     // Refresh the offline cache on every successful fetch (fire-and-forget —
     // a cache write failing shouldn't block the live UI update below).
     AsyncStorage.setItem(
@@ -473,10 +494,11 @@ export function useCremaPos() {
     }));
   }, []);
 
-  const hydrateMenuDataFromCache = useCallback(async () => {
+  const hydrateMenuDataFromCache = useCallback(async (seq: number) => {
     try {
       const cachedStr = await AsyncStorage.getItem(MENU_DATA_CACHE_KEY);
       if (!cachedStr) return;
+      if (seq !== menuFetchSeq.current) return;
       const cached = JSON.parse(cachedStr);
       setState((s) => ({
         ...s,
@@ -586,9 +608,11 @@ export function useCremaPos() {
       });
   }, [fetchQueue]);
 
-  const flagVoidOrder = useCallback(async (orderId: string, reason: string) => {
-    await supabase.from('orders').update({ status: 'void_requested', void_reason: reason }).eq('id', orderId);
+  const flagVoidOrder = useCallback(async (orderId: string, reason: string): Promise<{ error?: string }> => {
+    const { error } = await supabase.from('orders').update({ status: 'void_requested', void_reason: reason }).eq('id', orderId);
+    if (error) return { error: error.message };
     await fetchQueue();
+    return {};
   }, [fetchQueue]);
 
   const managerVoidOrder = useCallback(async (orderId: string, reason: string, pin: string): Promise<{ error?: string }> => {
@@ -693,7 +717,8 @@ export function useCremaPos() {
   // CHECKOUT
   // ─────────────────────────────────────────────
   const checkout = useCallback(async () => {
-    if (!state.currentUser || state.cart.length === 0) return;
+    if (!state.currentUser || state.cart.length === 0 || state.checkoutBusy) return;
+    patch({ checkoutBusy: true, checkoutError: null });
 
     const receiptNumber = 'REC-' + Date.now().toString().slice(-6) + Math.random().toString(36).slice(2, 5).toUpperCase();
     const tenderNum = state.tendered !== '' && !isNaN(Number(state.tendered)) ? Number(state.tendered) : null;
@@ -726,9 +751,10 @@ export function useCremaPos() {
 
     try {
       await submitOrder(orderData, orderItems, displayItems);
-    } catch (e) {
+    } catch (e: any) {
       errorHaptic();
-      throw e;
+      patch({ checkoutBusy: false, checkoutError: e?.message || 'Checkout failed. Please try again.' });
+      return;
     }
     successHaptic();
 
@@ -741,9 +767,9 @@ export function useCremaPos() {
       showChange: isCash && change >= 0,
       change,
     };
-    patch({ success, screen: 'success' });
+    patch({ success, screen: 'success', checkoutBusy: false, checkoutError: null });
     fetchQueue();
-  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.orderType, state.storeSettings, totals, patch, fetchQueue]);
+  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.orderType, state.storeSettings, state.checkoutBusy, totals, patch, fetchQueue]);
 
   const done = useCallback(() => {
     setState((s) => ({

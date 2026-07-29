@@ -4,6 +4,7 @@ import { BackHeader } from '../components/Header';
 import { SearchBar } from '../components/SearchBar';
 import { VoidModal } from '../components/VoidModal';
 import { peso0 } from '../format';
+import { tapLight } from '../lib/haptics';
 import { supabase } from '../lib/supabase';
 import { colors, fonts } from '../theme';
 
@@ -41,12 +42,13 @@ export function HistoryScreen({
   isOffline,
 }: {
   onBack: () => void;
-  onFlagVoid: (orderId: string, reason: string) => Promise<void>;
+  onFlagVoid: (orderId: string, reason: string) => Promise<{ error?: string }>;
   onManagerVoid: (orderId: string, reason: string, pin: string) => Promise<{ error?: string }>;
   isOffline: boolean;
 }) {
   const [orders, setOrders] = useState<HistoryOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [voidTarget, setVoidTarget] = useState<HistoryOrder | null>(null);
 
@@ -54,7 +56,7 @@ export function HistoryScreen({
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('orders')
       .select(
         'id, receipt_number, created_at, total, total_amount, status, order_type, order_items(qty, menu_item_id, menu_items(name))'
@@ -62,6 +64,13 @@ export function HistoryScreen({
       .gte('created_at', startOfToday.toISOString())
       .order('created_at', { ascending: false })
       .limit(50);
+
+    if (error) {
+      setLoadError('Could not load order history. Pull down to try again.');
+      setLoading(false);
+      return;
+    }
+    setLoadError('');
 
     const mapped: HistoryOrder[] = (data ?? []).map((o: any) => ({
       id: o.id,
@@ -99,7 +108,11 @@ export function HistoryScreen({
         <View style={s.center}><ActivityIndicator color={colors.gold} size="large" /></View>
       ) : (
         <ScrollView contentContainerStyle={s.content}>
-          {filtered.length === 0 && <Text style={s.empty}>No orders yet today.</Text>}
+          {loadError ? (
+            <Text style={[s.empty, { color: colors.danger }]}>{loadError}</Text>
+          ) : (
+            filtered.length === 0 && <Text style={s.empty}>No orders yet today.</Text>
+          )}
           {filtered.map((o) => {
             const canVoid = o.status === 'pending' || o.status === 'completed';
             const itemsStr = o.items.map(([n, qt]) => `${qt}× ${n}`).join(', ');
@@ -113,7 +126,7 @@ export function HistoryScreen({
                 <View style={s.cardBottom}>
                   <Text style={[s.status, { color: statusColor(o.status) }]}>{STATUS_LABEL[o.status] ?? o.status}</Text>
                   {canVoid && (
-                    <Pressable onPress={() => setVoidTarget(o)} style={s.voidBtn}>
+                    <Pressable onPress={() => { tapLight(); setVoidTarget(o); }} style={s.voidBtn}>
                       <Text style={s.voidBtnText}>Void</Text>
                     </Pressable>
                   )}
@@ -129,8 +142,10 @@ export function HistoryScreen({
         isOffline={isOffline}
         onClose={() => setVoidTarget(null)}
         onFlagForManager={async (reason) => {
-          if (voidTarget) { await onFlagVoid(voidTarget.id, reason); await load(); }
-          setVoidTarget(null);
+          if (!voidTarget) return {};
+          const res = await onFlagVoid(voidTarget.id, reason);
+          if (!res.error) { await load(); setVoidTarget(null); }
+          return res;
         }}
         onPinSubmit={async (pin, reason) => {
           if (!voidTarget) return {};

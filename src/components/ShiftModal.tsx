@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AlertCircleIcon, BanknoteIcon } from '../icons';
+import { tapLight, tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 
 // Cash-drawer shift gate — same `cash_drawer_shifts` table/flow as
@@ -25,9 +26,11 @@ export function OpenShiftModal({
   const submit = async () => {
     const n = Number(value);
     if (!value || isNaN(n) || n < 0) {
+      warning();
       setError('Enter a valid starting amount.');
       return;
     }
+    tapMedium();
     setBusy(true);
     setError('');
     const err = await onSubmit(n);
@@ -91,9 +94,11 @@ export function CloseShiftModal({
   const submit = async () => {
     const n = Number(value);
     if (!value || isNaN(n) || n < 0) {
+      warning();
       setError('Enter the actual cash counted in the drawer.');
       return;
     }
+    tapMedium();
     setBusy(true);
     setError('');
     const err = await onSubmit(n);
@@ -134,7 +139,7 @@ export function CloseShiftModal({
         <Pressable style={[s.btn, busy && { opacity: 0.7 }]} onPress={submit} disabled={busy}>
           {busy ? <ActivityIndicator color={colors.screenBg} /> : <Text style={s.btnText}>Close Shift &amp; Log Out</Text>}
         </Pressable>
-        <Pressable style={s.cancelBtn} onPress={onCancel} disabled={busy}>
+        <Pressable style={s.cancelBtn} onPress={() => { tapLight(); onCancel(); }} disabled={busy}>
           <Text style={s.cancelText}>Cancel</Text>
         </Pressable>
       </View>

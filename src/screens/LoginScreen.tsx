@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { PinPad, PinPadKey } from '../components/PinPad';
 import { Shot } from '../components/Shot';
 import { AlertCircleIcon } from '../icons';
+import { tapLight } from '../lib/haptics';
 import { supabase } from '../lib/supabase';
 import { colors, fonts } from '../theme';
 import { UserProfile } from '../types';
@@ -106,6 +107,7 @@ export function LoginScreen({
   }, [profiles, lastUserId]);
 
   const selectProfile = (p: UserProfile) => {
+    tapLight();
     setSelected(p);
     setError('');
   };
@@ -196,7 +198,7 @@ export function LoginScreen({
         </>
       ) : (
         <View style={s.pinWrap}>
-          <Pressable onPress={() => { setSelected(null); setError(''); }} style={s.changeUser}>
+          <Pressable onPress={() => { tapLight(); setSelected(null); setError(''); }} style={s.changeUser}>
             <Text style={s.changeUserText}>Not {selected.full_name.split(' ')[0]}? Switch profile</Text>
           </Pressable>
           <Text style={s.pinPrompt}>Enter PIN for {selected.full_name}</Text>

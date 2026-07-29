@@ -123,6 +123,8 @@ export function PosApp() {
     serviceChargePct: state.storeSettings.serviceChargePct,
     canPay,
     onPay: pos.checkout,
+    checkoutBusy: state.checkoutBusy,
+    checkoutError: state.checkoutError,
   };
 
   const accountSheet = (

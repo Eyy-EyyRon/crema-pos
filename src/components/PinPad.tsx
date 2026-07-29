@@ -1,7 +1,7 @@
-import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Text, TouchableOpacity, View } from 'react-native';
 import { DeleteIcon, FingerprintIcon } from '../icons';
+import { error as errorHaptic, tapHeavy, tapLight, tapMedium } from '../lib/haptics';
 import { colors as C } from '../theme';
 
 // A self-contained, uncontrolled numeric keypad — it owns its own digit
@@ -44,7 +44,7 @@ export function PinPad({
   const firstMount = useRef(true);
 
   const shake = useCallback(() => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    errorHaptic();
     Animated.sequence([
       Animated.timing(shakeX, { toValue: -13, duration: 50, useNativeDriver: true }),
       Animated.timing(shakeX, { toValue: 13, duration: 50, useNativeDriver: true }),
@@ -162,11 +162,9 @@ export function PinPadKey({ label, size, onPress, variant = 'digit', disabled = 
 
   const handlePress = useCallback(() => {
     if (disabled) return;
-    Haptics.impactAsync(
-      variant === 'bio' ? Haptics.ImpactFeedbackStyle.Heavy
-        : variant === 'action' ? Haptics.ImpactFeedbackStyle.Medium
-        : Haptics.ImpactFeedbackStyle.Light
-    );
+    if (variant === 'bio') tapHeavy();
+    else if (variant === 'action') tapMedium();
+    else tapLight();
     Animated.parallel([
       Animated.sequence([
         Animated.spring(sc, { toValue: 0.82, useNativeDriver: true, speed: 65, bounciness: 0 }),

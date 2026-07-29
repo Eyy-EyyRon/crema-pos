@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon } from '../icons';
+import { tapLight, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { Shift, UserProfile } from '../types';
 
@@ -43,7 +44,7 @@ export function AccountSheet({
             <Text style={s.name}>{user.full_name}</Text>
             <Text style={s.role}>{user.role === 'manager' ? 'Manager' : 'Barista'}</Text>
           </View>
-          <Pressable onPress={onClose} style={s.closeBtn}>
+          <Pressable onPress={() => { tapLight(); onClose(); }} style={s.closeBtn}>
             <XIcon size={14} color={colors.textMuted} strokeWidth={2.2} />
           </Pressable>
         </View>
@@ -57,22 +58,22 @@ export function AccountSheet({
           </View>
         )}
 
-        <Pressable style={s.row} onPress={onHistory}>
+        <Pressable style={s.row} onPress={() => { tapLight(); onHistory(); }}>
           <ReceiptIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
           <Text style={s.rowText}>Order History</Text>
         </Pressable>
 
-        <Pressable style={s.row} onPress={onLock}>
+        <Pressable style={s.row} onPress={() => { tapLight(); onLock(); }}>
           <UserIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
           <Text style={s.rowText}>Switch Profile / Lock POS</Text>
         </Pressable>
 
-        <Pressable style={s.row} onPress={onUploadAvatar}>
+        <Pressable style={s.row} onPress={() => { tapLight(); onUploadAvatar(); }}>
           <ImageIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
           <Text style={s.rowText}>Upload Avatar Photo</Text>
         </Pressable>
 
-        <Pressable style={[s.row, s.rowDanger]} onPress={onCloseShift}>
+        <Pressable style={[s.row, s.rowDanger]} onPress={() => { warning(); onCloseShift(); }}>
           <LogOutIcon size={16} color={colors.danger} strokeWidth={2} />
           <Text style={[s.rowText, { color: colors.danger }]}>Close Shift &amp; Log Out</Text>
         </Pressable>

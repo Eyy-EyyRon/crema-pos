@@ -4,6 +4,7 @@ import { BagIcon } from '../icons';
 import { CartRow } from '../components/CartRow';
 import {
   CashTenderBlock,
+  CheckoutErrorBanner,
   DiscountRow,
   OrderTypeRow,
   PaymentMethodRow,
@@ -48,6 +49,8 @@ interface OrderDockProps {
   serviceChargePct: number;
   canPay: boolean;
   onPay: () => void;
+  checkoutBusy: boolean;
+  checkoutError: string | null;
 }
 
 export function OrderDock(props: OrderDockProps) {
@@ -84,6 +87,8 @@ export function OrderDock(props: OrderDockProps) {
     serviceChargePct,
     canPay,
     onPay,
+    checkoutBusy,
+    checkoutError,
   } = props;
 
   const isEmpty = cartCount === 0;
@@ -142,7 +147,8 @@ export function OrderDock(props: OrderDockProps) {
             />
           </ScrollView>
           <View style={styles.footer}>
-            <ProcessPaymentButton totalStr={peso(total)} disabled={!canPay} onPress={onPay} />
+            {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
+            <ProcessPaymentButton totalStr={peso(total)} disabled={!canPay} busy={checkoutBusy} onPress={onPay} />
           </View>
         </>
       )}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AlertCircleIcon, AlertTriangleIcon, XIcon } from '../icons';
+import { tapLight, tapMedium } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { QueueEntry } from '../types';
 import { PinPad } from './PinPad';
@@ -22,7 +23,7 @@ export function VoidModal({
   order: QueueEntry | null;
   isOffline: boolean;
   onClose: () => void;
-  onFlagForManager: (reason: string) => Promise<void>;
+  onFlagForManager: (reason: string) => Promise<{ error?: string }>;
   onPinSubmit: (pin: string, reason: string) => Promise<{ error?: string }>;
 }) {
   const [reason, setReason] = useState('');
@@ -56,8 +57,10 @@ export function VoidModal({
   const handleFlag = async () => {
     if (!reason.trim()) { setError('Reason is required'); return; }
     if (isOffline) { setError('Cannot flag while offline'); return; }
+    tapMedium();
     setBusy(true);
-    await onFlagForManager(reason.trim());
+    const res = await onFlagForManager(reason.trim());
+    if (res.error) setError(res.error);
     setBusy(false);
   };
 
@@ -74,7 +77,7 @@ export function VoidModal({
               <Text style={s.subtitle}>{order.no}</Text>
             </View>
           </View>
-          <Pressable onPress={busy ? undefined : onClose} style={s.closeBtn}>
+          <Pressable onPress={busy ? undefined : () => { tapLight(); onClose(); }} style={s.closeBtn}>
             <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
           </Pressable>
         </View>
@@ -90,10 +93,10 @@ export function VoidModal({
         />
 
         <View style={s.tabs}>
-          <Pressable style={[s.tab, tab === 'pin' && s.tabActive]} onPress={() => setTab('pin')}>
+          <Pressable style={[s.tab, tab === 'pin' && s.tabActive]} onPress={() => { tapLight(); setTab('pin'); }}>
             <Text style={[s.tabText, tab === 'pin' && s.tabTextActive]}>Manager PIN</Text>
           </Pressable>
-          <Pressable style={[s.tab, tab === 'flag' && s.tabActive]} onPress={() => setTab('flag')}>
+          <Pressable style={[s.tab, tab === 'flag' && s.tabActive]} onPress={() => { tapLight(); setTab('flag'); }}>
             <Text style={[s.tabText, tab === 'flag' && s.tabTextActive]}>Flag Later</Text>
           </Pressable>
         </View>
