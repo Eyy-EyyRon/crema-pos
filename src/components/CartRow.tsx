@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { peso0 } from '../format';
-import { MinusIcon, PlusIcon, XIcon } from '../icons';
+import { MinusIcon, PlusIcon, TrashIcon } from '../icons';
+import { tapLight, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { CartItem } from '../types';
 import { Shot } from './Shot';
@@ -26,15 +27,15 @@ export function CartRow({ item, shotSize = 44, onInc, onDec, onRemove }: CartRow
         <Text style={styles.line}>{peso0(item.unit * item.qty)}</Text>
       </View>
       <View style={styles.right}>
-        <Pressable onPress={onRemove} style={styles.removeBtn} hitSlop={8}>
-          <XIcon size={14} color={colors.textLabel} strokeWidth={2} />
+        <Pressable onPress={() => { warning(); onRemove(); }} style={styles.removeBtn} hitSlop={8}>
+          <TrashIcon size={15} color={colors.danger} strokeWidth={1.8} />
         </Pressable>
         <View style={styles.stepper}>
-          <Pressable onPress={onDec} style={styles.stepBtn}>
+          <Pressable onPress={() => { tapLight(); onDec(); }} style={styles.stepBtn}>
             <MinusIcon size={12} color={colors.textSecondary} />
           </Pressable>
           <Text style={styles.qty}>{item.qty}</Text>
-          <Pressable onPress={onInc} style={[styles.stepBtn, { backgroundColor: colors.gold }]}>
+          <Pressable onPress={() => { tapLight(); onInc(); }} style={[styles.stepBtn, { backgroundColor: colors.gold }]}>
             <PlusIcon size={12} color={colors.screenBg} strokeWidth={3.2} />
           </Pressable>
         </View>

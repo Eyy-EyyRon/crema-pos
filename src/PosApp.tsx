@@ -118,6 +118,9 @@ export function PosApp() {
     service: pos.totals.service,
     tax: pos.totals.tax,
     total: pos.totals.total,
+    taxRatePct: state.storeSettings.taxRatePct,
+    isTaxInclusive: state.storeSettings.isTaxInclusive,
+    serviceChargePct: state.storeSettings.serviceChargePct,
     canPay,
     onPay: pos.checkout,
   };

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { peso, peso0 } from '../format';
+import { tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { Discount, OrderType, PayMethod } from '../types';
 import { Chip } from './Chip';
@@ -125,6 +126,9 @@ export function SummaryCard({
   service,
   tax,
   total,
+  taxRatePct,
+  isTaxInclusive,
+  serviceChargePct,
   dense = false,
 }: {
   subtotal: number;
@@ -133,6 +137,9 @@ export function SummaryCard({
   service: number;
   tax: number;
   total: number;
+  taxRatePct: number;
+  isTaxInclusive: boolean;
+  serviceChargePct: number;
   dense?: boolean;
 }) {
   const fs = dense ? 13 : 13.5;
@@ -152,14 +159,18 @@ export function SummaryCard({
       )}
       {service > 0 && (
         <View style={styles.summaryRow}>
-          <Text style={[styles.summaryLabel, { fontSize: fs }]}>Service Charge (5%)</Text>
+          <Text style={[styles.summaryLabel, { fontSize: fs }]}>Service Charge ({serviceChargePct}%)</Text>
           <Text style={[styles.summaryValue, { fontSize: fs }]}>{peso(service)}</Text>
         </View>
       )}
-      <View style={styles.summaryRow}>
-        <Text style={[styles.summaryLabel, { fontSize: fs }]}>VAT (12%, incl.)</Text>
-        <Text style={[styles.summaryValue, { fontSize: fs }]}>{peso(tax)}</Text>
-      </View>
+      {tax > 0 && (
+        <View style={styles.summaryRow}>
+          <Text style={[styles.summaryLabel, { fontSize: fs }]}>
+            VAT ({taxRatePct}%{isTaxInclusive ? ', incl.' : ''})
+          </Text>
+          <Text style={[styles.summaryValue, { fontSize: fs }]}>{peso(tax)}</Text>
+        </View>
+      )}
       <View style={[styles.totalRow, dense && { paddingTop: 12, marginTop: 3 }]}>
         <Text style={[styles.totalLabel, dense && { fontSize: 14 }]}>Total Due</Text>
         <Text style={[styles.totalValue, dense && { fontSize: 26 }]}>{peso(total)}</Text>
@@ -178,7 +189,10 @@ export function ProcessPaymentButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={disabled ? undefined : onPress} style={[styles.payBtn, { opacity: disabled ? 0.4 : 1 }]}>
+    <Pressable
+      onPress={disabled ? () => warning() : () => { tapMedium(); onPress(); }}
+      style={[styles.payBtn, { opacity: disabled ? 0.4 : 1 }]}
+    >
       <Text style={styles.payBtnLabel}>Process Payment</Text>
       <View style={styles.payBtnAmountWrap}>
         <Text style={styles.payBtnAmount}>{totalStr}</Text>
