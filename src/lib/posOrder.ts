@@ -45,8 +45,10 @@ export function buildRecipesByItem(recipes: RecipeRow[]): Record<string, RecipeR
 export function isOutOfStock(
   itemId: string,
   recipesByItem: Record<string, RecipeRow[]>,
-  stockByIngredient: Record<string, number>
+  stockByIngredient: Record<string, number>,
+  rushModeEnabled: boolean = false
 ): boolean {
+  if (rushModeEnabled) return false; // Rush Mode: ignore ingredient stock entirely
   const itemRecipes = recipesByItem[itemId];
   if (!itemRecipes?.length) return false; // no recipe rows => can't assess => treated as in-stock
   return itemRecipes.some((r) => (stockByIngredient[r.ingredient_id] ?? 0) < Number(r.recipe_qty));
@@ -71,8 +73,10 @@ export function getMaxAddableQty(
   itemId: string,
   cart: { menuId: string; qty: number }[],
   recipesByItem: Record<string, RecipeRow[]>,
-  ingredientStock: Record<string, number>
+  ingredientStock: Record<string, number>,
+  rushModeEnabled: boolean = false
 ): number {
+  if (rushModeEnabled) return Infinity; // Rush Mode: ignore ingredient stock entirely
   const recipe = recipesByItem[itemId];
   if (!recipe?.length) return Infinity;
 
@@ -153,6 +157,7 @@ export type PosOrderData = {
   tax_amount?: number;
   service_charge_amount?: number;
   is_tax_inclusive?: boolean;
+  rush_mode?: boolean;
 };
 
 export type PosOrderItem = {

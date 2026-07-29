@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { QUICK_CASH } from './data';
 import { peso, peso0 } from './format';
 import { supabase } from './lib/supabase';
 import { closeShift as closeShiftApi, getOpenShift, openShift as openShiftApi } from './lib/cashDrawer';
+import { success as successHaptic, error as errorHaptic } from './lib/haptics';
 import {
   PosOrderData,
   PosOrderItem,
@@ -37,13 +39,19 @@ interface StoreSettings {
   taxRatePct: number;
   isTaxInclusive: boolean;
   serviceChargePct: number;
+  rushModeEnabled: boolean;
 }
 
-const DEFAULT_STORE_SETTINGS: StoreSettings = { taxRatePct: 12, isTaxInclusive: true, serviceChargePct: 5 };
+const DEFAULT_STORE_SETTINGS: StoreSettings = { taxRatePct: 12, isTaxInclusive: true, serviceChargePct: 5, rushModeEnabled: false };
 
 // Below this many sellable units left, the menu grid flags the item as low
 // stock instead of waiting for it to hit zero.
 const LOW_STOCK_THRESHOLD = 5;
+
+// Last-known-good menu/ingredient/settings snapshot — read-through cache so
+// the register can still take orders (menu, prices, stock badges, mods,
+// discounts) if the tablet loses connectivity after the first successful load.
+const MENU_DATA_CACHE_KEY = 'crema_menu_data_cache';
 
 export interface MenuItemStock {
   unavailable: boolean;
@@ -323,8 +331,17 @@ export function useCremaPos() {
   // here too.
   // ─────────────────────────────────────────────
   const fetchMenuData = useCallback(async () => {
+    try {
+      await fetchMenuDataFromNetwork();
+    } catch (e) {
+      console.warn('Menu data fetch failed — falling back to cached data if available:', e);
+      await hydrateMenuDataFromCache();
+    }
+  }, []);
+
+  const fetchMenuDataFromNetwork = useCallback(async () => {
     const [
-      { data: items },
+      { data: items, error: itemsError },
       { data: cats },
       { data: groups },
       { data: options },
@@ -342,8 +359,9 @@ export function useCremaPos() {
       supabase.from('recipe_costing').select('menu_item_id, ingredient_id, recipe_qty'),
       supabase.from('ingredients').select('id, current_stock'),
       supabase.from('discounts').select('*').order('percentage', { ascending: false }),
-      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct').eq('id', 1).maybeSingle(),
+      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled').eq('id', 1).maybeSingle(),
     ]);
+    if (itemsError) throw itemsError;
 
     const optionsByGroup: Record<string, any[]> = {};
     (options ?? []).forEach((o: any) => {
@@ -396,6 +414,30 @@ export function useCremaPos() {
 
     const recipesByItem = buildRecipesByItem((recipes ?? []) as RecipeRow[]);
 
+    const resolvedStoreSettings = settings
+      ? {
+          taxRatePct: Number(settings.tax_rate ?? DEFAULT_STORE_SETTINGS.taxRatePct),
+          isTaxInclusive: settings.is_tax_inclusive ?? DEFAULT_STORE_SETTINGS.isTaxInclusive,
+          serviceChargePct: Number(settings.service_charge_pct ?? DEFAULT_STORE_SETTINGS.serviceChargePct),
+          rushModeEnabled: settings.rush_mode_enabled ?? DEFAULT_STORE_SETTINGS.rushModeEnabled,
+        }
+      : undefined;
+
+    // Refresh the offline cache on every successful fetch (fire-and-forget —
+    // a cache write failing shouldn't block the live UI update below).
+    AsyncStorage.setItem(
+      MENU_DATA_CACHE_KEY,
+      JSON.stringify({
+        menuItems,
+        categories,
+        discountsList,
+        modifierGroupsByItem,
+        recipesByItem,
+        ingredientStock,
+        storeSettings: resolvedStoreSettings ?? DEFAULT_STORE_SETTINGS,
+      })
+    ).catch(() => {});
+
     setState((s) => ({
       ...s,
       menuItems,
@@ -404,14 +446,28 @@ export function useCremaPos() {
       modifierGroupsByItem,
       recipesByItem,
       ingredientStock,
-      storeSettings: settings
-        ? {
-            taxRatePct: Number(settings.tax_rate ?? DEFAULT_STORE_SETTINGS.taxRatePct),
-            isTaxInclusive: settings.is_tax_inclusive ?? DEFAULT_STORE_SETTINGS.isTaxInclusive,
-            serviceChargePct: Number(settings.service_charge_pct ?? DEFAULT_STORE_SETTINGS.serviceChargePct),
-          }
-        : s.storeSettings,
+      storeSettings: resolvedStoreSettings ?? s.storeSettings,
     }));
+  }, []);
+
+  const hydrateMenuDataFromCache = useCallback(async () => {
+    try {
+      const cachedStr = await AsyncStorage.getItem(MENU_DATA_CACHE_KEY);
+      if (!cachedStr) return;
+      const cached = JSON.parse(cachedStr);
+      setState((s) => ({
+        ...s,
+        menuItems: cached.menuItems ?? s.menuItems,
+        categories: cached.categories ?? s.categories,
+        discountsList: cached.discountsList ?? s.discountsList,
+        modifierGroupsByItem: cached.modifierGroupsByItem ?? s.modifierGroupsByItem,
+        recipesByItem: cached.recipesByItem ?? s.recipesByItem,
+        ingredientStock: cached.ingredientStock ?? s.ingredientStock,
+        storeSettings: cached.storeSettings ?? s.storeSettings,
+      }));
+    } catch (e) {
+      console.warn('Failed to read cached menu data:', e);
+    }
   }, []);
 
   useEffect(() => {
@@ -421,6 +477,7 @@ export function useCremaPos() {
       .channel('crema_pos_menu_ingredients')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ingredients' }, fetchMenuData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, fetchMenuData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'store_settings' }, fetchMenuData)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -636,6 +693,7 @@ export function useCremaPos() {
       tax_amount: totals.tax,
       service_charge_amount: totals.service,
       is_tax_inclusive: state.storeSettings.isTaxInclusive,
+      rush_mode: state.storeSettings.rushModeEnabled,
     };
     const orderItems: PosOrderItem[] = state.cart.map((c) => ({
       menu_item_id: c.menuId,
@@ -646,7 +704,13 @@ export function useCremaPos() {
     }));
     const displayItems = state.cart.map((c) => ({ name: c.name, qty: c.qty }));
 
-    await submitOrder(orderData, orderItems, displayItems);
+    try {
+      await submitOrder(orderData, orderItems, displayItems);
+    } catch (e) {
+      errorHaptic();
+      throw e;
+    }
+    successHaptic();
 
     const items = state.cart.map((c) => ({ qtyName: `${c.qty}× ${c.name}`, lineStr: peso0(c.unit * c.qty) }));
     const success: SuccessInfo = {
@@ -697,7 +761,7 @@ export function useCremaPos() {
         map[m.id] = { unavailable: false, qty: null, low: false };
         return;
       }
-      const maxQty = getMaxAddableQty(m.id, cartArr, state.recipesByItem, state.ingredientStock);
+      const maxQty = getMaxAddableQty(m.id, cartArr, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled);
       map[m.id] = {
         unavailable: maxQty <= 0,
         qty: maxQty,
@@ -705,7 +769,7 @@ export function useCremaPos() {
       };
     });
     return map;
-  }, [state.menuItems, state.cart, state.recipesByItem, state.ingredientStock]);
+  }, [state.menuItems, state.cart, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled]);
 
   const filteredItems = useMemo(() => {
     const q = state.search.toLowerCase();
@@ -724,9 +788,9 @@ export function useCremaPos() {
   const addValid = useMemo(() => {
     const modsOk = !selectedItemGroups.some((g) => g.required && !(state.selMods[g.id] || []).length);
     if (!modsOk) return false;
-    if (selectedItem && isOutOfStock(selectedItem.id, state.recipesByItem, state.ingredientStock)) return false;
+    if (selectedItem && isOutOfStock(selectedItem.id, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled)) return false;
     return true;
-  }, [selectedItemGroups, state.selMods, selectedItem, state.recipesByItem, state.ingredientStock]);
+  }, [selectedItemGroups, state.selMods, selectedItem, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled]);
 
   const addUnitTotal = useMemo(() => {
     if (!selectedItem) return 0;
@@ -739,9 +803,10 @@ export function useCremaPos() {
       selectedItem.id,
       state.cart.map((c) => ({ menuId: c.menuId, qty: c.qty })),
       state.recipesByItem,
-      state.ingredientStock
+      state.ingredientStock,
+      state.storeSettings.rushModeEnabled
     );
-  }, [selectedItem, state.cart, state.recipesByItem, state.ingredientStock]);
+  }, [selectedItem, state.cart, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled]);
 
   const tenderNum = useMemo(
     () => (state.tendered !== '' && !isNaN(Number(state.tendered)) ? Number(state.tendered) : null),
