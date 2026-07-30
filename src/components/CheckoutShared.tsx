@@ -59,17 +59,26 @@ export function PaymentMethodRow({
   payMethod,
   onSelectCash,
   onSelectGcash,
+  onViewGcashQr,
   gap = 10,
 }: {
   payMethod: PayMethod;
   onSelectCash: () => void;
   onSelectGcash: () => void;
+  onViewGcashQr?: () => void;
   gap?: number;
 }) {
   return (
-    <View style={{ flexDirection: 'row', gap }}>
-      <PayButton kind="cash" active={payMethod === 'cash'} onPress={onSelectCash} />
-      <PayButton kind="gcash" active={payMethod === 'gcash'} onPress={onSelectGcash} />
+    <View>
+      <View style={{ flexDirection: 'row', gap }}>
+        <PayButton kind="cash" active={payMethod === 'cash'} onPress={onSelectCash} />
+        <PayButton kind="gcash" active={payMethod === 'gcash'} onPress={onSelectGcash} />
+      </View>
+      {payMethod === 'gcash' && onViewGcashQr && (
+        <Pressable onPress={onViewGcashQr} style={styles.viewQrLink}>
+          <Text style={styles.viewQrLinkText}>View QR again</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -232,6 +241,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
+  },
+  viewQrLink: {
+    alignSelf: 'center',
+    marginTop: 10,
+  },
+  viewQrLinkText: {
+    fontSize: 12.5,
+    fontFamily: fonts.sansBold,
+    color: colors.goldLight,
   },
   tenderInputRow: {
     flexDirection: 'row',
