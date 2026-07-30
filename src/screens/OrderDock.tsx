@@ -32,6 +32,7 @@ interface OrderDockProps {
   payMethod: PayMethod;
   onSelectCash: () => void;
   onSelectGcash: () => void;
+  onViewGcashQr: () => void;
   tendered: string;
   onChangeTendered: (v: string) => void;
   quickCash: number[];
@@ -70,6 +71,7 @@ export function OrderDock(props: OrderDockProps) {
     payMethod,
     onSelectCash,
     onSelectGcash,
+    onViewGcashQr,
     tendered,
     onChangeTendered,
     quickCash,
@@ -122,7 +124,7 @@ export function OrderDock(props: OrderDockProps) {
             <DiscountRow discounts={discounts} activeName={discountName} onSelect={onSelectDiscount} />
 
             <SectionLabel style={styles.sectionSpacing}>Payment Method</SectionLabel>
-            <PaymentMethodRow payMethod={payMethod} onSelectCash={onSelectCash} onSelectGcash={onSelectGcash} gap={9} />
+            <PaymentMethodRow payMethod={payMethod} onSelectCash={onSelectCash} onSelectGcash={onSelectGcash} onViewGcashQr={onViewGcashQr} gap={9} />
 
             {payMethod === 'cash' && (
               <>
