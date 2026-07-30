@@ -247,14 +247,25 @@ export function useCremaPos() {
               await clockIn(profileId);
             } else {
               // Online but the real session/clock-in never happened (e.g. PIN changed or
-              // profile deactivated since this device last cached it) — the visible
-              // fast-path login can't be un-shown safely, but this is not silent: any
-              // subsequent write (checkout, etc.) will now correctly fail under RLS since
-              // there's no real authenticated session, surfacing via checkoutError.
+              // profile deactivated since this device last cached it). There's no retry for
+              // this — silently continuing would let checkout run under a stale/anon session,
+              // which submitOrder now refuses to queue into the outbox (it would just fail
+              // forever). Forcing a re-login here is disruptive but bounded — much safer than
+              // an entire shift's sales silently piling up unsynced with no explanation.
               console.warn('Background auth did not return a session:', error);
+              Alert.alert(
+                'Session Expired',
+                "Your login couldn't be verified online. Please log in again to keep taking orders safely.",
+                [{ text: 'OK', onPress: () => { lockPos(); } }]
+              );
             }
           } catch (e) {
             console.warn('Background auth failed:', e);
+            Alert.alert(
+              'Connection Issue',
+              "Couldn't verify your login with the server. Please log in again once you have a connection.",
+              [{ text: 'OK', onPress: () => { lockPos(); } }]
+            );
           } finally {
             authSyncRef.current = null;
           }
@@ -389,22 +400,24 @@ export function useCremaPos() {
 
   const openShiftAction = useCallback(async (startingCash: number): Promise<string | void> => {
     if (!state.currentUser) return 'Not logged in';
+    if (!(await isOnline())) return 'Opening the cash drawer requires an internet connection. Please reconnect and try again.';
     if (authSyncRef.current) await authSyncRef.current;
     try {
       const s = await openShiftApi(state.currentUser.id, startingCash);
       patch({ shift: s });
     } catch (e: any) {
-      return e.message || 'Could not open shift';
+      return e.message || 'Could not open shift. Check your connection and try again.';
     }
   }, [state.currentUser, patch]);
 
   const closeShiftAction = useCallback(async (endingCash: number): Promise<string | void> => {
     if (!state.shift) return 'No open shift';
+    if (!(await isOnline())) return 'Closing the cash drawer requires an internet connection. Please reconnect and try again.';
     try {
       await closeShiftApi(state.shift.id, endingCash);
       await logout();
     } catch (e: any) {
-      return e.message || 'Could not close shift';
+      return e.message || 'Could not close shift. Check your connection and try again.';
     }
   }, [state.shift, logout]);
 
@@ -672,7 +685,12 @@ export function useCremaPos() {
       .update({ status: 'completed' })
       .eq('id', id)
       .then(({ error }) => {
-        if (error) fetchQueue();
+        if (error) {
+          // Ticket was optimistically removed above — put it back and say why,
+          // instead of it silently reappearing a moment later with no explanation.
+          fetchQueue();
+          Alert.alert('Could Not Complete Order', error.message || 'The order is still pending — check your connection and try again.');
+        }
       });
   }, [fetchQueue]);
 
@@ -684,11 +702,18 @@ export function useCremaPos() {
   }, [fetchQueue]);
 
   const managerVoidOrder = useCallback(async (orderId: string, reason: string, pin: string): Promise<{ error?: string }> => {
+    const online = await isOnline();
+    if (!online) return { error: 'Manager PIN verification requires an internet connection' };
+
     // verify_manager_pin runs server-side (never exposes pin_code to the client) and applies
     // the same 5-attempt/15-minute lockout as login, keyed off this barista's own session.
     const { data: managers, error: pinErr } = await supabase.rpc('verify_manager_pin', { p_pin: pin });
+    // Distinguish a genuine RPC/network failure from a real wrong-PIN attempt — collapsing
+    // both into "Invalid manager PIN" was actively misleading (e.g. a dropped connection
+    // looked identical to entering the wrong PIN).
+    if (pinErr) return { error: pinErr.message || 'Could not verify manager PIN. Check your connection and try again.' };
     const manager = managers?.[0];
-    if (pinErr || !manager) return { error: 'Invalid manager PIN' };
+    if (!manager) return { error: 'Invalid manager PIN' };
 
     const ticket = state.queue.find((q) => q.id === orderId);
     const { error: voidErr } = await supabase
@@ -706,7 +731,15 @@ export function useCremaPos() {
   // CART / CUSTOMIZE
   // ─────────────────────────────────────────────
   const selectType = useCallback((v: OrderType) => {
-    setState((s) => ({ ...s, orderType: v, screen: s.screen === 'orderType' ? 'menu' : s.screen }));
+    setState((s) => ({
+      ...s,
+      orderType: v,
+      screen: s.screen === 'orderType' ? 'menu' : s.screen,
+      // On tablet this is the moment OrderDock (and its checkout error banner)
+      // becomes visible again — clear a stale error from a previous failed
+      // attempt so it doesn't reappear before a new payment attempt.
+      checkoutError: s.screen === 'orderType' ? null : s.checkoutError,
+    }));
   }, []);
 
   const openItem = useCallback((menuId: string) => {
