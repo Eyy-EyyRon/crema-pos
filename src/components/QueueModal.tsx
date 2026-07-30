@@ -33,7 +33,7 @@ export function QueueModal({
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{tickets.length} active</Text>
             </View>
-            <Pressable onPress={() => { tapLight(); onClose(); }} style={styles.closeBtn}>
+            <Pressable onPress={() => { tapLight(); onClose(); }} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
               <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
             </Pressable>
           </View>
