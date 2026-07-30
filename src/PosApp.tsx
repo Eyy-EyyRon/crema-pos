@@ -4,6 +4,7 @@ import { AccountSheet } from './components/AccountSheet';
 import { CloseShiftModal, OpenShiftModal } from './components/ShiftModal';
 import { CustomizeSheet } from './components/CustomizeSheet';
 import { CustomizeSidebar } from './components/CustomizeSidebar';
+import { GcashQrModal } from './components/GcashQrModal';
 import { QueueModal } from './components/QueueModal';
 import { SuccessModal } from './components/SuccessModal';
 import { HistoryScreen } from './screens/HistoryScreen';
@@ -105,7 +106,8 @@ export function PosApp() {
     onSelectDiscount: (name: string) => pos.patch({ discountName: name }),
     payMethod: state.payMethod,
     onSelectCash: () => pos.patch({ payMethod: 'cash' as const }),
-    onSelectGcash: () => pos.patch({ payMethod: 'gcash' as const, tendered: '' }),
+    onSelectGcash: () => pos.patch({ payMethod: 'gcash' as const, tendered: '', showGcashQr: true }),
+    onViewGcashQr: () => pos.patch({ showGcashQr: true }),
     tendered: state.tendered,
     onChangeTendered: (v: string) => pos.patch({ tendered: v }),
     quickCash: pos.quickCash,
@@ -171,6 +173,7 @@ export function PosApp() {
         {state.screen === 'orderType' ? (
           <OrderTypeScreen
             variant="tablet"
+            orderNumber={state.todayOrderCount + 1}
             onSelectDineIn={() => pos.selectType('dine-in')}
             onSelectTakeout={() => pos.selectType('takeout')}
           />
@@ -209,6 +212,11 @@ export function PosApp() {
             isOffline={state.isOffline}
           />
         )}
+        <GcashQrModal
+          visible={state.showGcashQr}
+          qrUrl={state.storeSettings.gcashQrUrl}
+          onClose={() => pos.patch({ showGcashQr: false })}
+        />
         {accountSheet}
       </View>
     );
@@ -219,6 +227,7 @@ export function PosApp() {
       {state.screen === 'orderType' && (
         <OrderTypeScreen
           variant="phone"
+          orderNumber={state.todayOrderCount + 1}
           onSelectDineIn={() => pos.selectType('dine-in')}
           onSelectTakeout={() => pos.selectType('takeout')}
         />
@@ -263,6 +272,11 @@ export function PosApp() {
       )}
 
       {customizeProps && <CustomizeSheet {...customizeProps} />}
+      <GcashQrModal
+        visible={state.showGcashQr}
+        qrUrl={state.storeSettings.gcashQrUrl}
+        onClose={() => pos.patch({ showGcashQr: false })}
+      />
       {accountSheet}
     </View>
   );
