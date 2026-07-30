@@ -5,6 +5,7 @@ import { CloseShiftModal, OpenShiftModal } from './components/ShiftModal';
 import { CustomizeSheet } from './components/CustomizeSheet';
 import { CustomizeSidebar } from './components/CustomizeSidebar';
 import { GcashQrModal } from './components/GcashQrModal';
+import { OfflineBanner } from './components/OfflineBanner';
 import { QueueModal } from './components/QueueModal';
 import { SuccessModal } from './components/SuccessModal';
 import { HistoryScreen } from './screens/HistoryScreen';
@@ -164,11 +165,13 @@ export function PosApp() {
   if (state.screen === 'history') {
     return (
       <View style={styles.root}>
+        <OfflineBanner visible={state.isOffline} />
         <HistoryScreen
           onBack={() => pos.patch({ screen: 'menu' })}
           onFlagVoid={pos.flagVoidOrder}
           onManagerVoid={pos.managerVoidOrder}
           isOffline={state.isOffline}
+          storeInfo={receiptStoreInfo}
         />
         {accountSheet}
       </View>
@@ -178,6 +181,7 @@ export function PosApp() {
   if (isTablet) {
     return (
       <View style={styles.root}>
+        <OfflineBanner visible={state.isOffline} />
         {state.screen === 'orderType' ? (
           <OrderTypeScreen
             variant="tablet"
@@ -232,6 +236,7 @@ export function PosApp() {
 
   return (
     <View style={styles.root}>
+      <OfflineBanner visible={state.isOffline} />
       {state.screen === 'orderType' && (
         <OrderTypeScreen
           variant="phone"
@@ -263,7 +268,7 @@ export function PosApp() {
         />
       )}
       {state.screen === 'checkout' && (
-        <CheckoutScreen {...checkoutSharedProps} onBack={() => pos.patch({ screen: 'menu' })} />
+        <CheckoutScreen {...checkoutSharedProps} onBack={() => pos.patch({ screen: 'menu', checkoutError: null })} />
       )}
       {state.screen === 'success' && state.success && (
         <SuccessScreen success={state.success} orderTypeLabel={orderTypeLabel} storeInfo={receiptStoreInfo} onDone={pos.done} />
