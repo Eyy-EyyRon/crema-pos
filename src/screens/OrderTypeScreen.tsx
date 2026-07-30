@@ -5,19 +5,23 @@ import { colors, fonts } from '../theme';
 
 export function OrderTypeScreen({
   variant = 'phone',
+  orderNumber,
   onSelectDineIn,
   onSelectTakeout,
 }: {
   variant?: 'phone' | 'tablet';
+  orderNumber: number;
   onSelectDineIn: () => void;
   onSelectTakeout: () => void;
 }) {
+  const orderLabel = `New Order · #${String(orderNumber).padStart(4, '0')}`;
+
   if (variant === 'tablet') {
     return (
       <View style={styles.tabletWrap}>
         <Text style={styles.brandTablet}>CREMA</Text>
         <Text style={styles.brandSubTablet}>COFFEE &amp; ICE CREAM</Text>
-        <Text style={[styles.lbl, { marginTop: 34, marginBottom: 6 }]}>New Order · #0247</Text>
+        <Text style={[styles.lbl, { marginTop: 34, marginBottom: 6 }]}>{orderLabel}</Text>
         <Text style={styles.titleTablet}>How are we serving this order?</Text>
         <View style={styles.tilesRowTablet}>
           <OrderTypeTile kind="dine-in" variant="tablet" onPress={onSelectDineIn} />
@@ -34,7 +38,7 @@ export function OrderTypeScreen({
         <Text style={styles.brandSub}>COFFEE &amp; ICE CREAM</Text>
       </View>
       <View style={styles.titleBlock}>
-        <Text style={[styles.lbl, { textAlign: 'center', marginBottom: 4 }]}>New Order · #0247</Text>
+        <Text style={[styles.lbl, { textAlign: 'center', marginBottom: 4 }]}>{orderLabel}</Text>
         <Text style={styles.title}>How are we serving{'\n'}this order?</Text>
       </View>
       <View style={styles.tilesCol}>
