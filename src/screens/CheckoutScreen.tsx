@@ -32,6 +32,7 @@ interface CheckoutScreenProps {
   payMethod: PayMethod;
   onSelectCash: () => void;
   onSelectGcash: () => void;
+  onViewGcashQr: () => void;
   tendered: string;
   onChangeTendered: (v: string) => void;
   quickCash: number[];
@@ -70,6 +71,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     payMethod,
     onSelectCash,
     onSelectGcash,
+    onViewGcashQr,
     tendered,
     onChangeTendered,
     quickCash,
@@ -107,7 +109,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         <DiscountRow discounts={discounts} activeName={discountName} onSelect={onSelectDiscount} />
 
         <SectionLabel style={styles.sectionSpacing}>Payment Method</SectionLabel>
-        <PaymentMethodRow payMethod={payMethod} onSelectCash={onSelectCash} onSelectGcash={onSelectGcash} />
+        <PaymentMethodRow payMethod={payMethod} onSelectCash={onSelectCash} onSelectGcash={onSelectGcash} onViewGcashQr={onViewGcashQr} />
 
         {payMethod === 'cash' && (
           <>
