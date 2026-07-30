@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
 import { PosOrderData, PosOrderItem, submitPosOrder } from './posOrder';
+import { supabase } from './supabase';
 
 // Offline outbox for checkout — ported from CafePOS's .vscode/lib/syncEngine.ts,
 // rewired to push through posOrder.ts's submitPosOrder (atomic stock RPCs)
@@ -32,6 +33,16 @@ export async function submitOrder(
   const online = await isOnline();
 
   if (online) {
+    // A network connection existing doesn't mean we have a real authenticated
+    // session — the fast-path login's background auth can fail (see login()
+    // in useCremaPos.ts). Queuing that case into the outbox would retry the
+    // same doomed insert every 10s forever with zero indication anything's
+    // wrong, silently stranding real sales. Failing loudly here instead lets
+    // the caller's checkoutError banner tell the barista to re-login.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error("Your session isn't active. Please lock the POS and log back in, then try again.");
+    }
     try {
       return await submitPosOrder(orderData, orderItems);
     } catch (e) {
