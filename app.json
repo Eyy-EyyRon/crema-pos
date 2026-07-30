@@ -30,7 +30,8 @@
     },
     "owner": "eyyyronne",
     "plugins": [
-      "expo-image"
+      "expo-image",
+      "expo-sharing"
     ]
   }
 }
