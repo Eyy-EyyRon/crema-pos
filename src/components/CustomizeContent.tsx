@@ -59,7 +59,7 @@ export function CustomizeContent({
           <Text style={[styles.name, tablet && { fontSize: 18 }]}>{name}</Text>
           <Text style={styles.base}>Base {peso0(basePrice)}</Text>
         </View>
-        <Pressable onPress={() => { tapLight(); onClose(); }} style={[styles.closeBtn, tablet && { width: 34, height: 34 }]}>
+        <Pressable onPress={() => { tapLight(); onClose(); }} style={[styles.closeBtn, tablet && { width: 34, height: 34 }]} accessibilityRole="button" accessibilityLabel="Close">
           <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
         </Pressable>
       </View>
@@ -110,11 +110,11 @@ export function CustomizeContent({
       <View style={[styles.footer, tablet && styles.footerTablet]}>
         <View style={styles.footerRow}>
           <View style={styles.stepper}>
-            <Pressable onPress={() => { tapLight(); onDecQty(); }} style={styles.stepBtn}>
+            <Pressable onPress={() => { tapLight(); onDecQty(); }} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Decrease quantity">
               <MinusIcon size={14} color={colors.textSecondary} />
             </Pressable>
             <Text style={styles.qty}>{qty}</Text>
-            <Pressable onPress={() => { tapLight(); onIncQty(); }} style={[styles.stepBtn, { backgroundColor: colors.gold }]}>
+            <Pressable onPress={() => { tapLight(); onIncQty(); }} style={[styles.stepBtn, { backgroundColor: colors.gold }]} accessibilityRole="button" accessibilityLabel="Increase quantity">
               <PlusIcon size={14} color={colors.screenBg} strokeWidth={3.2} />
             </Pressable>
           </View>
