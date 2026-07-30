@@ -14,6 +14,7 @@ import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { PosApp } from './src/PosApp';
 import { colors } from './src/theme';
 
@@ -36,7 +37,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <View style={styles.app}>
-        <PosApp />
+        <ErrorBoundary>
+          <PosApp />
+        </ErrorBoundary>
         <StatusBar style="light" />
       </View>
     </SafeAreaProvider>
