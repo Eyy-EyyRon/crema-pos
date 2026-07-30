@@ -49,7 +49,7 @@ export function AccountSheet({
             <Text style={s.name}>{user.full_name}</Text>
             <Text style={s.role}>{user.role === 'manager' ? 'Manager' : 'Barista'}</Text>
           </View>
-          <Pressable onPress={() => { tapLight(); onClose(); }} style={s.closeBtn}>
+          <Pressable onPress={() => { tapLight(); onClose(); }} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
             <XIcon size={14} color={colors.textMuted} strokeWidth={2.2} />
           </Pressable>
         </View>
