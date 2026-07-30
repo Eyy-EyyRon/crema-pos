@@ -51,7 +51,12 @@ export function MenuHeader({
               <Text style={styles.typePillChange}>Change</Text>
             </Pressable>
           )}
-          <Pressable onPress={() => { tapLight(); onQueue(); }} style={[styles.queueBtn, tablet && { width: 40, height: 40 }]}>
+          <Pressable
+            onPress={() => { tapLight(); onQueue(); }}
+            style={[styles.queueBtn, tablet && { width: 40, height: 40 }]}
+            accessibilityRole="button"
+            accessibilityLabel={queueCount > 0 ? `View order queue, ${queueCount} pending` : 'View order queue'}
+          >
             <CoffeeIcon size={tablet ? 17 : 16} color={colors.textMuted} strokeWidth={1.8} />
             {queueCount > 0 && (
               <View style={styles.queueBadge}>
@@ -59,7 +64,12 @@ export function MenuHeader({
               </View>
             )}
           </Pressable>
-          <Pressable onPress={() => { tapLight(); onAccount(); }} style={[styles.queueBtn, tablet && { width: 40, height: 40 }]}>
+          <Pressable
+            onPress={() => { tapLight(); onAccount(); }}
+            style={[styles.queueBtn, tablet && { width: 40, height: 40 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Account and settings"
+          >
             <SettingsIcon size={tablet ? 17 : 16} color={colors.textMuted} strokeWidth={1.8} />
           </Pressable>
         </View>
@@ -89,7 +99,7 @@ export function BackHeader({
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.backHeaderWrap, { paddingTop: insets.top + 14 }]}>
-      <Pressable onPress={() => { tapLight(); onBack(); }} style={styles.backBtn}>
+      <Pressable onPress={() => { tapLight(); onBack(); }} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Go back">
         <ChevronLeftIcon size={17} color={colors.textPrimary} strokeWidth={2.2} />
       </Pressable>
       <Text style={styles.backTitle}>{title}</Text>
