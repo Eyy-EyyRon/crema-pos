@@ -1,6 +1,5 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { SuccessInfo } from '../types';
 
 export interface ReceiptStoreInfo {
   storeName: string;
@@ -11,12 +10,25 @@ export interface ReceiptStoreInfo {
   receiptFooter: string;
 }
 
+// Looser than the live-checkout SuccessInfo type (method: 'Cash' | 'GCash')
+// so a reprint from History — which can encounter any payment_method stored
+// on an older order — can reuse this without fighting the stricter union.
+// A real SuccessInfo still satisfies this structurally, so no call-site changes.
+export interface ReceiptOrderInfo {
+  no: string;
+  total: number;
+  method: string;
+  items: { qtyName: string; lineStr: string }[];
+  showChange: boolean;
+  change: number;
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function buildReceiptHtml(success: SuccessInfo, orderTypeLabel: string, store: ReceiptStoreInfo): string {
-  const now = new Date();
+function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: string, store: ReceiptStoreInfo, orderDate: Date = new Date()): string {
+  const now = orderDate;
   const itemRows = success.items
     .map(
       (it) =>
@@ -70,8 +82,8 @@ function buildReceiptHtml(success: SuccessInfo, orderTypeLabel: string, store: R
 }
 
 /** Renders the receipt to a PDF and opens the OS print/share sheet; falls back to the direct print dialog if sharing isn't available on this device. */
-export async function printReceipt(success: SuccessInfo, orderTypeLabel: string, store: ReceiptStoreInfo): Promise<void> {
-  const html = buildReceiptHtml(success, orderTypeLabel, store);
+export async function printReceipt(success: ReceiptOrderInfo, orderTypeLabel: string, store: ReceiptStoreInfo, orderDate?: Date): Promise<void> {
+  const html = buildReceiptHtml(success, orderTypeLabel, store, orderDate);
   const { uri } = await Print.printToFileAsync({ html });
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
