@@ -41,9 +41,10 @@ interface StoreSettings {
   isTaxInclusive: boolean;
   serviceChargePct: number;
   rushModeEnabled: boolean;
+  gcashQrUrl: string | null;
 }
 
-const DEFAULT_STORE_SETTINGS: StoreSettings = { taxRatePct: 12, isTaxInclusive: true, serviceChargePct: 5, rushModeEnabled: false };
+const DEFAULT_STORE_SETTINGS: StoreSettings = { taxRatePct: 12, isTaxInclusive: true, serviceChargePct: 5, rushModeEnabled: false, gcashQrUrl: null };
 
 // Below this many sellable units left, the menu grid flags the item as low
 // stock instead of waiting for it to hit zero.
@@ -79,6 +80,9 @@ interface PosState {
   nextId: number;
   success: SuccessInfo | null;
   queue: QueueEntry[];
+  /** Count of orders placed today, server-side — used to show the upcoming ticket number before checkout. */
+  todayOrderCount: number;
+  showGcashQr: boolean;
 
   // auth / shift
   currentUser: UserProfile | null;
@@ -117,6 +121,8 @@ const initialState: PosState = {
   nextId: 1,
   success: null,
   queue: [],
+  todayOrderCount: 0,
+  showGcashQr: false,
 
   currentUser: null,
   authLoading: true,
@@ -156,6 +162,10 @@ export function useCremaPos() {
   // listeners below can each trigger a fetch in quick succession) can detect it's no longer
   // the latest and skip committing its result — otherwise it could overwrite fresher state.
   const menuFetchSeq = useRef(0);
+  // Tracks the fast-path login's background real-auth attempt (see login() below) so any
+  // write that needs a real Supabase session — opening the cash drawer, checkout — can wait
+  // for it instead of racing ahead under a stale/anon session and failing RLS.
+  const authSyncRef = useRef<Promise<void> | null>(null);
 
   const patch = useCallback((p: Partial<PosState>) => {
     setState((s) => ({ ...s, ...p }));
@@ -201,8 +211,11 @@ export function useCremaPos() {
         // Instantly log the user in visually so the POS is immediately ready
         setState((s) => ({ ...s, currentUser: cachedProfile }));
 
-        // Perform the actual network auth and time-clock punch in the background
-        (async () => {
+        // Perform the actual network auth and time-clock punch in the background. Stored in
+        // authSyncRef (not fire-and-forget) so writes that need a real session — most
+        // urgently opening the cash drawer, which happens immediately after login — can await
+        // it first instead of running under a stale/anon session and failing RLS.
+        authSyncRef.current = (async () => {
           const online = await isOnline();
           if (!online) {
             patch({ isOffline: true });
@@ -224,6 +237,8 @@ export function useCremaPos() {
             }
           } catch (e) {
             console.warn('Background auth failed:', e);
+          } finally {
+            authSyncRef.current = null;
           }
         })();
 
@@ -277,12 +292,17 @@ export function useCremaPos() {
   const logout = useCallback(async () => {
     if (state.currentUser) await clockOut(state.currentUser.id);
     await supabase.auth.signOut();
-    setState(() => ({ ...initialState, authLoading: false, shiftLoading: false }));
+    // Deliberately leave shiftLoading at initialState's `true` (not forced to
+    // false) — otherwise the next login renders one frame with currentUser
+    // set, shiftLoading false, and shift still null, which incorrectly flashes
+    // the Open Cash Drawer modal before the shift-fetch effect below catches
+    // up and confirms whether that barista actually has an open shift.
+    setState(() => ({ ...initialState, authLoading: false }));
   }, [state.currentUser]);
 
   const lockPos = useCallback(async () => {
     await supabase.auth.signOut();
-    setState(() => ({ ...initialState, authLoading: false, shiftLoading: false }));
+    setState(() => ({ ...initialState, authLoading: false }));
   }, []);
 
   const uploadAvatar = useCallback(async () => {
@@ -344,6 +364,7 @@ export function useCremaPos() {
 
   const openShiftAction = useCallback(async (startingCash: number): Promise<string | void> => {
     if (!state.currentUser) return 'Not logged in';
+    if (authSyncRef.current) await authSyncRef.current;
     try {
       const s = await openShiftApi(state.currentUser.id, startingCash);
       patch({ shift: s });
@@ -398,7 +419,7 @@ export function useCremaPos() {
       supabase.from('recipe_costing').select('menu_item_id, ingredient_id, recipe_qty'),
       supabase.from('ingredients').select('id, current_stock'),
       supabase.from('discounts').select('*').order('percentage', { ascending: false }),
-      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled').eq('id', 1).maybeSingle(),
+      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url').eq('id', 1).maybeSingle(),
     ]);
     if (itemsError) throw itemsError;
 
@@ -459,6 +480,7 @@ export function useCremaPos() {
           isTaxInclusive: settings.is_tax_inclusive ?? DEFAULT_STORE_SETTINGS.isTaxInclusive,
           serviceChargePct: Number(settings.service_charge_pct ?? DEFAULT_STORE_SETTINGS.serviceChargePct),
           rushModeEnabled: settings.rush_mode_enabled ?? DEFAULT_STORE_SETTINGS.rushModeEnabled,
+          gcashQrUrl: settings.gcash_qr_url ?? null,
         }
       : undefined;
 
@@ -576,25 +598,40 @@ export function useCremaPos() {
     setState((s) => ({ ...s, queue: [...real, ...outboxTickets] }));
   }, []);
 
+  const fetchTodayOrderCount = useCallback(async () => {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const { count } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .gte('created_at', startOfDay.toISOString());
+    if (count !== null) setState((s) => ({ ...s, todayOrderCount: count }));
+  }, []);
+
   useEffect(() => {
     if (!state.currentUser) return;
     fetchQueue();
+    fetchTodayOrderCount();
     const channel = supabase
       .channel('crema_pos_queue')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchQueue)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchQueue();
+        fetchTodayOrderCount();
+      })
       .subscribe();
     const iv = setInterval(async () => {
       const online = await isOnline();
       patch({ isOffline: !online });
       if (online) await syncOutbox();
       fetchQueue();
+      fetchTodayOrderCount();
     }, 10000);
     return () => {
       supabase.removeChannel(channel);
       clearInterval(iv);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.currentUser?.id, fetchQueue]);
+  }, [state.currentUser?.id, fetchQueue, fetchTodayOrderCount]);
 
   const completeQueueTicket = useCallback((id: string) => {
     setState((s) => ({ ...s, queue: s.queue.filter((q) => q.id !== id) }));
@@ -719,6 +756,7 @@ export function useCremaPos() {
   const checkout = useCallback(async () => {
     if (!state.currentUser || state.cart.length === 0 || state.checkoutBusy) return;
     patch({ checkoutBusy: true, checkoutError: null });
+    if (authSyncRef.current) await authSyncRef.current;
 
     const receiptNumber = 'REC-' + Date.now().toString().slice(-6) + Math.random().toString(36).slice(2, 5).toUpperCase();
     const tenderNum = state.tendered !== '' && !isNaN(Number(state.tendered)) ? Number(state.tendered) : null;
@@ -784,6 +822,7 @@ export function useCremaPos() {
       success: null,
       selCat: 'All',
       search: '',
+      showGcashQr: false,
     }));
   }, []);
 
