@@ -42,9 +42,27 @@ interface StoreSettings {
   serviceChargePct: number;
   rushModeEnabled: boolean;
   gcashQrUrl: string | null;
+  storeName: string;
+  tagline: string;
+  address: string;
+  phone: string;
+  tin: string;
+  receiptFooter: string;
 }
 
-const DEFAULT_STORE_SETTINGS: StoreSettings = { taxRatePct: 12, isTaxInclusive: true, serviceChargePct: 5, rushModeEnabled: false, gcashQrUrl: null };
+const DEFAULT_STORE_SETTINGS: StoreSettings = {
+  taxRatePct: 12,
+  isTaxInclusive: true,
+  serviceChargePct: 5,
+  rushModeEnabled: false,
+  gcashQrUrl: null,
+  storeName: 'Crema',
+  tagline: 'Coffee & Ice Cream',
+  address: '',
+  phone: '',
+  tin: '',
+  receiptFooter: 'Thank you for visiting Crema!',
+};
 
 // Below this many sellable units left, the menu grid flags the item as low
 // stock instead of waiting for it to hit zero.
@@ -419,7 +437,7 @@ export function useCremaPos() {
       supabase.from('recipe_costing').select('menu_item_id, ingredient_id, recipe_qty'),
       supabase.from('ingredients').select('id, current_stock'),
       supabase.from('discounts').select('*').order('percentage', { ascending: false }),
-      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url').eq('id', 1).maybeSingle(),
+      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url, store_name, tagline, address, phone, tin, receipt_footer').eq('id', 1).maybeSingle(),
     ]);
     if (itemsError) throw itemsError;
 
@@ -481,6 +499,12 @@ export function useCremaPos() {
           serviceChargePct: Number(settings.service_charge_pct ?? DEFAULT_STORE_SETTINGS.serviceChargePct),
           rushModeEnabled: settings.rush_mode_enabled ?? DEFAULT_STORE_SETTINGS.rushModeEnabled,
           gcashQrUrl: settings.gcash_qr_url ?? null,
+          storeName: settings.store_name || DEFAULT_STORE_SETTINGS.storeName,
+          tagline: settings.tagline || DEFAULT_STORE_SETTINGS.tagline,
+          address: settings.address || '',
+          phone: settings.phone || '',
+          tin: settings.tin || '',
+          receiptFooter: settings.receipt_footer || DEFAULT_STORE_SETTINGS.receiptFooter,
         }
       : undefined;
 
@@ -819,6 +843,7 @@ export function useCremaPos() {
       note: '',
       tendered: '',
       discountName: 'None',
+      payMethod: 'cash',
       success: null,
       selCat: 'All',
       search: '',

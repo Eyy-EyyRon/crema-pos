@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CartRow } from '../components/CartRow';
 import {
   CashTenderBlock,
@@ -92,6 +93,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     checkoutBusy,
     checkoutError,
   } = props;
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.screen}>
@@ -132,7 +134,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           taxRatePct={taxRatePct} isTaxInclusive={isTaxInclusive} serviceChargePct={serviceChargePct}
         />
       </ScrollView>
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: 20 + insets.bottom }]}>
         {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
         <ProcessPaymentButton totalStr={peso(total)} disabled={!canPay} busy={checkoutBusy} onPress={onPay} />
       </View>
@@ -157,7 +159,6 @@ const styles = StyleSheet.create({
   footer: {
     paddingTop: 12,
     paddingHorizontal: 18,
-    paddingBottom: 20,
     backgroundColor: colors.screenBg,
   },
 });

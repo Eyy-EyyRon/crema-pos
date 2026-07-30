@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon } from '../icons';
 import { tapLight, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
@@ -38,7 +39,11 @@ export function AccountSheet({
       <View style={s.card}>
         <View style={s.header}>
           <View style={s.avatar}>
-            <UserIcon size={20} color={colors.gold} strokeWidth={1.8} />
+            {user.avatar_url ? (
+              <Image source={{ uri: user.avatar_url }} cachePolicy="disk" style={s.avatarImg} />
+            ) : (
+              <UserIcon size={20} color={colors.gold} strokeWidth={1.8} />
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.name}>{user.full_name}</Text>
@@ -101,6 +106,10 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(184,147,90,0.14)',
     borderWidth: 1, borderColor: colors.borderGold25,
     alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: '100%', height: '100%', borderRadius: 21,
   },
   name: { fontSize: 14.5, fontFamily: fonts.sansExtraBold, color: colors.textPrimary },
   role: { fontSize: 11.5, color: colors.textMuted, marginTop: 1 },

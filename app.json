@@ -31,7 +31,16 @@
     "owner": "eyyyronne",
     "plugins": [
       "expo-image",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-local-authentication",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Crema needs access to your photos so you can set a profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

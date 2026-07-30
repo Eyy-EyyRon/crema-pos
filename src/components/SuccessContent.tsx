@@ -2,17 +2,19 @@ import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CheckIcon } from '../icons';
 import { tapLight, tapMedium } from '../lib/haptics';
-import { printReceipt } from '../lib/receipt';
+import { printReceipt, ReceiptStoreInfo } from '../lib/receipt';
 import { colors, fonts } from '../theme';
 import { SuccessInfo } from '../types';
 
 export function SuccessContent({
   success,
   orderTypeLabel,
+  storeInfo,
   onDone,
 }: {
   success: SuccessInfo;
   orderTypeLabel: string;
+  storeInfo: ReceiptStoreInfo;
   onDone: () => void;
 }) {
   const [printing, setPrinting] = useState(false);
@@ -22,7 +24,7 @@ export function SuccessContent({
     tapLight();
     setPrinting(true);
     try {
-      await printReceipt(success, orderTypeLabel);
+      await printReceipt(success, orderTypeLabel, storeInfo);
     } catch (e: any) {
       Alert.alert('Print Failed', e?.message || 'Could not print or share the receipt.');
     } finally {

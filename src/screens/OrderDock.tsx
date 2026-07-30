@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BagIcon } from '../icons';
 import { CartRow } from '../components/CartRow';
 import {
@@ -92,6 +93,7 @@ export function OrderDock(props: OrderDockProps) {
     checkoutBusy,
     checkoutError,
   } = props;
+  const insets = useSafeAreaInsets();
 
   const isEmpty = cartCount === 0;
 
@@ -148,7 +150,7 @@ export function OrderDock(props: OrderDockProps) {
               dense
             />
           </ScrollView>
-          <View style={styles.footer}>
+          <View style={[styles.footer, { paddingBottom: 14 + insets.bottom }]}>
             {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
             <ProcessPaymentButton totalStr={peso(total)} disabled={!canPay} busy={checkoutBusy} onPress={onPay} />
           </View>

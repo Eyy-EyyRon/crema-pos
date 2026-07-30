@@ -71,6 +71,14 @@ export function PosApp() {
   const orderTypeLabel = state.orderType === 'dine-in' ? 'Dine-In' : 'Takeout';
   const canPay = state.cart.length > 0 && !pos.shortfall;
   const userName = currentUser.full_name;
+  const receiptStoreInfo = {
+    storeName: state.storeSettings.storeName,
+    tagline: state.storeSettings.tagline,
+    address: state.storeSettings.address,
+    phone: state.storeSettings.phone,
+    tin: state.storeSettings.tin,
+    receiptFooter: state.storeSettings.receiptFooter,
+  };
 
   const customizeProps = pos.selectedItem
     ? {
@@ -201,7 +209,7 @@ export function PosApp() {
         )}
 
         {customizeProps && <CustomizeSidebar {...customizeProps} />}
-        {state.success && <SuccessModal success={state.success} orderTypeLabel={orderTypeLabel} onDone={pos.done} />}
+        {state.success && <SuccessModal success={state.success} orderTypeLabel={orderTypeLabel} storeInfo={receiptStoreInfo} onDone={pos.done} />}
         {state.showQueue && (
           <QueueModal
             tickets={state.queue}
@@ -258,7 +266,7 @@ export function PosApp() {
         <CheckoutScreen {...checkoutSharedProps} onBack={() => pos.patch({ screen: 'menu' })} />
       )}
       {state.screen === 'success' && state.success && (
-        <SuccessScreen success={state.success} orderTypeLabel={orderTypeLabel} onDone={pos.done} />
+        <SuccessScreen success={state.success} orderTypeLabel={orderTypeLabel} storeInfo={receiptStoreInfo} onDone={pos.done} />
       )}
       {state.screen === 'queue' && (
         <QueueScreen

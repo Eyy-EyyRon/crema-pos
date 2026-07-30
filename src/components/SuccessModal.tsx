@@ -1,22 +1,25 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors } from '../theme';
+import { ReceiptStoreInfo } from '../lib/receipt';
 import { SuccessInfo } from '../types';
 import { SuccessContent } from './SuccessContent';
 
 export function SuccessModal({
   success,
   orderTypeLabel,
+  storeInfo,
   onDone,
 }: {
   success: SuccessInfo;
   orderTypeLabel: string;
+  storeInfo: ReceiptStoreInfo;
   onDone: () => void;
 }) {
   return (
     <View style={styles.overlay}>
       <View style={styles.card}>
-        <SuccessContent success={success} orderTypeLabel={orderTypeLabel} onDone={onDone} />
+        <SuccessContent success={success} orderTypeLabel={orderTypeLabel} storeInfo={storeInfo} onDone={onDone} />
       </View>
     </View>
   );

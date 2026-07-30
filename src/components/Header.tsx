@@ -1,5 +1,6 @@
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeftIcon, CoffeeIcon, SettingsIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
@@ -31,8 +32,9 @@ export function MenuHeader({
   variant?: 'phone' | 'tablet';
 }) {
   const tablet = variant === 'tablet';
+  const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.wrap, tablet && styles.wrapTablet]}>
+    <View style={[styles.wrap, { paddingTop: insets.top + 14 }, tablet && [styles.wrapTablet, { paddingTop: insets.top + 14 }]]}>
       <View style={styles.topRow}>
         <Pressable style={styles.brandRow} onPress={() => { tapLight(); onAccount(); }}>
           <Image source={logo} style={[styles.logo, tablet && { width: 42, height: 42 }]} />
@@ -84,8 +86,9 @@ export function BackHeader({
   onBack: () => void;
   right?: React.ReactNode;
 }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.backHeaderWrap}>
+    <View style={[styles.backHeaderWrap, { paddingTop: insets.top + 14 }]}>
       <Pressable onPress={() => { tapLight(); onBack(); }} style={styles.backBtn}>
         <ChevronLeftIcon size={17} color={colors.textPrimary} strokeWidth={2.2} />
       </Pressable>
@@ -100,12 +103,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.screenBg,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(184,147,90,0.1)',
-    paddingTop: 14,
     paddingHorizontal: 20,
     paddingBottom: 12,
   },
   wrapTablet: {
-    paddingTop: 14,
     paddingHorizontal: 26,
     paddingBottom: 12,
     borderBottomWidth: 0,

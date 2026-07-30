@@ -13,6 +13,7 @@ import {
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PosApp } from './src/PosApp';
 import { colors } from './src/theme';
 
@@ -33,10 +34,12 @@ export default function App() {
   }
 
   return (
-    <View style={styles.app}>
-      <PosApp />
-      <StatusBar style="light" />
-    </View>
+    <SafeAreaProvider>
+      <View style={styles.app}>
+        <PosApp />
+        <StatusBar style="light" />
+      </View>
+    </SafeAreaProvider>
   );
 }
 
