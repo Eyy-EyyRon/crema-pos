@@ -371,6 +371,13 @@ export function useCremaPos() {
     let cancelled = false;
     (async () => {
       patch({ shiftLoading: true });
+      // Same race as openShiftAction/checkout: this fetch fires the instant
+      // currentUser is set, which can be before the fast-path login's
+      // background real-session swap lands. Under a stale/anon session, RLS
+      // silently returns zero rows even if this barista genuinely has an
+      // open shift, wrongly re-triggering the Open Cash Drawer modal.
+      if (authSyncRef.current) await authSyncRef.current;
+      if (cancelled) return;
       const s = await getOpenShift(state.currentUser!.id);
       if (!cancelled) setState((st) => ({ ...st, shift: s, shiftLoading: false }));
     })();
