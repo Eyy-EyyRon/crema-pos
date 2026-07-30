@@ -35,7 +35,7 @@ export function GcashQrModal({
             </View>
             <Text style={s.title}>Scan to Pay with GCash</Text>
           </View>
-          <Pressable onPress={() => { tapLight(); onClose(); }} style={s.closeBtn}>
+          <Pressable onPress={() => { tapLight(); onClose(); }} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
             <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
           </Pressable>
         </View>
