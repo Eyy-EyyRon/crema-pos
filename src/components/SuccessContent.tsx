@@ -1,7 +1,8 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CheckIcon } from '../icons';
 import { tapLight, tapMedium } from '../lib/haptics';
+import { printReceipt } from '../lib/receipt';
 import { colors, fonts } from '../theme';
 import { SuccessInfo } from '../types';
 
@@ -14,6 +15,21 @@ export function SuccessContent({
   orderTypeLabel: string;
   onDone: () => void;
 }) {
+  const [printing, setPrinting] = useState(false);
+
+  const handlePrint = async () => {
+    if (printing) return;
+    tapLight();
+    setPrinting(true);
+    try {
+      await printReceipt(success, orderTypeLabel);
+    } catch (e: any) {
+      Alert.alert('Print Failed', e?.message || 'Could not print or share the receipt.');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   return (
     <>
       <View style={styles.checkCircle}>
@@ -50,8 +66,8 @@ export function SuccessContent({
         )}
       </View>
       <View style={styles.buttonsRow}>
-        <Pressable onPress={() => { tapLight(); onDone(); }} style={styles.printBtn}>
-          <Text style={styles.printBtnText}>Print Receipt</Text>
+        <Pressable onPress={handlePrint} disabled={printing} style={styles.printBtn}>
+          <Text style={styles.printBtnText}>{printing ? 'Preparing…' : 'Print Receipt'}</Text>
         </Pressable>
         <Pressable onPress={() => { tapMedium(); onDone(); }} style={styles.newOrderBtn}>
           <Text style={styles.newOrderBtnText}>New Order</Text>
