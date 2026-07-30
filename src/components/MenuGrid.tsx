@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { LayoutChangeEvent, View } from 'react-native';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { SearchIcon } from '../icons';
+import { colors, fonts } from '../theme';
 import { MenuItemStock } from '../useCremaPos';
 import { MenuItem } from '../types';
 import { MenuItemCard } from './MenuItemCard';
@@ -32,6 +34,16 @@ export function MenuGrid({
   const columns = fixedColumns ?? Math.max(1, Math.floor((width + gap) / (minTileWidth + gap)));
   const itemWidth = width > 0 ? (width - gap * (columns - 1)) / columns : undefined;
 
+  if (items.length === 0) {
+    return (
+      <View onLayout={onLayout} style={styles.empty}>
+        <SearchIcon size={26} color={colors.textLabel} strokeWidth={1.8} />
+        <Text style={styles.emptyTitle}>No items found</Text>
+        <Text style={styles.emptySub}>Try a different search or category.</Text>
+      </View>
+    );
+  }
+
   return (
     <View onLayout={onLayout} style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
       {itemWidth &&
@@ -49,3 +61,24 @@ export function MenuGrid({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  empty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+    gap: 6,
+    width: '100%',
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontFamily: fonts.sansBold,
+    color: colors.textMuted,
+    marginTop: 4,
+  },
+  emptySub: {
+    fontSize: 12.5,
+    color: colors.textLabel,
+  },
+});
