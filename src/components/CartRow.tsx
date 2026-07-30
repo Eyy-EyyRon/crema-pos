@@ -27,15 +27,15 @@ export function CartRow({ item, shotSize = 44, onInc, onDec, onRemove }: CartRow
         <Text style={styles.line}>{peso0(item.unit * item.qty)}</Text>
       </View>
       <View style={styles.right}>
-        <Pressable onPress={() => { warning(); onRemove(); }} style={styles.removeBtn} hitSlop={8}>
+        <Pressable onPress={() => { warning(); onRemove(); }} style={styles.removeBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remove ${item.name} from cart`}>
           <TrashIcon size={15} color={colors.danger} strokeWidth={1.8} />
         </Pressable>
         <View style={styles.stepper}>
-          <Pressable onPress={() => { tapLight(); onDec(); }} style={styles.stepBtn}>
+          <Pressable onPress={() => { tapLight(); onDec(); }} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel={`Decrease quantity of ${item.name}`}>
             <MinusIcon size={12} color={colors.textSecondary} />
           </Pressable>
           <Text style={styles.qty}>{item.qty}</Text>
-          <Pressable onPress={() => { tapLight(); onInc(); }} style={[styles.stepBtn, { backgroundColor: colors.gold }]}>
+          <Pressable onPress={() => { tapLight(); onInc(); }} style={[styles.stepBtn, { backgroundColor: colors.gold }]} accessibilityRole="button" accessibilityLabel={`Increase quantity of ${item.name}`}>
             <PlusIcon size={12} color={colors.screenBg} strokeWidth={3.2} />
           </Pressable>
         </View>
