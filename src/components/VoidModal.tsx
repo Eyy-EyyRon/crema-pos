@@ -40,6 +40,11 @@ export function VoidModal({
 
   const handlePinComplete = async (pin: string) => {
     if (busy) return;
+    if (isOffline) {
+      setError('Manager PIN verification requires an internet connection');
+      setResetTick((t) => t + 1);
+      return;
+    }
     if (!reason.trim()) {
       setError('Enter a reason first');
       setResetTick((t) => t + 1);
@@ -77,7 +82,7 @@ export function VoidModal({
               <Text style={s.subtitle}>{order.no}</Text>
             </View>
           </View>
-          <Pressable onPress={busy ? undefined : () => { tapLight(); onClose(); }} style={s.closeBtn}>
+          <Pressable onPress={busy ? undefined : () => { tapLight(); onClose(); }} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
             <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
           </Pressable>
         </View>
@@ -117,10 +122,11 @@ export function VoidModal({
               gap={10}
               onComplete={handlePinComplete}
               onChangeLength={() => error && setError('')}
-              disabled={busy}
+              disabled={busy || isOffline}
               error={!!error}
               resetSignal={resetTick}
             />
+            {isOffline && <Text style={s.offlineNote}>Manager PIN verification requires an internet connection</Text>}
           </View>
         ) : (
           <View>
