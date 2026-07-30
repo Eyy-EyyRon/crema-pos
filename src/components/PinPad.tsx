@@ -187,7 +187,13 @@ export function PinPadKey({ label, size, onPress, variant = 'digit', disabled = 
 
   return (
     <Animated.View style={{ transform: [{ scale: sc }], opacity: disabled ? 0.5 : 1 }}>
-      <TouchableOpacity onPress={handlePress} activeOpacity={1} disabled={disabled}>
+      <TouchableOpacity
+        onPress={handlePress}
+        activeOpacity={1}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={variant === 'bio' ? 'Use biometric login' : label === '⌫' ? 'Delete' : label}
+      >
         <Animated.View style={{
           width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center',
           borderWidth: variant === 'bio' ? 1.5 : 1,
