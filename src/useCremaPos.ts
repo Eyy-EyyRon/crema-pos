@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { QUICK_CASH } from './data';
 import { peso, peso0 } from './format';
 import { supabase } from './lib/supabase';
+import { logActivity } from './lib/activityLog';
 import { closeShift as closeShiftApi, getOpenShift, openShift as openShiftApi } from './lib/cashDrawer';
 import { success as successHaptic, error as errorHaptic } from './lib/haptics';
 import {
@@ -34,6 +35,7 @@ import {
   SelectedMod,
   SelectedMods,
   Shift,
+  ShiftScheduleEntry,
   SuccessInfo,
   UserProfile,
 } from './types';
@@ -107,6 +109,7 @@ interface PosState {
   /** Set while the cart being built is meant to top up an already-queued order rather than create a new one. */
   appendTargetOrderId: string | null;
   appendTargetOrderNo: string | null;
+  upcomingShifts: ShiftScheduleEntry[];
 
   // auth / shift
   currentUser: UserProfile | null;
@@ -150,6 +153,7 @@ const initialState: PosState = {
   showGcashQr: false,
   appendTargetOrderId: null,
   appendTargetOrderNo: null,
+  upcomingShifts: [],
 
   currentUser: null,
   authLoading: true,
@@ -161,7 +165,7 @@ const initialState: PosState = {
 
   menuItems: [],
   categories: ['All'],
-  discountsList: [{ n: 'None', p: 0 }],
+  discountsList: [{ id: null, n: 'None', p: 0 }],
   modifierGroupsByItem: {},
   recipesByItem: {},
   ingredientStock: {},
@@ -441,6 +445,7 @@ export function useCremaPos() {
     try {
       const s = await openShiftApi(state.currentUser.id, startingCash);
       patch({ shift: s });
+      logActivity(state.currentUser.id, 'shift_opened', `Opened shift with ₱${startingCash.toFixed(2)} starting cash`);
     } catch (e: any) {
       return e.message || 'Could not open shift. Check your connection and try again.';
     }
@@ -451,11 +456,13 @@ export function useCremaPos() {
     if (!(await isOnline())) return 'Closing the cash drawer requires an internet connection. Please reconnect and try again.';
     try {
       await closeShiftApi(state.shift.id, endingCash);
+      // Read the barista id before logout() clears state.currentUser.
+      if (state.currentUser) logActivity(state.currentUser.id, 'shift_closed', `Closed shift with ₱${endingCash.toFixed(2)} ending cash`);
       await logout();
     } catch (e: any) {
       return e.message || 'Could not close shift. Check your connection and try again.';
     }
-  }, [state.shift, logout]);
+  }, [state.shift, state.currentUser, logout]);
 
   // ─────────────────────────────────────────────
   // MENU / MODS / DISCOUNTS / STORE SETTINGS
@@ -537,8 +544,8 @@ export function useCremaPos() {
     // Always keep a synthetic 0% "None" entry first regardless of what's in
     // the real table, so the discount row always has a "No Discount" chip.
     const discountsList: Discount[] = [
-      { n: 'None', p: 0 },
-      ...(discountsData ?? []).map((d: any) => ({ n: d.name, p: Number(d.percentage) })),
+      { id: null, n: 'None', p: 0 },
+      ...(discountsData ?? []).map((d: any) => ({ id: d.id, n: d.name, p: Number(d.percentage) })),
     ];
 
     const ingredientStock: Record<string, number> = {};
@@ -650,6 +657,7 @@ export function useCremaPos() {
       total: Number(o.total ?? o.total_amount ?? 0),
       restoreItems: (o.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty })),
       customerName: o.customer_name ?? null,
+      barista_id: o.barista_id,
     }));
 
   const buildQueueFromOutbox = (entries: OutboxEntry[]): QueueEntry[] =>
@@ -663,6 +671,7 @@ export function useCremaPos() {
       restoreItems: [],
       pendingSync: true,
       customerName: e.orderData.customer_name ?? null,
+      barista_id: e.orderData.barista_id,
     }));
 
   const fetchQueue = useCallback(async () => {
@@ -670,7 +679,7 @@ export function useCremaPos() {
       supabase
         .from('orders')
         .select(
-          'id, receipt_number, created_at, total, total_amount, order_type, customer_name, order_items(qty, menu_item_id, modifiers_json, special_note, menu_items(name))'
+          'id, receipt_number, created_at, total, total_amount, order_type, customer_name, barista_id, order_items(qty, menu_item_id, modifiers_json, special_note, menu_items(name))'
         )
         .eq('status', 'pending')
         .order('created_at', { ascending: true }),
@@ -694,10 +703,25 @@ export function useCremaPos() {
     if (count !== null) setState((s) => ({ ...s, todayOrderCount: count }));
   }, []);
 
+  // Read-only visibility into shifts a manager assigned via the web dashboard's Staff page —
+  // baristas previously had no way to see their own upcoming schedule anywhere.
+  const fetchUpcomingShifts = useCallback(async () => {
+    if (!state.currentUser) return;
+    const { data } = await supabase
+      .from('shift_schedules')
+      .select('id, scheduled_start, scheduled_end, notes')
+      .eq('barista_id', state.currentUser.id)
+      .gte('scheduled_start', new Date().toISOString())
+      .order('scheduled_start', { ascending: true })
+      .limit(10);
+    setState((s) => ({ ...s, upcomingShifts: (data ?? []) as ShiftScheduleEntry[] }));
+  }, [state.currentUser]);
+
   useEffect(() => {
     if (!state.currentUser) return;
     fetchQueue();
     fetchTodayOrderCount();
+    fetchUpcomingShifts();
     const channel = supabase
       .channel('crema_pos_queue')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
@@ -711,13 +735,14 @@ export function useCremaPos() {
       if (online) await syncOutbox();
       fetchQueue();
       fetchTodayOrderCount();
+      fetchUpcomingShifts();
     }, 10000);
     return () => {
       supabase.removeChannel(channel);
       clearInterval(iv);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.currentUser?.id, fetchQueue, fetchTodayOrderCount]);
+  }, [state.currentUser?.id, fetchQueue, fetchTodayOrderCount, fetchUpcomingShifts]);
 
   const completeQueueTicket = useCallback((id: string) => {
     setState((s) => ({ ...s, queue: s.queue.filter((q) => q.id !== id) }));
@@ -739,9 +764,12 @@ export function useCremaPos() {
   const flagVoidOrder = useCallback(async (orderId: string, reason: string): Promise<{ error?: string }> => {
     const { error } = await supabase.from('orders').update({ status: 'void_requested', void_reason: reason }).eq('id', orderId);
     if (error) return { error: error.message };
+    const ticket = state.queue.find((q) => q.id === orderId);
+    const actorId = ticket?.barista_id ?? state.currentUser?.id;
+    if (actorId) logActivity(actorId, 'void_requested', `Void requested for order ${ticket?.no ?? orderId.slice(0, 8).toUpperCase()} — ${reason}`);
     await fetchQueue();
     return {};
-  }, [fetchQueue]);
+  }, [fetchQueue, state.queue, state.currentUser]);
 
   const managerVoidOrder = useCallback(async (orderId: string, reason: string, pin: string): Promise<{ error?: string }> => {
     const online = await isOnline();
@@ -763,6 +791,13 @@ export function useCremaPos() {
       .update({ status: 'voided', void_reason: reason, voided_by: manager.id })
       .eq('id', orderId);
     if (voidErr) return { error: voidErr.message };
+
+    // Keeps the `sales` analytics mirror row from overstating revenue for a reversed order —
+    // best-effort, never blocks the void itself on failure.
+    supabase.rpc('adjust_sales_for_order', { p_order_id: orderId }).then(({ error }) => {
+      if (error) console.warn('adjust_sales_for_order failed:', error.message);
+    });
+    logActivity(ticket?.barista_id ?? manager.id, 'void_approved', `Order ${ticket?.no ?? orderId.slice(0, 8).toUpperCase()} voided by manager ${manager.full_name} — ${reason}`);
 
     if (ticket && ticket.restoreItems.length > 0) await restoreStockForOrderItems(ticket.restoreItems);
     await fetchQueue();
@@ -790,7 +825,7 @@ export function useCremaPos() {
     // it could be stale if another device modified the order in the meantime.
     const { data: order, error: fetchErr } = await supabase
       .from('orders')
-      .select('total, total_amount, order_items(menu_item_id, qty)')
+      .select('total, total_amount, receipt_number, barista_id, order_items(menu_item_id, qty)')
       .eq('id', orderId)
       .single();
     if (fetchErr || !order) return { error: fetchErr?.message || 'Could not load the order to refund.' };
@@ -812,6 +847,15 @@ export function useCremaPos() {
       })
       .eq('id', orderId);
     if (refundErr) return { error: refundErr.message };
+
+    supabase.rpc('adjust_sales_for_order', { p_order_id: orderId }).then(({ error }) => {
+      if (error) console.warn('adjust_sales_for_order failed:', error.message);
+    });
+    logActivity(
+      order.barista_id ?? manager.id,
+      'refund_issued',
+      `₱${amount.toFixed(2)} refunded for order ${order.receipt_number ?? orderId.slice(0, 8).toUpperCase()} by manager ${manager.full_name} — ${reason.trim()}`
+    );
 
     if (isFull) {
       const restoreItems = (order.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty }));
@@ -973,6 +1017,8 @@ export function useCremaPos() {
       status: 'pending',
       order_type: state.orderType,
       customer_name: state.customerName.trim() || null,
+      discount_name: state.discountName !== 'None' ? state.discountName : null,
+      discount_id: state.discountsList.find((d) => d.n === state.discountName)?.id ?? null,
       subtotal: totals.sub,
       discount_amount: totals.disc,
       tax_amount: totals.tax,

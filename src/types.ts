@@ -40,6 +40,7 @@ export interface CartItem {
 }
 
 export interface Discount {
+  id: string | null;
   n: string;
   p: number;
 }
@@ -64,6 +65,8 @@ export interface QueueEntry {
   pendingSync?: boolean;
   /** Optional name given for the order (e.g. for takeout pickup calls) — not always present. */
   customerName?: string | null;
+  /** The order's original barista — used to attribute pos_activity_logs rows correctly even when a different barista is on-shift now. */
+  barista_id: string;
 }
 
 export interface SuccessInfo {
@@ -87,4 +90,13 @@ export interface Shift {
   id: string;
   startingCash: number;
   openedAt: string;
+}
+
+// A planned future shift a manager assigned via the web dashboard's Staff page — read-only on
+// mobile, since scheduling/editing stays a manager-only web feature by design.
+export interface ShiftScheduleEntry {
+  id: string;
+  scheduled_start: string;
+  scheduled_end: string;
+  notes: string | null;
 }

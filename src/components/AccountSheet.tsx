@@ -1,10 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon } from '../icons';
+import { CalendarIcon, ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon } from '../icons';
 import { tapLight, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
-import { Shift, UserProfile } from '../types';
+import { Shift, ShiftScheduleEntry, UserProfile } from '../types';
 
 function elapsedSince(iso: string) {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -17,6 +17,7 @@ export function AccountSheet({
   visible,
   user,
   shift,
+  upcomingShifts,
   onClose,
   onHistory,
   onCloseShift,
@@ -26,6 +27,7 @@ export function AccountSheet({
   visible: boolean;
   user: UserProfile;
   shift: Shift | null;
+  upcomingShifts: ShiftScheduleEntry[];
   onClose: () => void;
   onHistory: () => void;
   onCloseShift: () => void;
@@ -60,6 +62,30 @@ export function AccountSheet({
             <Text style={s.shiftText}>
               Shift open {elapsedSince(shift.openedAt)} · Starting cash ₱{shift.startingCash.toFixed(0)}
             </Text>
+          </View>
+        )}
+
+        {upcomingShifts.length > 0 && (
+          <View style={s.schedSection}>
+            <Text style={s.schedTitle}>Upcoming Shifts</Text>
+            {upcomingShifts.slice(0, 3).map((sch) => {
+              const start = new Date(sch.scheduled_start);
+              const end = new Date(sch.scheduled_end);
+              return (
+                <View key={sch.id} style={s.schedRow}>
+                  <CalendarIcon size={12} color={colors.textMuted} strokeWidth={2} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.schedDate}>
+                      {start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </Text>
+                    <Text style={s.schedTime}>
+                      {start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} – {end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                      {sch.notes ? ` · ${sch.notes}` : ''}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -122,6 +148,16 @@ const s = StyleSheet.create({
     backgroundColor: colors.chipBg, borderRadius: 10, padding: 10, marginBottom: 12,
   },
   shiftText: { fontSize: 11.5, color: colors.textMuted, flex: 1 },
+  schedSection: {
+    backgroundColor: colors.chipBg, borderRadius: 10, padding: 10, marginBottom: 12, gap: 8,
+  },
+  schedTitle: {
+    fontSize: 9.5, fontFamily: fonts.sansExtraBold, letterSpacing: 1.2, textTransform: 'uppercase',
+    color: colors.textLabel, marginBottom: 2,
+  },
+  schedRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
+  schedDate: { fontSize: 11.5, fontFamily: fonts.sansBold, color: colors.textSecondary },
+  schedTime: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 12, paddingHorizontal: 4,

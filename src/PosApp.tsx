@@ -148,6 +148,7 @@ export function PosApp() {
         visible={state.showAccount}
         user={currentUser}
         shift={state.shift}
+        upcomingShifts={state.upcomingShifts}
         onClose={() => pos.patch({ showAccount: false })}
         onHistory={() => pos.patch({ showAccount: false, screen: 'history' })}
         onLock={() => { pos.patch({ showAccount: false }); pos.lockPos(); }}

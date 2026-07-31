@@ -167,6 +167,8 @@ export type PosOrderData = {
   status: 'pending';
   order_type: OrderType;
   customer_name?: string | null;
+  discount_name?: string | null;
+  discount_id?: string | null;
   subtotal?: number;
   discount_amount?: number;
   tax_amount?: number;
@@ -198,6 +200,7 @@ export async function submitPosOrder(orderData: PosOrderData, orderItems: PosOrd
   // violation — product-level reporting is already covered by order_items.
   try {
     await supabase.from('sales').insert({
+      order_id: order.id,
       barista_id: orderData.barista_id,
       total_amount: orderData.total,
       payment_method: orderData.payment_method,
@@ -314,6 +317,7 @@ export async function addItemsToExistingOrder(
   // (e.g. original was cash, the extra cookie was GCash), so it's recorded as its own sale.
   try {
     await supabase.from('sales').insert({
+      order_id: orderId,
       barista_id: order.barista_id,
       total_amount: incrementalAmounts.total,
       payment_method: incrementalPaymentMethod,

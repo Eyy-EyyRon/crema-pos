@@ -23,6 +23,7 @@ type HistoryOrder = {
   paymentMethod: string;
   customerName: string | null;
   refundAmount: number | null;
+  baristaId: string;
   items: QueueItemLine[];
   receiptItems: { qtyName: string; lineStr: string; modsStr?: string }[];
   restoreItems: { menu_item_id: string; qty: number }[];
@@ -106,7 +107,7 @@ export function HistoryScreen({
     let query = supabase
       .from('orders')
       .select(
-        'id, receipt_number, created_at, total, total_amount, status, order_type, payment_method, customer_name, refund_amount, order_items(qty, menu_item_id, unit_price, modifiers_json, special_note, menu_items(name))'
+        'id, receipt_number, created_at, total, total_amount, status, order_type, payment_method, customer_name, refund_amount, barista_id, order_items(qty, menu_item_id, unit_price, modifiers_json, special_note, menu_items(name))'
       )
       .order('created_at', { ascending: false })
       .limit(100);
@@ -132,6 +133,7 @@ export function HistoryScreen({
       paymentMethod: o.payment_method ?? 'cash',
       customerName: o.customer_name ?? null,
       refundAmount: o.refund_amount !== null && o.refund_amount !== undefined ? Number(o.refund_amount) : null,
+      baristaId: o.barista_id,
       items: (o.order_items ?? []).map((oi: any) => ({
         name: oi.menu_items?.name ?? 'Item',
         qty: oi.qty,
@@ -189,12 +191,15 @@ export function HistoryScreen({
     if (!search.trim()) return orders;
     const q = search.toLowerCase();
     return orders.filter(
-      (o) => o.no.toLowerCase().includes(q) || o.items.some((it) => it.name.toLowerCase().includes(q))
+      (o) =>
+        o.no.toLowerCase().includes(q) ||
+        o.items.some((it) => it.name.toLowerCase().includes(q)) ||
+        (o.customerName ?? '').toLowerCase().includes(q)
     );
   }, [orders, search]);
 
   const voidableTarget = voidTarget
-    ? { id: voidTarget.id, no: voidTarget.no, type: (voidTarget.orderType === 'takeout' ? 'Takeout' : 'Dine-In') as 'Dine-In' | 'Takeout', mins: 0, items: voidTarget.items, total: voidTarget.total, restoreItems: voidTarget.restoreItems }
+    ? { id: voidTarget.id, no: voidTarget.no, type: (voidTarget.orderType === 'takeout' ? 'Takeout' : 'Dine-In') as 'Dine-In' | 'Takeout', mins: 0, items: voidTarget.items, total: voidTarget.total, restoreItems: voidTarget.restoreItems, barista_id: voidTarget.baristaId }
     : null;
 
   return (
