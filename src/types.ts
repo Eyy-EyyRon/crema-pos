@@ -44,26 +44,36 @@ export interface Discount {
   p: number;
 }
 
+export interface QueueItemLine {
+  name: string;
+  qty: number;
+  /** Modifiers + special note, joined into one display string (e.g. "Oat Milk · No Sugar · Note: extra hot"). */
+  mods?: string;
+}
+
 export interface QueueEntry {
   id: string;
   no: string;
   type: 'Dine-In' | 'Takeout';
   mins: number;
-  items: [string, number][];
+  items: QueueItemLine[];
   total: number;
   /** Line items keyed for stock-restore on void — not rendered by QueueCard. */
   restoreItems: { menu_item_id: string; qty: number }[];
   /** True for an order still sitting in the local offline outbox — not yet a real Supabase row. */
   pendingSync?: boolean;
+  /** Optional name given for the order (e.g. for takeout pickup calls) — not always present. */
+  customerName?: string | null;
 }
 
 export interface SuccessInfo {
   no: string;
   total: number;
   method: 'Cash' | 'GCash';
-  items: { qtyName: string; lineStr: string }[];
+  items: { qtyName: string; lineStr: string; modsStr?: string }[];
   showChange: boolean;
   change: number;
+  customerName?: string | null;
 }
 
 export interface UserProfile {

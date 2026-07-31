@@ -12,10 +12,12 @@ import {
   PosOrderData,
   PosOrderItem,
   RecipeRow,
+  addItemsToExistingOrder,
   buildRecipesByItem,
   computeOrderTotals,
   getMaxAddableQty,
   isOutOfStock,
+  modsDisplayString,
   restoreStockForOrderItems,
 } from './lib/posOrder';
 import { OutboxEntry, getOutboxOrders, isOnline, submitOrder, syncOutbox } from './lib/syncEngine';
@@ -94,6 +96,7 @@ interface PosState {
   payMethod: PayMethod;
   tendered: string;
   discountName: string;
+  customerName: string;
   cart: CartItem[];
   nextId: number;
   success: SuccessInfo | null;
@@ -101,6 +104,9 @@ interface PosState {
   /** Count of orders placed today, server-side — used to show the upcoming ticket number before checkout. */
   todayOrderCount: number;
   showGcashQr: boolean;
+  /** Set while the cart being built is meant to top up an already-queued order rather than create a new one. */
+  appendTargetOrderId: string | null;
+  appendTargetOrderNo: string | null;
 
   // auth / shift
   currentUser: UserProfile | null;
@@ -135,12 +141,15 @@ const initialState: PosState = {
   payMethod: 'cash',
   tendered: '',
   discountName: 'None',
+  customerName: '',
   cart: [],
   nextId: 1,
   success: null,
   queue: [],
   todayOrderCount: 0,
   showGcashQr: false,
+  appendTargetOrderId: null,
+  appendTargetOrderNo: null,
 
   currentUser: null,
   authLoading: true,
@@ -173,6 +182,12 @@ function extractFunctionError(error: any): string | null {
   if (!error) return null;
   return error.message || 'Request failed';
 }
+
+function pinLockoutKey(profileId: string): string {
+  return `crema_pin_lockout_${profileId}`;
+}
+const PIN_LOCKOUT_MAX_ATTEMPTS = 5;
+const PIN_LOCKOUT_DURATION_MS = 15 * 60_000;
 
 export function useCremaPos() {
   const [state, setState] = useState<PosState>(initialState);
@@ -214,14 +229,35 @@ export function useCremaPos() {
     if (cachedProfile) {
       let fastPathOk = opts.biometric === true;
       if (!fastPathOk && opts.pin) {
+        // Same 5-attempt/15-minute lockout convention as the server-side manager-PIN check
+        // (see managerVoidOrder below) — this offline comparison never touches the server, so
+        // without a local guard a lost/unattended device would let someone brute-force a
+        // 4-digit PIN with no rate limit at all.
+        const lockoutKey = pinLockoutKey(profileId);
+        const lockoutStr = await AsyncStorage.getItem(lockoutKey);
+        const lockout: { count: number; lockedUntil: number } = lockoutStr ? JSON.parse(lockoutStr) : { count: 0, lockedUntil: 0 };
+        if (lockout.lockedUntil && Date.now() < lockout.lockedUntil) {
+          const mins = Math.ceil((lockout.lockedUntil - Date.now()) / 60000);
+          return { error: `Too many wrong PIN attempts. Try again in ${mins} minute${mins === 1 ? '' : 's'}.` };
+        }
+
         const cachedHash = await AsyncStorage.getItem(pinHashKey);
         if (cachedHash) {
           const candidateHash = await Crypto.digestStringAsync(
             Crypto.CryptoDigestAlgorithm.SHA256,
             `${profileId}:${opts.pin}`
           );
-          if (candidateHash !== cachedHash) return { error: 'Invalid PIN' };
+          if (candidateHash !== cachedHash) {
+            const nextCount = (lockout.count ?? 0) + 1;
+            const locked = nextCount >= PIN_LOCKOUT_MAX_ATTEMPTS;
+            await AsyncStorage.setItem(
+              lockoutKey,
+              JSON.stringify({ count: locked ? 0 : nextCount, lockedUntil: locked ? Date.now() + PIN_LOCKOUT_DURATION_MS : 0 })
+            );
+            return { error: locked ? 'Too many wrong PIN attempts. Try again in 15 minutes.' : 'Invalid PIN' };
+          }
           fastPathOk = true;
+          if (lockout.count) await AsyncStorage.removeItem(lockoutKey);
         }
       }
 
@@ -606,9 +642,14 @@ export function useCremaPos() {
       no: o.receipt_number ?? o.id.slice(0, 8).toUpperCase(),
       type: o.order_type === 'takeout' ? 'Takeout' : 'Dine-In',
       mins: elapsedMinutes(o.created_at),
-      items: (o.order_items ?? []).map((oi: any) => [oi.menu_items?.name ?? 'Item', oi.qty] as [string, number]),
+      items: (o.order_items ?? []).map((oi: any) => ({
+        name: oi.menu_items?.name ?? 'Item',
+        qty: oi.qty,
+        mods: modsDisplayString(oi.modifiers_json, oi.special_note),
+      })),
       total: Number(o.total ?? o.total_amount ?? 0),
       restoreItems: (o.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty })),
+      customerName: o.customer_name ?? null,
     }));
 
   const buildQueueFromOutbox = (entries: OutboxEntry[]): QueueEntry[] =>
@@ -617,10 +658,11 @@ export function useCremaPos() {
       no: e.orderData.receipt_number,
       type: e.orderData.order_type === 'takeout' ? 'Takeout' : 'Dine-In',
       mins: elapsedMinutes(e.timestamp),
-      items: e.displayItems.map((d) => [d.name, d.qty] as [string, number]),
+      items: e.displayItems.map((d) => ({ name: d.name, qty: d.qty, mods: d.mods })),
       total: e.orderData.total,
       restoreItems: [],
       pendingSync: true,
+      customerName: e.orderData.customer_name ?? null,
     }));
 
   const fetchQueue = useCallback(async () => {
@@ -628,7 +670,7 @@ export function useCremaPos() {
       supabase
         .from('orders')
         .select(
-          'id, receipt_number, created_at, total, total_amount, order_type, order_items(qty, menu_item_id, menu_items(name))'
+          'id, receipt_number, created_at, total, total_amount, order_type, customer_name, order_items(qty, menu_item_id, modifiers_json, special_note, menu_items(name))'
         )
         .eq('status', 'pending')
         .order('created_at', { ascending: true }),
@@ -727,19 +769,106 @@ export function useCremaPos() {
     return {};
   }, [state.queue, fetchQueue]);
 
+  // Mirrors cafe-web-dashboard's manager Transactions page refund flow exactly (same
+  // refund_amount/refunded_at/refund_reason/refunded_by columns, same MVP scope: an arbitrary
+  // amount against the order total rather than per-line-item selection; a full refund — amount
+  // equals the total — restores ingredient stock like a void, a partial refund doesn't, since
+  // there's no reliable amount-to-ingredient mapping for less than the whole order). Gated by
+  // the same manager-PIN check as managerVoidOrder since, unlike the web dashboard, this runs on
+  // a shared kiosk device with no per-manager login.
+  const managerRefundOrder = useCallback(async (orderId: string, amount: number, reason: string, pin: string): Promise<{ error?: string }> => {
+    const online = await isOnline();
+    if (!online) return { error: 'Manager PIN verification requires an internet connection' };
+    if (!reason.trim()) return { error: 'A refund reason is required' };
+
+    const { data: managers, error: pinErr } = await supabase.rpc('verify_manager_pin', { p_pin: pin });
+    if (pinErr) return { error: pinErr.message || 'Could not verify manager PIN. Check your connection and try again.' };
+    const manager = managers?.[0];
+    if (!manager) return { error: 'Invalid manager PIN' };
+
+    // Re-fetch the order fresh rather than trusting whatever total/items History last loaded —
+    // it could be stale if another device modified the order in the meantime.
+    const { data: order, error: fetchErr } = await supabase
+      .from('orders')
+      .select('total, total_amount, order_items(menu_item_id, qty)')
+      .eq('id', orderId)
+      .single();
+    if (fetchErr || !order) return { error: fetchErr?.message || 'Could not load the order to refund.' };
+
+    const total = Number(order.total ?? order.total_amount ?? 0);
+    if (!(amount > 0) || amount > total) {
+      return { error: `Refund amount must be between ₱0.01 and ${peso0(total)}.` };
+    }
+
+    const isFull = amount === total;
+    const { error: refundErr } = await supabase
+      .from('orders')
+      .update({
+        status: isFull ? 'refunded' : 'partially_refunded',
+        refund_amount: amount,
+        refunded_at: new Date().toISOString(),
+        refund_reason: reason.trim(),
+        refunded_by: manager.id,
+      })
+      .eq('id', orderId);
+    if (refundErr) return { error: refundErr.message };
+
+    if (isFull) {
+      const restoreItems = (order.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty }));
+      if (restoreItems.length > 0) await restoreStockForOrderItems(restoreItems);
+    }
+    return {};
+  }, []);
+
+  // Puts the register into "add to an already-queued order" mode instead of building a new
+  // order — for something like "customer adds one more cookie" after the ticket's already
+  // fired, without forcing a full void + re-ring of everything already sent to the kitchen.
+  const startAddToOrder = useCallback((ticket: QueueEntry) => {
+    setState((s) => ({
+      ...s,
+      appendTargetOrderId: ticket.id,
+      appendTargetOrderNo: ticket.no,
+      orderType: ticket.type === 'Takeout' ? 'takeout' : 'dine-in',
+      cart: [],
+      selMods: {},
+      qty: 1,
+      note: '',
+      discountName: 'None',
+      payMethod: 'cash',
+      tendered: '',
+      customerName: '',
+      showQueue: false,
+      screen: 'menu',
+    }));
+  }, []);
+
+  const cancelAddToOrder = useCallback(() => {
+    setState((s) => ({ ...s, appendTargetOrderId: null, appendTargetOrderNo: null, cart: [], screen: 'menu' }));
+  }, []);
+
   // ─────────────────────────────────────────────
   // CART / CUSTOMIZE
   // ─────────────────────────────────────────────
   const selectType = useCallback((v: OrderType) => {
-    setState((s) => ({
-      ...s,
-      orderType: v,
-      screen: s.screen === 'orderType' ? 'menu' : s.screen,
-      // On tablet this is the moment OrderDock (and its checkout error banner)
-      // becomes visible again — clear a stale error from a previous failed
-      // attempt so it doesn't reappear before a new payment attempt.
-      checkoutError: s.screen === 'orderType' ? null : s.checkoutError,
-    }));
+    setState((s) => {
+      const fromOrderTypeScreen = s.screen === 'orderType';
+      // The OrderType screen is only reachable via "Change Type" or after done() resets things
+      // for the next customer — if an add-to-order was left mid-flow, picking a type here is an
+      // unambiguous signal the barista is starting something fresh, not continuing the top-up.
+      const wasAppending = fromOrderTypeScreen && !!s.appendTargetOrderId;
+      return {
+        ...s,
+        orderType: v,
+        screen: fromOrderTypeScreen ? 'menu' : s.screen,
+        // On tablet this is the moment OrderDock (and its checkout error banner)
+        // becomes visible again — clear a stale error from a previous failed
+        // attempt so it doesn't reappear before a new payment attempt.
+        checkoutError: fromOrderTypeScreen ? null : s.checkoutError,
+        appendTargetOrderId: wasAppending ? null : s.appendTargetOrderId,
+        appendTargetOrderNo: wasAppending ? null : s.appendTargetOrderNo,
+        cart: wasAppending ? [] : s.cart,
+      };
+    });
   }, []);
 
   const openItem = useCallback((menuId: string) => {
@@ -822,6 +951,14 @@ export function useCremaPos() {
     patch({ checkoutBusy: true, checkoutError: null });
     if (authSyncRef.current) await authSyncRef.current;
 
+    const isAppend = !!state.appendTargetOrderId;
+    // Appending to an existing order has no offline outbox path of its own (unlike a brand-new
+    // order) — merging into a possibly-already-synced parent row safely needs a live round trip.
+    if (isAppend && !(await isOnline())) {
+      patch({ checkoutBusy: false, checkoutError: 'Adding items to an existing order requires an internet connection. Please reconnect and try again.' });
+      return;
+    }
+
     const receiptNumber = 'REC-' + Date.now().toString().slice(-6) + Math.random().toString(36).slice(2, 5).toUpperCase();
     const tenderNum = state.tendered !== '' && !isNaN(Number(state.tendered)) ? Number(state.tendered) : null;
     const isCash = state.payMethod === 'cash';
@@ -835,6 +972,7 @@ export function useCremaPos() {
       barista_id: state.currentUser.id,
       status: 'pending',
       order_type: state.orderType,
+      customer_name: state.customerName.trim() || null,
       subtotal: totals.sub,
       discount_amount: totals.disc,
       tax_amount: totals.tax,
@@ -849,10 +987,25 @@ export function useCremaPos() {
       modifiers_json: JSON.stringify(c.modifiers),
       special_note: c.note || null,
     }));
-    const displayItems = state.cart.map((c) => ({ name: c.name, qty: c.qty }));
+    const cartModsStr = (c: CartItem) => {
+      const parts = [...c.mods];
+      if (c.note) parts.push(`Note: ${c.note}`);
+      return parts.length > 0 ? parts.join(', ') : undefined;
+    };
+    const displayItems = state.cart.map((c) => ({ name: c.name, qty: c.qty, mods: cartModsStr(c) }));
 
     try {
-      await submitOrder(orderData, orderItems, displayItems);
+      if (isAppend) {
+        await addItemsToExistingOrder(state.appendTargetOrderId!, orderItems, state.payMethod, {
+          subtotal: totals.sub,
+          discount_amount: totals.disc,
+          tax_amount: totals.tax,
+          service_charge_amount: totals.service,
+          total: totals.total,
+        });
+      } else {
+        await submitOrder(orderData, orderItems, displayItems);
+      }
     } catch (e: any) {
       errorHaptic();
       patch({ checkoutBusy: false, checkoutError: e?.message || 'Checkout failed. Please try again.' });
@@ -860,18 +1013,19 @@ export function useCremaPos() {
     }
     successHaptic();
 
-    const items = state.cart.map((c) => ({ qtyName: `${c.qty}× ${c.name}`, lineStr: peso0(c.unit * c.qty) }));
+    const items = state.cart.map((c) => ({ qtyName: `${c.qty}× ${c.name}`, lineStr: peso0(c.unit * c.qty), modsStr: cartModsStr(c) }));
     const success: SuccessInfo = {
-      no: receiptNumber,
+      no: isAppend ? state.appendTargetOrderNo! : receiptNumber,
       total: totals.total,
       method: isCash ? 'Cash' : 'GCash',
       items,
       showChange: isCash && change >= 0,
       change,
+      customerName: isAppend ? null : orderData.customer_name,
     };
     patch({ success, screen: 'success', checkoutBusy: false, checkoutError: null });
     fetchQueue();
-  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.orderType, state.storeSettings, state.checkoutBusy, totals, patch, fetchQueue]);
+  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, totals, patch, fetchQueue]);
 
   const done = useCallback(() => {
     setState((s) => ({
@@ -883,11 +1037,14 @@ export function useCremaPos() {
       note: '',
       tendered: '',
       discountName: 'None',
+      customerName: '',
       payMethod: 'cash',
       success: null,
       selCat: 'All',
       search: '',
       showGcashQr: false,
+      appendTargetOrderId: null,
+      appendTargetOrderNo: null,
     }));
   }, []);
 
@@ -921,6 +1078,10 @@ export function useCremaPos() {
     return map;
   }, [state.menuItems, state.cart, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled]);
 
+  // Deliberate: once the barista is actively typing a search, it matches across every
+  // category, not just the currently-selected tab. Scoping to the active tab would silently
+  // return zero results for an item that exists but sits under a different tab than whatever
+  // was last selected — worse than the reverse for a fast-moving register.
   const filteredItems = useMemo(() => {
     const q = state.search.toLowerCase();
     return state.menuItems.filter(
@@ -981,6 +1142,9 @@ export function useCremaPos() {
     completeQueueTicket,
     flagVoidOrder,
     managerVoidOrder,
+    managerRefundOrder,
+    startAddToOrder,
+    cancelAddToOrder,
     totals,
     discountPct,
     cartQtyByMenuId,

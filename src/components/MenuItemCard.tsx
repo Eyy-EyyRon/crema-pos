@@ -18,7 +18,7 @@ interface MenuItemCardProps {
   stock?: MenuItemStock;
 }
 
-export function MenuItemCard({ item, qty, variant = 'phone', onPress, stock }: MenuItemCardProps) {
+function MenuItemCardImpl({ item, qty, variant = 'phone', onPress, stock }: MenuItemCardProps) {
   const tablet = variant === 'tablet';
   const badgeBg = catColors[item.category] || '#2C3E5C';
   const unavailable = stock?.unavailable ?? false;
@@ -83,6 +83,29 @@ export function MenuItemCard({ item, qty, variant = 'phone', onPress, stock }: M
     </Pressable>
   );
 }
+
+// `onPress` is deliberately excluded from this comparison — MenuGrid passes a fresh arrow
+// function per render, but it always just forwards the same `item.id`, so its identity
+// changing doesn't affect what's rendered. Comparing the rest by value (rather than relying on
+// default shallow-equal reference checks) means the grid doesn't re-render every tile on every
+// cart/stock update — cartQtyByMenuId and stockByMenuId are rebuilt as new objects each time,
+// even for items whose own numbers didn't actually change.
+function arePropsEqual(prev: MenuItemCardProps, next: MenuItemCardProps): boolean {
+  return (
+    prev.item.id === next.item.id &&
+    prev.item.name === next.item.name &&
+    prev.item.price === next.item.price &&
+    prev.item.category === next.item.category &&
+    prev.item.image_url === next.item.image_url &&
+    prev.qty === next.qty &&
+    prev.variant === next.variant &&
+    (prev.stock?.unavailable ?? false) === (next.stock?.unavailable ?? false) &&
+    (prev.stock?.qty ?? null) === (next.stock?.qty ?? null) &&
+    (prev.stock?.low ?? false) === (next.stock?.low ?? false)
+  );
+}
+
+export const MenuItemCard = React.memo(MenuItemCardImpl, arePropsEqual);
 
 const styles = StyleSheet.create({
   card: {

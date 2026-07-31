@@ -18,9 +18,10 @@ export interface ReceiptOrderInfo {
   no: string;
   total: number;
   method: string;
-  items: { qtyName: string; lineStr: string }[];
+  items: { qtyName: string; lineStr: string; modsStr?: string }[];
   showChange: boolean;
   change: number;
+  customerName?: string | null;
 }
 
 function escapeHtml(s: string): string {
@@ -32,7 +33,7 @@ function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: string, sto
   const itemRows = success.items
     .map(
       (it) =>
-        `<tr><td>${escapeHtml(it.qtyName)}</td><td class="r">${escapeHtml(it.lineStr)}</td></tr>`
+        `<tr><td>${escapeHtml(it.qtyName)}${it.modsStr ? `<div class="mod">${escapeHtml(it.modsStr)}</div>` : ''}</td><td class="r">${escapeHtml(it.lineStr)}</td></tr>`
     )
     .join('');
   const changeRow = success.showChange
@@ -42,6 +43,9 @@ function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: string, sto
     .filter(Boolean)
     .map((line) => `<div class="storeLine">${escapeHtml(line as string)}</div>`)
     .join('');
+  const customerLine = success.customerName
+    ? `<div><span>Name</span><span>${escapeHtml(success.customerName)}</span></div>`
+    : '';
 
   return `<!DOCTYPE html>
 <html>
@@ -57,6 +61,7 @@ function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: string, sto
       table { width: 100%; margin-top: 16px; border-top: 1px dashed #999; padding-top: 10px; font-size: 14px; border-collapse: collapse; }
       td { padding: 4px 0; }
       td.r { text-align: right; }
+      .mod { font-size: 11px; color: #777; margin-top: 2px; }
       tr.total td { font-weight: bold; border-top: 1px dashed #999; padding-top: 10px; }
       .footer { text-align: center; margin-top: 26px; font-size: 12px; color: #777; white-space: pre-wrap; }
     </style>
@@ -70,6 +75,7 @@ function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: string, sto
       <div><span>Date</span><span>${escapeHtml(now.toLocaleDateString())} ${escapeHtml(now.toLocaleTimeString())}</span></div>
       <div><span>Order Type</span><span>${escapeHtml(orderTypeLabel)}</span></div>
       <div><span>Payment</span><span>${escapeHtml(success.method)}</span></div>
+      ${customerLine}
     </div>
     <table>
       ${itemRows}

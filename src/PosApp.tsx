@@ -109,6 +109,8 @@ export function PosApp() {
     orderType: state.orderType,
     onSelectDineIn: () => pos.selectType('dine-in'),
     onSelectTakeout: () => pos.selectType('takeout'),
+    customerName: state.customerName,
+    onChangeCustomerName: (v: string) => pos.patch({ customerName: v }),
     discounts: pos.discounts,
     discountName: state.discountName,
     discountPct: pos.discountPct,
@@ -136,6 +138,8 @@ export function PosApp() {
     onPay: pos.checkout,
     checkoutBusy: state.checkoutBusy,
     checkoutError: state.checkoutError,
+    appendTargetOrderNo: state.appendTargetOrderId ? state.appendTargetOrderNo : null,
+    onCancelAppend: pos.cancelAddToOrder,
   };
 
   const accountSheet = (
@@ -152,6 +156,7 @@ export function PosApp() {
       />
       <CloseShiftModal
         visible={closeShiftVisible}
+        startingCash={state.shift?.startingCash ?? 0}
         onCancel={() => setCloseShiftVisible(false)}
         onSubmit={async (cash) => {
           const err = await pos.closeShiftAction(cash);
@@ -170,6 +175,7 @@ export function PosApp() {
           onBack={() => pos.patch({ screen: 'menu' })}
           onFlagVoid={pos.flagVoidOrder}
           onManagerVoid={pos.managerVoidOrder}
+          onManagerRefund={pos.managerRefundOrder}
           isOffline={state.isOffline}
           storeInfo={receiptStoreInfo}
         />
@@ -221,6 +227,7 @@ export function PosApp() {
             onComplete={pos.completeQueueTicket}
             onFlagVoid={pos.flagVoidOrder}
             onManagerVoid={pos.managerVoidOrder}
+            onAddItems={pos.startAddToOrder}
             isOffline={state.isOffline}
           />
         )}
@@ -280,6 +287,7 @@ export function PosApp() {
           onComplete={pos.completeQueueTicket}
           onFlagVoid={pos.flagVoidOrder}
           onManagerVoid={pos.managerVoidOrder}
+          onAddItems={pos.startAddToOrder}
           isOffline={state.isOffline}
         />
       )}

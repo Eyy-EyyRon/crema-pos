@@ -12,6 +12,7 @@ export function QueueScreen({
   onComplete,
   onFlagVoid,
   onManagerVoid,
+  onAddItems,
   isOffline,
 }: {
   tickets: QueueEntry[];
@@ -19,6 +20,7 @@ export function QueueScreen({
   onComplete: (id: string) => void;
   onFlagVoid: (orderId: string, reason: string) => Promise<{ error?: string }>;
   onManagerVoid: (orderId: string, reason: string, pin: string) => Promise<{ error?: string }>;
+  onAddItems: (ticket: QueueEntry) => void;
   isOffline: boolean;
 }) {
   const [voidTarget, setVoidTarget] = useState<QueueEntry | null>(null);
@@ -35,7 +37,15 @@ export function QueueScreen({
         }
       />
       <ScrollView contentContainerStyle={styles.content}>
-        <QueueList tickets={tickets} onComplete={onComplete} onVoid={(id) => setVoidTarget(tickets.find((t) => t.id === id) ?? null)} />
+        <QueueList
+          tickets={tickets}
+          onComplete={onComplete}
+          onVoid={(id) => setVoidTarget(tickets.find((t) => t.id === id) ?? null)}
+          onAddItems={(id) => {
+            const t = tickets.find((x) => x.id === id);
+            if (t) onAddItems(t);
+          }}
+        />
       </ScrollView>
       <VoidModal
         visible={!!voidTarget}

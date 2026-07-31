@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { peso0 } from '../format';
 import { AlertCircleIcon, BanknoteIcon } from '../icons';
 import { tapLight, tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
@@ -78,10 +79,12 @@ export function OpenShiftModal({
 
 export function CloseShiftModal({
   visible,
+  startingCash,
   onSubmit,
   onCancel,
 }: {
   visible: boolean;
+  startingCash: number;
   onSubmit: (endingCash: number) => Promise<string | void>;
   onCancel: () => void;
 }) {
@@ -114,6 +117,11 @@ export function CloseShiftModal({
         </View>
         <Text style={s.title}>Close Shift</Text>
         <Text style={s.sub}>Count the actual cash in the drawer now. This closes your shift and logs you out.</Text>
+
+        <View style={s.startingCashRow}>
+          <Text style={s.startingCashLabel}>Starting Cash</Text>
+          <Text style={s.startingCashValue}>{peso0(startingCash)}</Text>
+        </View>
 
         <View style={s.inputRow}>
           <Text style={s.peso}>₱</Text>
@@ -167,6 +175,13 @@ const s = StyleSheet.create({
   },
   title: { fontSize: 18, fontFamily: fonts.sansExtraBold, color: colors.textPrimary },
   sub: { fontSize: 12.5, color: colors.textMuted, textAlign: 'center', marginTop: 8, lineHeight: 18, marginBottom: 20 },
+  startingCashRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+    backgroundColor: 'rgba(184,147,90,0.08)', borderWidth: 1, borderColor: colors.borderGold14,
+    borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 14,
+  },
+  startingCashLabel: { fontSize: 12, fontFamily: fonts.sansSemiBold, color: colors.textMuted },
+  startingCashValue: { fontSize: 14, fontFamily: fonts.sansExtraBold, color: colors.goldLight },
   inputRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%',
     backgroundColor: colors.chipBg, borderWidth: 1, borderColor: colors.borderGold14,

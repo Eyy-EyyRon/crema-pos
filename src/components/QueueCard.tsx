@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { peso0 } from '../format';
-import { BanIcon, CheckIcon, WifiOffIcon } from '../icons';
+import { BanIcon, CheckIcon, PlusIcon, WifiOffIcon } from '../icons';
 import { tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { QueueEntry } from '../types';
@@ -16,12 +16,12 @@ interface QueueCardProps {
   ticket: QueueEntry;
   onComplete: () => void;
   onVoid: () => void;
+  onAddItems: () => void;
 }
 
-export function QueueCard({ ticket, onComplete, onVoid }: QueueCardProps) {
+export function QueueCard({ ticket, onComplete, onVoid, onAddItems }: QueueCardProps) {
   const h = heat(ticket.mins);
   const timeAgo = ticket.mins < 1 ? 'Just now' : `${ticket.mins} min ago`;
-  const itemsStr = ticket.items.map(([n, qt]) => `${qt}× ${n}`).join(', ');
   const locked = !!ticket.pendingSync;
   return (
     <View style={[styles.card, { borderColor: h.border, borderWidth: h.bw }]}>
@@ -41,7 +41,15 @@ export function QueueCard({ ticket, onComplete, onVoid }: QueueCardProps) {
           {timeAgo}
         </Text>
       </View>
-      <Text style={styles.items}>{itemsStr}</Text>
+      {!!ticket.customerName && <Text style={styles.customerName}>For: {ticket.customerName}</Text>}
+      <View style={styles.itemsList}>
+        {ticket.items.map((it, i) => (
+          <View key={i} style={styles.itemLine}>
+            <Text style={styles.itemMain}>{it.qty}× {it.name}</Text>
+            {!!it.mods && <Text style={styles.itemMods}>{it.mods}</Text>}
+          </View>
+        ))}
+      </View>
       {locked && (
         <View style={styles.syncBadge}>
           <WifiOffIcon size={11} color={colors.heatMedText} strokeWidth={2} />
@@ -51,6 +59,10 @@ export function QueueCard({ ticket, onComplete, onVoid }: QueueCardProps) {
       <View style={styles.footerRow}>
         <Text style={styles.total}>{peso0(ticket.total)}</Text>
         <View style={styles.actions}>
+          <Pressable onPress={() => { tapMedium(); onAddItems(); }} style={[styles.addBtn, locked && styles.disabledBtn]} disabled={locked}>
+            <PlusIcon size={13} color={colors.gold} strokeWidth={2.4} />
+            <Text style={styles.addText}>Add</Text>
+          </Pressable>
           <Pressable onPress={() => { warning(); onVoid(); }} style={[styles.voidBtn, locked && styles.disabledBtn]} disabled={locked}>
             <BanIcon size={13} color={colors.danger} strokeWidth={2} />
             <Text style={styles.voidText}>Void</Text>
@@ -109,11 +121,28 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
   },
-  items: {
+  customerName: {
+    fontSize: 12,
+    fontFamily: fonts.sansBold,
+    color: colors.goldLight,
+    marginBottom: 8,
+  },
+  itemsList: {
+    marginBottom: 13,
+    gap: 4,
+  },
+  itemLine: {
+    gap: 1,
+  },
+  itemMain: {
     fontSize: 12.5,
     color: colors.textSecondary,
     lineHeight: 18,
-    marginBottom: 13,
+  },
+  itemMods: {
+    fontSize: 11,
+    color: colors.textMuted,
+    lineHeight: 15,
   },
   footerRow: {
     flexDirection: 'row',
@@ -131,6 +160,22 @@ const styles = StyleSheet.create({
   },
   disabledBtn: {
     opacity: 0.4,
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(184,147,90,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,147,90,0.3)',
+    borderRadius: 11,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  addText: {
+    fontSize: 12.5,
+    fontFamily: fonts.sansBold,
+    color: colors.gold,
   },
   voidBtn: {
     flexDirection: 'row',

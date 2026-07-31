@@ -39,7 +39,7 @@ export function SuccessContent({
       </View>
       <Text style={styles.title}>Payment Complete</Text>
       <Text style={styles.subtitle}>
-        {success.method} · {orderTypeLabel}
+        {success.method} · {orderTypeLabel}{success.customerName ? ` · ${success.customerName}` : ''}
       </Text>
       <View style={styles.receipt}>
         <View style={styles.receiptHeader}>
@@ -55,7 +55,10 @@ export function SuccessContent({
         <View style={styles.itemsList}>
           {success.items.map((it, i) => (
             <View key={i} style={styles.itemRow}>
-              <Text style={styles.itemQtyName}>{it.qtyName}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.itemQtyName}>{it.qtyName}</Text>
+                {!!it.modsStr && <Text style={styles.itemMods}>{it.modsStr}</Text>}
+              </View>
               <Text style={styles.itemLine}>{it.lineStr}</Text>
             </View>
           ))}
@@ -149,6 +152,11 @@ const styles = StyleSheet.create({
   itemQtyName: {
     fontSize: 13,
     color: colors.textSecondary,
+  },
+  itemMods: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   itemLine: {
     fontSize: 13,

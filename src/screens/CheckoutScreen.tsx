@@ -3,8 +3,10 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CartRow } from '../components/CartRow';
 import {
+  AppendOrderBanner,
   CashTenderBlock,
   CheckoutErrorBanner,
+  CustomerNameField,
   DiscountRow,
   OrderTypeRow,
   PaymentMethodRow,
@@ -26,6 +28,8 @@ interface CheckoutScreenProps {
   orderType: OrderType;
   onSelectDineIn: () => void;
   onSelectTakeout: () => void;
+  customerName: string;
+  onChangeCustomerName: (v: string) => void;
   discounts: Discount[];
   discountName: string;
   discountPct: number;
@@ -53,6 +57,8 @@ interface CheckoutScreenProps {
   onPay: () => void;
   checkoutBusy: boolean;
   checkoutError: string | null;
+  appendTargetOrderNo: string | null;
+  onCancelAppend: () => void;
 }
 
 export function CheckoutScreen(props: CheckoutScreenProps) {
@@ -65,6 +71,8 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     orderType,
     onSelectDineIn,
     onSelectTakeout,
+    customerName,
+    onChangeCustomerName,
     discounts,
     discountName,
     discountPct,
@@ -92,20 +100,34 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     onPay,
     checkoutBusy,
     checkoutError,
+    appendTargetOrderNo,
+    onCancelAppend,
   } = props;
   const insets = useSafeAreaInsets();
+  const isAppend = !!appendTargetOrderNo;
 
   return (
     <View style={styles.screen}>
-      <BackHeader title="Your Order" onBack={onBack} />
+      <BackHeader title={isAppend ? 'Add to Order' : 'Your Order'} onBack={onBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <SectionLabel style={{ marginBottom: 10 }}>Items</SectionLabel>
         {cart.map((c) => (
           <CartRow key={c.cartId} item={c} onInc={() => onInc(c.cartId)} onDec={() => onDec(c.cartId)} onRemove={() => onRemove(c.cartId)} />
         ))}
 
-        <SectionLabel style={styles.sectionSpacing}>Order Type</SectionLabel>
-        <OrderTypeRow orderType={orderType} onSelectDineIn={onSelectDineIn} onSelectTakeout={onSelectTakeout} />
+        {isAppend ? (
+          <View style={styles.sectionSpacing}>
+            <AppendOrderBanner orderNo={appendTargetOrderNo!} onCancel={onCancelAppend} />
+          </View>
+        ) : (
+          <>
+            <SectionLabel style={styles.sectionSpacing}>Order Type</SectionLabel>
+            <OrderTypeRow orderType={orderType} onSelectDineIn={onSelectDineIn} onSelectTakeout={onSelectTakeout} />
+
+            <SectionLabel style={styles.sectionSpacing}>Name for Order</SectionLabel>
+            <CustomerNameField value={customerName} onChangeText={onChangeCustomerName} />
+          </>
+        )}
 
         <SectionLabel style={styles.sectionSpacing}>Discount</SectionLabel>
         <DiscountRow discounts={discounts} activeName={discountName} onSelect={onSelectDiscount} />
@@ -136,7 +158,13 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: 20 + insets.bottom }]}>
         {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
-        <ProcessPaymentButton totalStr={peso(total)} disabled={!canPay} busy={checkoutBusy} onPress={onPay} />
+        <ProcessPaymentButton
+          totalStr={peso(total)}
+          disabled={!canPay}
+          busy={checkoutBusy}
+          onPress={onPay}
+          label={isAppend ? 'Add to Order' : 'Process Payment'}
+        />
       </View>
     </View>
   );

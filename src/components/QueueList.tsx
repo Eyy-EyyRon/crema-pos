@@ -8,10 +8,12 @@ export function QueueList({
   tickets,
   onComplete,
   onVoid,
+  onAddItems,
 }: {
   tickets: QueueEntry[];
   onComplete: (id: string) => void;
   onVoid: (id: string) => void;
+  onAddItems: (id: string) => void;
 }) {
   if (tickets.length === 0) {
     return (
@@ -24,7 +26,7 @@ export function QueueList({
   return (
     <>
       {tickets.map((t) => (
-        <QueueCard key={t.id} ticket={t} onComplete={() => onComplete(t.id)} onVoid={() => onVoid(t.id)} />
+        <QueueCard key={t.id} ticket={t} onComplete={() => onComplete(t.id)} onVoid={() => onVoid(t.id)} onAddItems={() => onAddItems(t.id)} />
       ))}
     </>
   );

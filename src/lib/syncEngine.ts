@@ -13,10 +13,10 @@ export type OutboxEntry = {
   id: string; // temp local id, not a real order id
   orderData: PosOrderData;
   orderItems: PosOrderItem[];
-  // Item names/qtys for offline-queue display only — order_items has no name
-  // column (normally resolved via a menu_items join on fetch), but a
+  // Item names/qtys/mods for offline-queue display only — order_items has no
+  // name column (normally resolved via a menu_items join on fetch), but a
   // synthetic outbox ticket has nothing to join against yet.
-  displayItems: { name: string; qty: number }[];
+  displayItems: { name: string; qty: number; mods?: string }[];
   timestamp: string;
 };
 
@@ -28,7 +28,7 @@ export async function isOnline(): Promise<boolean> {
 export async function submitOrder(
   orderData: PosOrderData,
   orderItems: PosOrderItem[],
-  displayItems: { name: string; qty: number }[]
+  displayItems: { name: string; qty: number; mods?: string }[]
 ): Promise<string> {
   const online = await isOnline();
 

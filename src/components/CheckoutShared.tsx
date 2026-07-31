@@ -13,6 +13,23 @@ export function SectionLabel({ children, style }: { children: React.ReactNode; s
   return <Text style={[styles.label, style]}>{children}</Text>;
 }
 
+// Shown instead of the Order Type / Name for Order sections when the current cart is topping
+// up an already-queued order rather than starting a new one — those two fields describe the
+// parent ticket, not this incremental add-on, so re-showing them here would just be confusing.
+export function AppendOrderBanner({ orderNo, onCancel }: { orderNo: string; onCancel: () => void }) {
+  return (
+    <View style={styles.appendBanner}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.appendBannerTitle}>Adding to Order {orderNo}</Text>
+        <Text style={styles.appendBannerSub}>These items go on the existing ticket and are paid for separately.</Text>
+      </View>
+      <Pressable onPress={() => { tapMedium(); onCancel(); }} style={styles.appendBannerCancel}>
+        <Text style={styles.appendBannerCancelText}>Cancel</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function OrderTypeRow({
   orderType,
   onSelectDineIn,
@@ -28,6 +45,27 @@ export function OrderTypeRow({
     <View style={{ flexDirection: 'row', gap }}>
       <TypeButton kind="dine-in" active={orderType === 'dine-in'} onPress={onSelectDineIn} />
       <TypeButton kind="takeout" active={orderType === 'takeout'} onPress={onSelectTakeout} />
+    </View>
+  );
+}
+
+export function CustomerNameField({
+  value,
+  onChangeText,
+}: {
+  value: string;
+  onChangeText: (v: string) => void;
+}) {
+  return (
+    <View style={styles.nameInputRow}>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder="Name for the order (optional)"
+        placeholderTextColor={colors.textMuted}
+        style={styles.nameInput}
+        maxLength={60}
+      />
     </View>
   );
 }
@@ -194,11 +232,13 @@ export function ProcessPaymentButton({
   disabled,
   busy,
   onPress,
+  label = 'Process Payment',
 }: {
   totalStr: string;
   disabled: boolean;
   busy?: boolean;
   onPress: () => void;
+  label?: string;
 }) {
   const blocked = disabled || !!busy;
   return (
@@ -210,7 +250,7 @@ export function ProcessPaymentButton({
         <ActivityIndicator color={colors.screenBg} />
       ) : (
         <>
-          <Text style={styles.payBtnLabel}>Process Payment</Text>
+          <Text style={styles.payBtnLabel}>{label}</Text>
           <View style={styles.payBtnAmountWrap}>
             <Text style={styles.payBtnAmount}>{totalStr}</Text>
           </View>
@@ -241,6 +281,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
+  },
+  nameInputRow: {
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: colors.borderGold14,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  nameInput: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontFamily: fonts.sansSemiBold,
+    padding: 0,
+  },
+  appendBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(184,147,90,0.1)',
+    borderWidth: 1,
+    borderColor: colors.borderGold20,
+    borderRadius: 14,
+    padding: 14,
+  },
+  appendBannerTitle: {
+    fontSize: 13.5,
+    fontFamily: fonts.sansExtraBold,
+    color: colors.goldBrightText,
+  },
+  appendBannerSub: {
+    fontSize: 11.5,
+    color: colors.textMuted,
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  appendBannerCancel: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: colors.chipBg,
+  },
+  appendBannerCancelText: {
+    fontSize: 12,
+    fontFamily: fonts.sansBold,
+    color: colors.textSecondary,
   },
   viewQrLink: {
     alignSelf: 'center',

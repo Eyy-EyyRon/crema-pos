@@ -33,6 +33,21 @@ export type OrderType = 'dine-in' | 'takeout';
 // ported from CafePOS app/pos/index.tsx)
 // ─────────────────────────────────────────────
 
+// Turns an order_item's modifiers_json + special_note into one display line for the
+// queue/history/receipt — e.g. "Oat Milk, Extra Shot, Note: no sugar".
+export function modsDisplayString(modifiersJson: string | null | undefined, specialNote: string | null | undefined): string | undefined {
+  let modNames: string[] = [];
+  if (modifiersJson) {
+    try {
+      const parsed = JSON.parse(modifiersJson);
+      if (Array.isArray(parsed)) modNames = parsed.map((m: any) => m?.name).filter(Boolean);
+    } catch {}
+  }
+  const parts = [...modNames];
+  if (specialNote) parts.push(`Note: ${specialNote}`);
+  return parts.length > 0 ? parts.join(', ') : undefined;
+}
+
 export function buildRecipesByItem(recipes: RecipeRow[]): Record<string, RecipeRow[]> {
   const map: Record<string, RecipeRow[]> = {};
   recipes.forEach((r) => {
@@ -194,7 +209,15 @@ export async function submitPosOrder(orderData: PosOrderData, orderItems: PosOrd
     console.error('Failed to record sale for analytics:', e);
   }
 
-  // Deduct inventory based on recipe & trigger low-stock alerts (non-fatal if it fails)
+  await deductStockForOrderItems(orderItems);
+
+  return order.id;
+}
+
+// Deduct inventory based on recipe & trigger low-stock alerts (non-fatal if it fails). Shared
+// by submitPosOrder above and addItemsToExistingOrder below, since adding items to an
+// already-queued order needs the exact same deduction/alert behavior a brand-new order gets.
+export async function deductStockForOrderItems(orderItems: PosOrderItem[]): Promise<void> {
   try {
     const menuIds = [...new Set(orderItems.map((i) => i.menu_item_id))];
     const { data: recipes } = await supabase
@@ -248,8 +271,61 @@ export async function submitPosOrder(orderData: PosOrderData, orderItems: PosOrd
   } catch (e) {
     console.error('Failed to deduct inventory or send alert:', e);
   }
+}
 
-  return order.id;
+// Appends items to an order that's already been submitted (still sitting in the kitchen queue)
+// instead of forcing a full void + re-ring for something like "customer adds one more cookie".
+// The added items are treated as their own mini-checkout — own discount/tax/service-charge
+// totals and payment method — then merged into the parent order's stored totals, so a barista
+// can top up an in-flight ticket with a fresh payment for just the delta.
+export async function addItemsToExistingOrder(
+  orderId: string,
+  orderItems: PosOrderItem[],
+  incrementalPaymentMethod: PayMethod,
+  incrementalAmounts: { subtotal: number; discount_amount: number; tax_amount: number; service_charge_amount: number; total: number }
+): Promise<void> {
+  const { data: order, error: orderErr } = await supabase
+    .from('orders')
+    .select('subtotal, discount_amount, tax_amount, service_charge_amount, total, total_amount, barista_id, order_type')
+    .eq('id', orderId)
+    .single();
+  if (orderErr) throw orderErr;
+
+  const itemsToInsert = orderItems.map((item) => ({ ...item, order_id: orderId }));
+  const { error: itemsErr } = await supabase.from('order_items').insert(itemsToInsert);
+  if (itemsErr) throw itemsErr;
+
+  const newTotal = Number(order.total ?? order.total_amount ?? 0) + incrementalAmounts.total;
+  const { error: updateErr } = await supabase
+    .from('orders')
+    .update({
+      total: newTotal,
+      total_amount: newTotal,
+      subtotal: Number(order.subtotal ?? 0) + incrementalAmounts.subtotal,
+      discount_amount: Number(order.discount_amount ?? 0) + incrementalAmounts.discount_amount,
+      tax_amount: Number(order.tax_amount ?? 0) + incrementalAmounts.tax_amount,
+      service_charge_amount: Number(order.service_charge_amount ?? 0) + incrementalAmounts.service_charge_amount,
+    })
+    .eq('id', orderId);
+  if (updateErr) throw updateErr;
+
+  // Analytics mirror row for just the incremental amount, same non-fatal treatment as
+  // submitPosOrder — the top-up may have been paid a different way than the original order
+  // (e.g. original was cash, the extra cookie was GCash), so it's recorded as its own sale.
+  try {
+    await supabase.from('sales').insert({
+      barista_id: order.barista_id,
+      total_amount: incrementalAmounts.total,
+      payment_method: incrementalPaymentMethod,
+      order_type: order.order_type,
+      tax_amount: incrementalAmounts.tax_amount,
+      service_charge_amount: incrementalAmounts.service_charge_amount,
+    });
+  } catch (e) {
+    console.error('Failed to record sale for analytics:', e);
+  }
+
+  await deductStockForOrderItems(orderItems);
 }
 
 // Gives back the ingredient stock an order reserved at checkout — used on

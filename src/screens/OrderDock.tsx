@@ -4,8 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BagIcon } from '../icons';
 import { CartRow } from '../components/CartRow';
 import {
+  AppendOrderBanner,
   CashTenderBlock,
   CheckoutErrorBanner,
+  CustomerNameField,
   DiscountRow,
   OrderTypeRow,
   PaymentMethodRow,
@@ -26,6 +28,8 @@ interface OrderDockProps {
   orderType: OrderType;
   onSelectDineIn: () => void;
   onSelectTakeout: () => void;
+  customerName: string;
+  onChangeCustomerName: (v: string) => void;
   discounts: Discount[];
   discountName: string;
   discountPct: number;
@@ -53,6 +57,8 @@ interface OrderDockProps {
   onPay: () => void;
   checkoutBusy: boolean;
   checkoutError: string | null;
+  appendTargetOrderNo: string | null;
+  onCancelAppend: () => void;
 }
 
 export function OrderDock(props: OrderDockProps) {
@@ -65,6 +71,8 @@ export function OrderDock(props: OrderDockProps) {
     orderType,
     onSelectDineIn,
     onSelectTakeout,
+    customerName,
+    onChangeCustomerName,
     discounts,
     discountName,
     discountPct,
@@ -92,15 +100,18 @@ export function OrderDock(props: OrderDockProps) {
     onPay,
     checkoutBusy,
     checkoutError,
+    appendTargetOrderNo,
+    onCancelAppend,
   } = props;
   const insets = useSafeAreaInsets();
+  const isAppend = !!appendTargetOrderNo;
 
   const isEmpty = cartCount === 0;
 
   return (
     <View style={styles.dock}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Current Order</Text>
+        <Text style={styles.headerTitle}>{isAppend ? 'Add to Order' : 'Current Order'}</Text>
         {!isEmpty && <Text style={styles.headerCount}>{cartCount + (cartCount === 1 ? ' item' : ' items')}</Text>}
       </View>
 
@@ -119,8 +130,19 @@ export function OrderDock(props: OrderDockProps) {
               <CartRow key={c.cartId} item={c} shotSize={42} onInc={() => onInc(c.cartId)} onDec={() => onDec(c.cartId)} onRemove={() => onRemove(c.cartId)} />
             ))}
 
-            <SectionLabel style={styles.sectionSpacing}>Order Type</SectionLabel>
-            <OrderTypeRow orderType={orderType} onSelectDineIn={onSelectDineIn} onSelectTakeout={onSelectTakeout} gap={9} />
+            {isAppend ? (
+              <View style={styles.sectionSpacing}>
+                <AppendOrderBanner orderNo={appendTargetOrderNo!} onCancel={onCancelAppend} />
+              </View>
+            ) : (
+              <>
+                <SectionLabel style={styles.sectionSpacing}>Order Type</SectionLabel>
+                <OrderTypeRow orderType={orderType} onSelectDineIn={onSelectDineIn} onSelectTakeout={onSelectTakeout} gap={9} />
+
+                <SectionLabel style={styles.sectionSpacing}>Name for Order</SectionLabel>
+                <CustomerNameField value={customerName} onChangeText={onChangeCustomerName} />
+              </>
+            )}
 
             <SectionLabel style={styles.sectionSpacing}>Discount</SectionLabel>
             <DiscountRow discounts={discounts} activeName={discountName} onSelect={onSelectDiscount} />
@@ -152,7 +174,13 @@ export function OrderDock(props: OrderDockProps) {
           </ScrollView>
           <View style={[styles.footer, { paddingBottom: 14 + insets.bottom }]}>
             {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
-            <ProcessPaymentButton totalStr={peso(total)} disabled={!canPay} busy={checkoutBusy} onPress={onPay} />
+            <ProcessPaymentButton
+              totalStr={peso(total)}
+              disabled={!canPay}
+              busy={checkoutBusy}
+              onPress={onPay}
+              label={isAppend ? 'Add to Order' : 'Process Payment'}
+            />
           </View>
         </>
       )}
