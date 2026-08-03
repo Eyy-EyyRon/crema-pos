@@ -487,6 +487,13 @@ export function useCremaPos() {
   // here too.
   // ─────────────────────────────────────────────
   const fetchMenuData = useCallback(async () => {
+    // Same race the shift-fetch effect guards against: this fires the instant currentUser is
+    // set on a fast-path login, which can be before the background real-session swap lands.
+    // Under a stale/anon session, store_settings' RLS (authenticated-only) silently returns no
+    // row while menu_items/ingredients (open to anon) still succeed — so without this wait,
+    // a barista who just switched profiles gets a fully-loaded menu but storeSettings quietly
+    // resets to defaults (gcashQrUrl: null, tax rate, service charge, rush mode all wrong).
+    if (authSyncRef.current) await authSyncRef.current;
     const seq = ++menuFetchSeq.current;
     try {
       await fetchMenuDataFromNetwork(seq);
@@ -691,6 +698,10 @@ export function useCremaPos() {
     }));
 
   const fetchQueue = useCallback(async () => {
+    // Same stale/anon-session race as fetchMenuData above — orders is authenticated-only, so
+    // firing this before the fast-path login's background session swap lands would silently
+    // return an empty queue right after a profile switch instead of the real pending tickets.
+    if (authSyncRef.current) await authSyncRef.current;
     const [{ data }, outboxEntries] = await Promise.all([
       supabase
         .from('orders')
@@ -710,6 +721,7 @@ export function useCremaPos() {
   }, []);
 
   const fetchTodayOrderCount = useCallback(async () => {
+    if (authSyncRef.current) await authSyncRef.current;
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const { count } = await supabase
@@ -723,6 +735,7 @@ export function useCremaPos() {
   // baristas previously had no way to see their own upcoming schedule anywhere.
   const fetchUpcomingShifts = useCallback(async () => {
     if (!state.currentUser) return;
+    if (authSyncRef.current) await authSyncRef.current;
     const { data } = await supabase
       .from('shift_schedules')
       .select('id, scheduled_start, scheduled_end, notes')
