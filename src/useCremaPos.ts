@@ -203,6 +203,14 @@ export function useCremaPos() {
   // write that needs a real Supabase session — opening the cash drawer, checkout — can wait
   // for it instead of racing ahead under a stale/anon session and failing RLS.
   const authSyncRef = useRef<Promise<void> | null>(null);
+  // Bumped on every fast-path login attempt. If a barista switches away (locks the POS) before
+  // their own background auth settles, that task keeps running unattended — nothing else
+  // cancels it. Without this guard, a stale task finishing late calls setSession()/clockIn() for
+  // whoever it was started for, silently swapping the ACTIVE session out from under a different
+  // barista who has since logged in — which then makes RLS reject that barista's own already-open
+  // cash_drawer_shifts row (barista_id = current_profile_id() no longer matches) and wrongly
+  // re-prompts them to open a new shift. Same staleness pattern as menuFetchSeq above.
+  const loginSeqRef = useRef(0);
 
   const patch = useCallback((p: Partial<PosState>) => {
     setState((s) => ({ ...s, ...p }));
@@ -273,15 +281,20 @@ export function useCremaPos() {
         // authSyncRef (not fire-and-forget) so writes that need a real session — most
         // urgently opening the cash drawer, which happens immediately after login — can await
         // it first instead of running under a stale/anon session and failing RLS.
+        const seq = ++loginSeqRef.current;
         authSyncRef.current = (async () => {
           const online = await isOnline();
           if (!online) {
-            patch({ isOffline: true });
+            if (loginSeqRef.current === seq) patch({ isOffline: true });
             return;
           }
           try {
             const body = opts.biometric ? { profile_id: profileId, biometric: true } : { profile_id: profileId, pin: opts.pin };
             const { data, error } = await supabase.functions.invoke('pin-login', { body });
+            // A newer login has since started (this barista switched away before this one
+            // finished) — don't let an abandoned attempt activate its session over the current
+            // user's, and don't clock in a profile that's no longer the one in front of the POS.
+            if (loginSeqRef.current !== seq) return;
             if (!error && data?.access_token) {
               await supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
               await clockIn(profileId);
@@ -300,6 +313,7 @@ export function useCremaPos() {
               );
             }
           } catch (e) {
+            if (loginSeqRef.current !== seq) return;
             console.warn('Background auth failed:', e);
             Alert.alert(
               'Connection Issue',
@@ -307,7 +321,9 @@ export function useCremaPos() {
               [{ text: 'OK', onPress: () => { lockPos(); } }]
             );
           } finally {
-            authSyncRef.current = null;
+            // Only clear the ref if it's still ours — a newer login's own in-flight ref must
+            // not be nulled out by an older, unrelated attempt finishing later.
+            if (loginSeqRef.current === seq) authSyncRef.current = null;
           }
         })();
 
