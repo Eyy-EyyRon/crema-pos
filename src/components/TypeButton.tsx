@@ -15,13 +15,17 @@ export function TypeButton({ kind, active, onPress }: TypeButtonProps) {
   return (
     <Pressable
       onPress={() => { tapLight(); onPress(); }}
-      style={[
+      style={({ pressed }) => [
         styles.base,
         {
           backgroundColor: active ? colors.chipBg : colors.cardBg,
           borderColor: active ? 'rgba(184,147,90,0.35)' : colors.borderGold12,
+          opacity: pressed ? 0.7 : 1,
         },
       ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`${kind === 'dine-in' ? 'Dine-In' : 'Takeout'} order type`}
     >
       {kind === 'dine-in' ? <CoffeeIcon size={17} color={iconColor} /> : <BagIcon size={17} color={iconColor} />}
       <Text style={[styles.label, { color: active ? colors.goldBrightText : colors.textMuted }]}>

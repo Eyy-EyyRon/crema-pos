@@ -17,13 +17,17 @@ export function OptionChip({ name, price, active, onPress }: OptionChipProps) {
   return (
     <Pressable
       onPress={() => { tapLight(); onPress(); }}
-      style={[
+      style={({ pressed }) => [
         styles.base,
         {
           backgroundColor: active ? colors.chipBg : colors.cardBg,
           borderColor: active ? 'rgba(184,147,90,0.4)' : colors.borderGold12,
+          opacity: pressed ? 0.7 : 1,
         },
       ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={showPrice ? `${name}, ${priceStr}` : name}
     >
       <Text style={[styles.label, { color: active ? colors.goldBrightText : colors.textSecondary }]}>{name}</Text>
       {showPrice && (
