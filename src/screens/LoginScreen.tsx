@@ -59,6 +59,7 @@ export function LoginScreen({
   const [error, setError] = useState('');
   const [resetTick, setResetTick] = useState(0);
   const [bioBusy, setBioBusy] = useState(false);
+  const [pinBusy, setPinBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -114,7 +115,9 @@ export function LoginScreen({
 
   const handlePinComplete = async (pin: string) => {
     if (!selected) return;
+    setPinBusy(true);
     const res = await onLogin(selected.id, { pin }, selected);
+    setPinBusy(false);
     if (res.error) {
       setError(res.error);
       setResetTick((t) => t + 1);
@@ -157,7 +160,13 @@ export function LoginScreen({
           <Text style={s.prompt}>Who's ringing up orders?</Text>
           <ScrollView contentContainerStyle={s.grid}>
             {sorted.map((p) => (
-              <Pressable key={p.id} style={s.tile} onPress={() => selectProfile(p)}>
+              <Pressable
+                key={p.id}
+                style={({ pressed }) => [s.tile, pressed && { opacity: 0.6 }]}
+                onPress={() => selectProfile(p)}
+                accessibilityRole="button"
+                accessibilityLabel={p.id === lastUserId ? `${p.full_name}, last used` : p.full_name}
+              >
                 {p.avatar_url ? (
                   <Image
                     source={{ uri: p.avatar_url }}
@@ -198,7 +207,12 @@ export function LoginScreen({
         </>
       ) : (
         <View style={s.pinWrap}>
-          <Pressable onPress={() => { tapLight(); setSelected(null); setError(''); }} style={s.changeUser}>
+          <Pressable
+            onPress={() => { tapLight(); setSelected(null); setError(''); }}
+            style={({ pressed }) => [s.changeUser, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel={`Not ${selected.full_name}? Switch profile`}
+          >
             <Text style={s.changeUserText}>Not {selected.full_name.split(' ')[0]}? Switch profile</Text>
           </Pressable>
           <Text style={s.pinPrompt}>Enter PIN for {selected.full_name}</Text>
@@ -208,10 +222,11 @@ export function LoginScreen({
             onChangeLength={() => error && setError('')}
             error={!!error}
             resetSignal={resetTick}
-            disabled={bioBusy}
+            disabled={bioBusy || pinBusy}
+            statusSlot={pinBusy ? <ActivityIndicator color={colors.gold} style={{ marginBottom: 12 }} /> : undefined}
             renderSlot10={
               biometricAvailable && selected.id === lastUserId
-                ? () => <PinPadKey label="bio" size={64} variant="bio" onPress={handleBiometric} disabled={bioBusy} />
+                ? () => <PinPadKey label="bio" size={64} variant="bio" onPress={handleBiometric} disabled={bioBusy || pinBusy} />
                 : undefined
             }
           />
