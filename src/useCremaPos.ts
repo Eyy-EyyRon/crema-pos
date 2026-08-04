@@ -119,6 +119,7 @@ interface PosState {
   isOffline: boolean;
   checkoutBusy: boolean;
   checkoutError: string | null;
+  avatarUploading: boolean;
 
   // live backend data
   menuItems: { id: string; name: string; price: number; category: string }[];
@@ -162,6 +163,7 @@ const initialState: PosState = {
   isOffline: false,
   checkoutBusy: false,
   checkoutError: null,
+  avatarUploading: false,
 
   menuItems: [],
   categories: ['All'],
@@ -403,23 +405,24 @@ export function useCremaPos() {
     if (result.canceled || !result.assets[0]) return;
     const uri = result.assets[0].uri;
     const ext = uri.split('.').pop() || 'jpg';
-    
+
+    patch({ avatarUploading: true });
     try {
       const res = await fetch(uri);
       const blob = await res.blob();
-      
+
       const filename = `${state.currentUser.id}-${Date.now()}.${ext}`;
       const { error } = await supabase.storage.from('avatars').upload(filename, blob, {
         upsert: true,
       });
-      
+
       if (error) throw error;
-      
+
       const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filename);
       const publicUrl = publicUrlData.publicUrl;
-      
+
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', state.currentUser.id);
-      
+
       setState(s => ({
         ...s,
         currentUser: s.currentUser ? { ...s.currentUser, avatar_url: publicUrl } : null
@@ -427,8 +430,10 @@ export function useCremaPos() {
     } catch (e: any) {
       console.warn('Avatar upload failed:', e.message);
       Alert.alert('Upload Failed', 'Could not upload avatar: ' + e.message);
+    } finally {
+      patch({ avatarUploading: false });
     }
-  }, [state.currentUser]);
+  }, [state.currentUser, patch]);
 
   // ─────────────────────────────────────────────
   // CASH DRAWER SHIFT

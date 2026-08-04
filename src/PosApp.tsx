@@ -149,10 +149,11 @@ export function PosApp() {
         user={currentUser}
         shift={state.shift}
         upcomingShifts={state.upcomingShifts}
+        uploading={state.avatarUploading}
         onClose={() => pos.patch({ showAccount: false })}
         onHistory={() => pos.patch({ showAccount: false, screen: 'history' })}
         onLock={() => { pos.patch({ showAccount: false }); pos.lockPos(); }}
-        onUploadAvatar={() => { pos.patch({ showAccount: false }); pos.uploadAvatar(); }}
+        onUploadAvatar={() => { pos.uploadAvatar(); }}
         onCloseShift={() => { pos.patch({ showAccount: false }); setCloseShiftVisible(true); }}
       />
       <CloseShiftModal

@@ -13,12 +13,16 @@ export function Chip({ label, active, onPress }: ChipProps) {
   return (
     <Pressable
       onPress={() => { tapLight(); onPress(); }}
-      style={[
+      style={({ pressed }) => [
         styles.base,
         active
           ? { backgroundColor: colors.gold, borderColor: colors.gold }
           : { backgroundColor: 'rgba(26,42,62,0.4)', borderColor: colors.borderGold12 },
+        pressed && { opacity: 0.7 },
       ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
     >
       <Text
         style={[

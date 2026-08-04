@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { CalendarIcon, ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon } from '../icons';
 import { tapLight, warning } from '../lib/haptics';
@@ -18,6 +18,7 @@ export function AccountSheet({
   user,
   shift,
   upcomingShifts,
+  uploading = false,
   onClose,
   onHistory,
   onCloseShift,
@@ -28,12 +29,22 @@ export function AccountSheet({
   user: UserProfile;
   shift: Shift | null;
   upcomingShifts: ShiftScheduleEntry[];
+  uploading?: boolean;
   onClose: () => void;
   onHistory: () => void;
   onCloseShift: () => void;
   onLock: () => void;
   onUploadAvatar: () => void;
 }) {
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
+
   if (!visible) return null;
   return (
     <View style={s.overlay}>
@@ -89,22 +100,47 @@ export function AccountSheet({
           </View>
         )}
 
-        <Pressable style={s.row} onPress={() => { tapLight(); onHistory(); }}>
+        <Pressable
+          style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+          onPress={() => { tapLight(); onHistory(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Order History"
+        >
           <ReceiptIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
           <Text style={s.rowText}>Order History</Text>
         </Pressable>
 
-        <Pressable style={s.row} onPress={() => { tapLight(); onLock(); }}>
+        <Pressable
+          style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+          onPress={() => { tapLight(); onLock(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Switch Profile or Lock POS"
+        >
           <UserIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
           <Text style={s.rowText}>Switch Profile / Lock POS</Text>
         </Pressable>
 
-        <Pressable style={s.row} onPress={() => { tapLight(); onUploadAvatar(); }}>
-          <ImageIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
-          <Text style={s.rowText}>Upload Avatar Photo</Text>
+        <Pressable
+          style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+          onPress={() => { if (!uploading) { tapLight(); onUploadAvatar(); } }}
+          disabled={uploading}
+          accessibilityRole="button"
+          accessibilityLabel={uploading ? 'Uploading avatar photo' : 'Upload Avatar Photo'}
+        >
+          {uploading ? (
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          ) : (
+            <ImageIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
+          )}
+          <Text style={s.rowText}>{uploading ? 'Uploading…' : 'Upload Avatar Photo'}</Text>
         </Pressable>
 
-        <Pressable style={[s.row, s.rowDanger]} onPress={() => { warning(); onCloseShift(); }}>
+        <Pressable
+          style={({ pressed }) => [s.row, s.rowDanger, pressed && s.rowPressed]}
+          onPress={() => { warning(); onCloseShift(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Close Shift and Log Out"
+        >
           <LogOutIcon size={16} color={colors.danger} strokeWidth={2} />
           <Text style={[s.rowText, { color: colors.danger }]}>Close Shift &amp; Log Out</Text>
         </Pressable>
@@ -164,5 +200,6 @@ const s = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: colors.divider,
   },
   rowDanger: {},
+  rowPressed: { backgroundColor: 'rgba(184,147,90,0.06)' },
   rowText: { fontSize: 13.5, fontFamily: fonts.sansSemiBold, color: colors.textSecondary },
 });

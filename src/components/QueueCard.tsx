@@ -1,15 +1,15 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { peso0 } from '../format';
-import { BanIcon, CheckIcon, PlusIcon, WifiOffIcon } from '../icons';
+import { AlertTriangleIcon, BanIcon, CheckIcon, PlusIcon, WifiOffIcon } from '../icons';
 import { tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { QueueEntry } from '../types';
 
 function heat(mins: number) {
-  if (mins >= 15) return { border: colors.heatHighBorder, bw: 1.5, bg: colors.heatHighBg, col: colors.heatHighText };
-  if (mins >= 8) return { border: colors.heatMedBorder, bw: 1.5, bg: colors.heatMedBg, col: colors.heatMedText };
-  return { border: colors.borderGold12, bw: 1, bg: 'transparent', col: colors.textMuted };
+  if (mins >= 15) return { border: colors.heatHighBorder, bw: 1.5, bg: colors.heatHighBg, col: colors.heatHighText, urgent: true, warm: false };
+  if (mins >= 8) return { border: colors.heatMedBorder, bw: 1.5, bg: colors.heatMedBg, col: colors.heatMedText, urgent: false, warm: true };
+  return { border: colors.borderGold12, bw: 1, bg: 'transparent', col: colors.textMuted, urgent: false, warm: false };
 }
 
 interface QueueCardProps {
@@ -22,7 +22,21 @@ interface QueueCardProps {
 export function QueueCard({ ticket, onComplete, onVoid, onAddItems }: QueueCardProps) {
   const h = heat(ticket.mins);
   const timeAgo = ticket.mins < 1 ? 'Just now' : `${ticket.mins} min ago`;
+  const timeLabel = h.urgent ? `Urgent · ${timeAgo}` : timeAgo;
   const locked = !!ticket.pendingSync;
+
+  const confirmComplete = () => {
+    tapMedium();
+    Alert.alert(
+      `Complete order ${ticket.no}?`,
+      'This removes the ticket from the queue.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Complete', onPress: onComplete },
+      ]
+    );
+  };
+
   return (
     <View style={[styles.card, { borderColor: h.border, borderWidth: h.bw }]}>
       <View style={styles.headerRow}>
@@ -32,14 +46,16 @@ export function QueueCard({ ticket, onComplete, onVoid, onAddItems }: QueueCardP
             <Text style={styles.typeBadgeText}>{ticket.type}</Text>
           </View>
         </View>
-        <Text
+        <View
           style={[
-            styles.time,
-            { color: h.col, backgroundColor: h.bg, paddingVertical: h.bg === 'transparent' ? 0 : 3, paddingHorizontal: h.bg === 'transparent' ? 0 : 9 },
+            styles.timeBadge,
+            { backgroundColor: h.bg, paddingVertical: h.bg === 'transparent' ? 0 : 3, paddingHorizontal: h.bg === 'transparent' ? 0 : 9 },
           ]}
+          accessibilityLabel={`Placed ${timeAgo}${h.urgent ? ', urgent' : h.warm ? ', getting old' : ''}`}
         >
-          {timeAgo}
-        </Text>
+          {(h.warm || h.urgent) && <AlertTriangleIcon size={11} color={h.col} strokeWidth={2.2} />}
+          <Text style={[styles.time, { color: h.col }]}>{timeLabel}</Text>
+        </View>
       </View>
       {!!ticket.customerName && <Text style={styles.customerName}>For: {ticket.customerName}</Text>}
       <View style={styles.itemsList}>
@@ -59,15 +75,33 @@ export function QueueCard({ ticket, onComplete, onVoid, onAddItems }: QueueCardP
       <View style={styles.footerRow}>
         <Text style={styles.total}>{peso0(ticket.total)}</Text>
         <View style={styles.actions}>
-          <Pressable onPress={() => { tapMedium(); onAddItems(); }} style={[styles.addBtn, locked && styles.disabledBtn]} disabled={locked}>
+          <Pressable
+            onPress={() => { tapMedium(); onAddItems(); }}
+            style={[styles.addBtn, locked && styles.disabledBtn]}
+            disabled={locked}
+            accessibilityRole="button"
+            accessibilityLabel={`Add items to order ${ticket.no}`}
+          >
             <PlusIcon size={13} color={colors.gold} strokeWidth={2.4} />
             <Text style={styles.addText}>Add</Text>
           </Pressable>
-          <Pressable onPress={() => { warning(); onVoid(); }} style={[styles.voidBtn, locked && styles.disabledBtn]} disabled={locked}>
+          <Pressable
+            onPress={() => { warning(); onVoid(); }}
+            style={[styles.voidBtn, locked && styles.disabledBtn]}
+            disabled={locked}
+            accessibilityRole="button"
+            accessibilityLabel={`Void order ${ticket.no}`}
+          >
             <BanIcon size={13} color={colors.danger} strokeWidth={2} />
             <Text style={styles.voidText}>Void</Text>
           </Pressable>
-          <Pressable onPress={() => { tapMedium(); onComplete(); }} style={[styles.completeBtn, locked && styles.disabledBtn]} disabled={locked}>
+          <Pressable
+            onPress={confirmComplete}
+            style={[styles.completeBtn, locked && styles.disabledBtn]}
+            disabled={locked}
+            accessibilityRole="button"
+            accessibilityLabel={`Mark order ${ticket.no} complete`}
+          >
             <CheckIcon size={14} color={colors.success} strokeWidth={2.4} />
             <Text style={styles.completeText}>Complete</Text>
           </Pressable>
@@ -115,11 +149,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: colors.textSecondary,
   },
+  timeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
   time: {
     fontSize: 11.5,
     fontFamily: fonts.sansBold,
-    borderRadius: 20,
-    overflow: 'hidden',
   },
   customerName: {
     fontSize: 12,

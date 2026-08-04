@@ -32,8 +32,21 @@ function MenuItemCardImpl({ item, qty, variant = 'phone', onPress, stock }: Menu
     </View>
   ) : null;
 
+  const stockLabel = unavailable
+    ? ', out of stock'
+    : stock && stock.qty !== null
+    ? `, ${stock.qty} left${stock.low ? ', running low' : ''}`
+    : '';
+  const a11yLabel = `${item.name}, ${peso0(item.price)}${stockLabel}${qty > 0 ? `, ${qty} in cart` : ''}`;
+
   return (
-    <Pressable onPress={() => { tapLight(); onPress(); }} disabled={unavailable} style={[styles.card, unavailable && styles.cardDisabled]}>
+    <Pressable
+      onPress={() => { tapLight(); onPress(); }}
+      disabled={unavailable}
+      style={({ pressed }) => [styles.card, unavailable && styles.cardDisabled, pressed && !unavailable && styles.cardPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+    >
       {item.image_url ? (
         <View style={{ height: tablet ? 96 : 86, position: 'relative' as const, backgroundColor: '#101d2b', overflow: 'hidden' }}>
           <Image
@@ -117,6 +130,9 @@ const styles = StyleSheet.create({
   },
   cardDisabled: {
     opacity: 0.5,
+  },
+  cardPressed: {
+    opacity: 0.85,
   },
   topRightStack: {
     position: 'absolute',
