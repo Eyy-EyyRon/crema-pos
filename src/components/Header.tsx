@@ -36,7 +36,12 @@ export function MenuHeader({
   return (
     <View style={[styles.wrap, { paddingTop: insets.top + 14 }, tablet && [styles.wrapTablet, { paddingTop: insets.top + 14 }]]}>
       <View style={styles.topRow}>
-        <Pressable style={styles.brandRow} onPress={() => { tapLight(); onAccount(); }}>
+        <Pressable
+          style={({ pressed }) => [styles.brandRow, pressed && { opacity: 0.7 }]}
+          onPress={() => { tapLight(); onAccount(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Account and settings"
+        >
           <Image source={logo} style={[styles.logo, tablet && { width: 42, height: 42 }]} />
           <View>
             <Text style={styles.brandLabel}>Crema POS</Text>
@@ -45,7 +50,12 @@ export function MenuHeader({
         </Pressable>
         <View style={styles.actionsRow}>
           {tablet && (
-            <Pressable onPress={() => { tapLight(); onChangeType(); }} style={styles.typePillTablet}>
+            <Pressable
+              onPress={() => { tapLight(); onChangeType(); }}
+              style={({ pressed }) => [styles.typePillTablet, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Order type: ${orderTypeLabel}. Change`}
+            >
               <View style={styles.dot} />
               <Text style={styles.typePillText}>{orderTypeLabel}</Text>
               <Text style={styles.typePillChange}>Change</Text>
@@ -75,7 +85,12 @@ export function MenuHeader({
         </View>
       </View>
       {!tablet && (
-        <Pressable onPress={() => { tapLight(); onChangeType(); }} style={styles.typePillPhone}>
+        <Pressable
+          onPress={() => { tapLight(); onChangeType(); }}
+          style={({ pressed }) => [styles.typePillPhone, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Order type: ${orderTypeLabel}. Change`}
+        >
           <View style={styles.typePillLeft}>
             <View style={styles.dot} />
             <Text style={styles.typePillText}>{orderTypeLabel}</Text>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BagIcon } from '../icons';
 import { CartRow } from '../components/CartRow';
@@ -124,7 +124,7 @@ export function OrderDock(props: OrderDockProps) {
           <Text style={styles.emptySub}>Tap a product to start building{'\n'}this order.</Text>
         </View>
       ) : (
-        <>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
             {cart.map((c) => (
               <CartRow key={c.cartId} item={c} shotSize={42} onInc={() => onInc(c.cartId)} onDec={() => onDec(c.cartId)} onRemove={() => onRemove(c.cartId)} />
@@ -182,7 +182,7 @@ export function OrderDock(props: OrderDockProps) {
               label={isAppend ? 'Add to Order' : 'Process Payment'}
             />
           </View>
-        </>
+        </KeyboardAvoidingView>
       )}
     </View>
   );

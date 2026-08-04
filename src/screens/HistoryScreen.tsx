@@ -211,7 +211,10 @@ export function HistoryScreen({
           <Pressable
             key={opt.key}
             onPress={() => { tapLight(); setDateRange(opt.key); }}
-            style={[s.rangeChip, dateRange === opt.key && s.rangeChipActive]}
+            style={({ pressed }) => [s.rangeChip, dateRange === opt.key && s.rangeChipActive, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: dateRange === opt.key }}
+            accessibilityLabel={opt.label}
           >
             <Text style={[s.rangeChipText, dateRange === opt.key && s.rangeChipTextActive]}>{opt.label}</Text>
           </Pressable>
@@ -250,8 +253,9 @@ export function HistoryScreen({
                     <Pressable
                       onPress={() => handlePrint(o)}
                       disabled={printingId === o.id}
-                      style={s.printBtn}
-                      accessibilityLabel={`Reprint receipt ${o.no}`}
+                      style={({ pressed }) => [s.printBtn, pressed && { opacity: 0.7 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={printingId === o.id ? `Printing receipt ${o.no}` : `Reprint receipt ${o.no}`}
                     >
                       {printingId === o.id ? (
                         <ActivityIndicator color={colors.textSecondary} size="small" />
@@ -260,12 +264,22 @@ export function HistoryScreen({
                       )}
                     </Pressable>
                     {canRefund && (
-                      <Pressable onPress={() => { tapLight(); setRefundTarget(o); }} style={s.refundBtn}>
+                      <Pressable
+                        onPress={() => { tapLight(); setRefundTarget(o); }}
+                        style={({ pressed }) => [s.refundBtn, pressed && { opacity: 0.7 }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Refund order ${o.no}`}
+                      >
                         <Text style={s.refundBtnText}>Refund</Text>
                       </Pressable>
                     )}
                     {canVoid && (
-                      <Pressable onPress={() => { tapLight(); setVoidTarget(o); }} style={s.voidBtn}>
+                      <Pressable
+                        onPress={() => { tapLight(); setVoidTarget(o); }}
+                        style={({ pressed }) => [s.voidBtn, pressed && { opacity: 0.7 }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Void order ${o.no}`}
+                      >
                         <Text style={s.voidBtnText}>Void</Text>
                       </Pressable>
                     )}

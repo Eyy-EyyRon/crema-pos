@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CartRow } from '../components/CartRow';
 import {
@@ -109,6 +109,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   return (
     <View style={styles.screen}>
       <BackHeader title={isAppend ? 'Add to Order' : 'Your Order'} onBack={onBack} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content}>
         <SectionLabel style={{ marginBottom: 10 }}>Items</SectionLabel>
         {cart.map((c) => (
@@ -166,6 +167,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           label={isAppend ? 'Add to Order' : 'Process Payment'}
         />
       </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }

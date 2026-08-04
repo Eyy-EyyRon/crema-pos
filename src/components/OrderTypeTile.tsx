@@ -19,7 +19,12 @@ export function OrderTypeTile({ kind, variant = 'phone', onPress }: OrderTypeTil
   const Icon = isDineIn ? CoffeeIcon : BagIcon;
 
   return (
-    <Pressable onPress={() => { tapMedium(); onPress(); }} style={[styles.card, tablet && styles.cardTablet]}>
+    <Pressable
+      onPress={() => { tapMedium(); onPress(); }}
+      style={({ pressed }) => [styles.card, tablet && styles.cardTablet, pressed && { opacity: 0.85 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${subtitle}`}
+    >
       <Shot label={isDineIn ? 'dine-in photo' : 'takeout photo'} style={{ height: tablet ? 140 : 112 }}>
         <View
           style={[

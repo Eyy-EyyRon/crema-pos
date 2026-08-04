@@ -71,10 +71,21 @@ export function SuccessContent({
         )}
       </View>
       <View style={styles.buttonsRow}>
-        <Pressable onPress={handlePrint} disabled={printing} style={styles.printBtn}>
+        <Pressable
+          onPress={handlePrint}
+          disabled={printing}
+          style={({ pressed }) => [styles.printBtn, pressed && { opacity: 0.8 }]}
+          accessibilityRole="button"
+          accessibilityLabel={printing ? 'Preparing receipt' : 'Print Receipt'}
+        >
           <Text style={styles.printBtnText}>{printing ? 'Preparing…' : 'Print Receipt'}</Text>
         </Pressable>
-        <Pressable onPress={() => { tapMedium(); onDone(); }} style={styles.newOrderBtn}>
+        <Pressable
+          onPress={() => { tapMedium(); onDone(); }}
+          style={({ pressed }) => [styles.newOrderBtn, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Start a new order"
+        >
           <Text style={styles.newOrderBtnText}>New Order</Text>
         </Pressable>
       </View>

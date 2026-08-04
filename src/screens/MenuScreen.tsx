@@ -58,7 +58,12 @@ export function MenuScreen({
         <MenuGrid items={items} cartQtyByMenuId={cartQtyByMenuId} stockByMenuId={stockByMenuId} onItemPress={onItemPress} variant="phone" fixedColumns={2} gap={13} />
       </ScrollView>
       {showCartBar && (
-        <Pressable onPress={onViewOrder} style={styles.cartBar}>
+        <Pressable
+          onPress={onViewOrder}
+          style={({ pressed }) => [styles.cartBar, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`View order, ${cartCount} item${cartCount === 1 ? '' : 's'}, ${peso(cartTotal)}`}
+        >
           <View style={styles.cartBarLeft}>
             <View style={styles.cartCountCircle}>
               <Text style={styles.cartCountText}>{cartCount}</Text>
