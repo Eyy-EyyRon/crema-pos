@@ -30,9 +30,13 @@ interface QueueCardProps {
   onVoid: () => void;
   onAddItems: () => void;
   onAdvanceItem: (orderItemId: string) => void;
+  /** Opens the offline outbox (Retry/Delete) — a ticket stuck in `pendingSync` forever (its
+   *  submission keeps failing, e.g. offline for good, or a real server-side rejection) has no
+   *  other way to get unstuck, since every action here is disabled while unsynced. */
+  onOpenOutbox?: () => void;
 }
 
-export function QueueCard({ ticket, onComplete, onVoid, onAddItems, onAdvanceItem }: QueueCardProps) {
+export function QueueCard({ ticket, onComplete, onVoid, onAddItems, onAdvanceItem, onOpenOutbox }: QueueCardProps) {
   const h = heat(ticket.mins);
   const timeAgo = ticket.mins < 1 ? 'Just now' : `${ticket.mins} min ago`;
   const timeLabel = h.urgent ? `Urgent · ${timeAgo}` : timeAgo;
@@ -98,10 +102,16 @@ export function QueueCard({ ticket, onComplete, onVoid, onAddItems, onAdvanceIte
         })}
       </View>
       {locked && (
-        <View style={styles.syncBadge}>
+        <Pressable
+          style={styles.syncBadge}
+          onPress={onOpenOutbox ? () => { tapMedium(); onOpenOutbox(); } : undefined}
+          disabled={!onOpenOutbox}
+          accessibilityRole={onOpenOutbox ? 'button' : undefined}
+          accessibilityLabel={onOpenOutbox ? 'Not synced yet — open outbox to retry or remove' : undefined}
+        >
           <WifiOffIcon size={11} color={colors.heatMedText} strokeWidth={2} />
-          <Text style={styles.syncBadgeText}>Not synced yet — saved on this device</Text>
-        </View>
+          <Text style={styles.syncBadgeText}>{onOpenOutbox ? 'Not synced yet — tap to retry or remove' : 'Not synced yet — saved on this device'}</Text>
+        </Pressable>
       )}
       <View style={styles.footerRow}>
         <Text style={styles.total}>{peso0(ticket.total)}</Text>
