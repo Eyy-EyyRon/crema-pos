@@ -61,10 +61,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   brand: {
-    fontFamily: fonts.serifBold,
-    fontSize: 34,
-    fontWeight: '600',
-    letterSpacing: 5,
+    fontFamily: fonts.display,
+    fontSize: 40,
+    letterSpacing: 2,
     color: colors.goldBrightText,
   },
   brandSub: {
@@ -111,9 +110,9 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   brandTablet: {
-    fontFamily: fonts.serifBold,
-    fontSize: 44,
-    letterSpacing: 6,
+    fontFamily: fonts.display,
+    fontSize: 52,
+    letterSpacing: 3,
     color: colors.goldBrightText,
   },
   brandSubTablet: {

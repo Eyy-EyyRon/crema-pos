@@ -263,7 +263,7 @@ export function LoginScreen({
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.screenBg, paddingTop: 50 },
   brandBlock: { alignItems: 'center', marginBottom: 20 },
-  brand: { fontFamily: fonts.serifBold, fontSize: 34, letterSpacing: 5, color: colors.goldBrightText },
+  brand: { fontFamily: fonts.display, fontSize: 40, letterSpacing: 2, color: colors.goldBrightText },
   brandSub: { fontSize: 10, letterSpacing: 4, color: colors.gold, fontFamily: fonts.sansBold, marginTop: 2 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   prompt: {

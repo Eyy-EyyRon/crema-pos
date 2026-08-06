@@ -67,6 +67,7 @@ export const fonts = {
   sansSemiBold: 'DMSans_600SemiBold',
   sansBold: 'DMSans_700Bold',
   sansExtraBold: 'DMSans_800ExtraBold',
+  display: 'CreamyChicken',
 };
 
 export const TABLET_BREAKPOINT = 768;

@@ -28,6 +28,7 @@ export default function App() {
     DMSans_600SemiBold,
     DMSans_700Bold,
     DMSans_800ExtraBold,
+    CreamyChicken: require('./assets/fonts/CreamyChicken.otf'),
   });
 
   if (!fontsLoaded) {
