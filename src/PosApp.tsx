@@ -12,6 +12,7 @@ import { QueueModal } from './components/QueueModal';
 import { StockAdjustModal } from './components/StockAdjustModal';
 import { ShiftCloseSummaryModal } from './components/ShiftCloseSummaryModal';
 import { SuccessModal } from './components/SuccessModal';
+import { UndoToast } from './components/UndoToast';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { CheckoutScreen } from './screens/CheckoutScreen';
@@ -72,6 +73,8 @@ export function PosApp() {
       </View>
     );
   }
+
+  const undoRemovedItem = pos.pendingUndo ? { name: pos.pendingUndo.item.name, qty: pos.pendingUndo.item.qty } : null;
 
   const currentUser = state.currentUser;
   const orderTypeLabel = state.orderType === 'dine-in' ? 'Dine-In' : 'Takeout';
@@ -261,6 +264,7 @@ export function PosApp() {
           storeInfo={receiptStoreInfo}
         />
         {accountSheet}
+        <UndoToast removedItem={undoRemovedItem} onUndo={pos.undoRemove} />
       </View>
     );
   }
@@ -314,6 +318,7 @@ export function PosApp() {
             onAddItems={pos.startAddToOrder}
             onAdvanceItem={pos.advanceItemPrepStatus}
             isOffline={state.isOffline}
+            onOpenOutbox={pos.openOutbox}
           />
         )}
         <GcashQrModal
@@ -322,6 +327,7 @@ export function PosApp() {
           onClose={() => pos.patch({ showGcashQr: false })}
         />
         {accountSheet}
+        <UndoToast removedItem={undoRemovedItem} onUndo={pos.undoRemove} />
       </View>
     );
   }
@@ -378,6 +384,7 @@ export function PosApp() {
           onAddItems={pos.startAddToOrder}
           onAdvanceItem={pos.advanceItemPrepStatus}
           isOffline={state.isOffline}
+          onOpenOutbox={pos.openOutbox}
         />
       )}
 
@@ -388,6 +395,7 @@ export function PosApp() {
         onClose={() => pos.patch({ showGcashQr: false })}
       />
       {accountSheet}
+      <UndoToast removedItem={undoRemovedItem} onUndo={pos.undoRemove} />
     </View>
   );
 }
