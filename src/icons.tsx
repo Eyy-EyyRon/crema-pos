@@ -267,6 +267,18 @@ export function ImageIcon({ size = 16, color = '#B0BFD0', strokeWidth = 1.8 }: I
   );
 }
 
+export function GiftIcon({ size = 18, color = '#8A9BB0', strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="3" y="8" width="18" height="4" rx="1" />
+      <Path d="M12 8v13" />
+      <Path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
+      <Path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8" />
+      <Path d="M16.5 8a2.5 2.5 0 0 0 0-5C13 3 12 8 12 8" />
+    </Svg>
+  );
+}
+
 export function SettingsIcon({ size = 18, color = '#B0BFD0', strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
