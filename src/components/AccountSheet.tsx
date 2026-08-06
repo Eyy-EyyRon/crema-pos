@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { CalendarIcon, ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon } from '../icons';
+import { CalendarIcon, ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon, WifiOffIcon, LockIcon } from '../icons';
 import { tapLight, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { Shift, ShiftScheduleEntry, UserProfile } from '../types';
@@ -19,22 +19,28 @@ export function AccountSheet({
   shift,
   upcomingShifts,
   uploading = false,
+  outboxCount = 0,
   onClose,
   onHistory,
   onCloseShift,
   onLock,
   onUploadAvatar,
+  onOpenOutbox,
+  onOpenStockAdjust,
 }: {
   visible: boolean;
   user: UserProfile;
   shift: Shift | null;
   upcomingShifts: ShiftScheduleEntry[];
   uploading?: boolean;
+  outboxCount?: number;
   onClose: () => void;
   onHistory: () => void;
   onCloseShift: () => void;
   onLock: () => void;
   onUploadAvatar: () => void;
+  onOpenOutbox: () => void;
+  onOpenStockAdjust: () => void;
 }) {
   useEffect(() => {
     if (!visible) return;
@@ -112,6 +118,21 @@ export function AccountSheet({
 
         <Pressable
           style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+          onPress={() => { tapLight(); onOpenOutbox(); }}
+          accessibilityRole="button"
+          accessibilityLabel={outboxCount > 0 ? `Sync Status, ${outboxCount} pending` : 'Sync Status, all synced'}
+        >
+          <WifiOffIcon size={16} color={outboxCount > 0 ? colors.heatMedText : colors.textSecondary} strokeWidth={1.7} />
+          <Text style={s.rowText}>{outboxCount > 0 ? `Sync Status — ${outboxCount} pending` : 'Sync Status — all synced'}</Text>
+          {outboxCount > 0 && (
+            <View style={s.syncBadge}>
+              <Text style={s.syncBadgeText}>{outboxCount}</Text>
+            </View>
+          )}
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [s.row, pressed && s.rowPressed]}
           onPress={() => { tapLight(); onLock(); }}
           accessibilityRole="button"
           accessibilityLabel="Switch Profile or Lock POS"
@@ -133,6 +154,16 @@ export function AccountSheet({
             <ImageIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
           )}
           <Text style={s.rowText}>{uploading ? 'Uploading…' : 'Upload Avatar Photo'}</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+          onPress={() => { tapLight(); onOpenStockAdjust(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Adjust Stock"
+        >
+          <LockIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
+          <Text style={s.rowText}>Adjust Stock</Text>
         </Pressable>
 
         <Pressable
@@ -201,5 +232,10 @@ const s = StyleSheet.create({
   },
   rowDanger: {},
   rowPressed: { backgroundColor: 'rgba(184,147,90,0.06)' },
-  rowText: { fontSize: 13.5, fontFamily: fonts.sansSemiBold, color: colors.textSecondary },
+  rowText: { fontSize: 13.5, fontFamily: fonts.sansSemiBold, color: colors.textSecondary, flex: 1 },
+  syncBadge: {
+    minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5,
+    backgroundColor: colors.heatMedText, alignItems: 'center', justifyContent: 'center',
+  },
+  syncBadgeText: { fontSize: 11, fontFamily: fonts.sansExtraBold, color: colors.screenBg },
 });
