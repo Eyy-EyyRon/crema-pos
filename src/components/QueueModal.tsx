@@ -18,6 +18,7 @@ export function QueueModal({
   onAddItems,
   onAdvanceItem,
   isOffline,
+  onOpenOutbox,
 }: {
   tickets: QueueEntry[];
   onClose: () => void;
@@ -29,6 +30,7 @@ export function QueueModal({
   onAddItems: (ticket: QueueEntry) => void;
   onAdvanceItem: (orderItemId: string) => void;
   isOffline: boolean;
+  onOpenOutbox?: () => void;
 }) {
   const [voidTarget, setVoidTarget] = useState<QueueEntry | null>(null);
   const selfVoidEligible = !!voidTarget && !!currentUser && (
@@ -50,7 +52,7 @@ export function QueueModal({
             </Pressable>
           </View>
         </View>
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <QueueList
             tickets={tickets}
             onComplete={onComplete}
@@ -60,6 +62,7 @@ export function QueueModal({
               if (t) onAddItems(t);
             }}
             onAdvanceItem={onAdvanceItem}
+            onOpenOutbox={onOpenOutbox}
           />
         </ScrollView>
       </View>
