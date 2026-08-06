@@ -3,10 +3,12 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
+import { ForgotPinModal } from '../components/ForgotPinModal';
 import { PinPad, PinPadKey } from '../components/PinPad';
 import { Shot } from '../components/Shot';
 import { AlertCircleIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
+import { requestPinReset } from '../lib/pinReset';
 import { supabase } from '../lib/supabase';
 import { colors, fonts } from '../theme';
 import { UserProfile } from '../types';
@@ -60,6 +62,7 @@ export function LoginScreen({
   const [resetTick, setResetTick] = useState(0);
   const [bioBusy, setBioBusy] = useState(false);
   const [pinBusy, setPinBusy] = useState(false);
+  const [forgotPinVisible, setForgotPinVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -71,7 +74,7 @@ export function LoginScreen({
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, full_name, role, avatar_url')
+          .select('id, full_name, role, avatar_url, is_senior_barista, self_void_threshold_php')
           .eq('role', 'barista')
           .neq('status', 'inactive');
         
@@ -236,8 +239,23 @@ export function LoginScreen({
               <Text style={s.errorText}>{error}</Text>
             </View>
           )}
+          <Pressable
+            onPress={() => { tapLight(); setForgotPinVisible(true); }}
+            style={({ pressed }) => [s.forgotPin, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Forgot PIN"
+          >
+            <Text style={s.forgotPinText}>Forgot PIN?</Text>
+          </Pressable>
         </View>
       )}
+
+      <ForgotPinModal
+        visible={forgotPinVisible}
+        profileName={selected?.full_name ?? ''}
+        onClose={() => setForgotPinVisible(false)}
+        onSubmit={(note) => requestPinReset(selected!.id, note)}
+      />
     </View>
   );
 }
@@ -274,6 +292,8 @@ const s = StyleSheet.create({
   pinPrompt: { fontSize: 14, fontFamily: fonts.sansBold, color: colors.textSecondary, marginBottom: 20 },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16 },
   errorText: { fontSize: 12.5, color: colors.danger, fontFamily: fonts.sansSemiBold },
+  forgotPin: { marginTop: 20 },
+  forgotPinText: { fontSize: 12, color: colors.textMuted, fontFamily: fonts.sansSemiBold },
   clockWrap: { position: 'absolute', top: 40, right: 40, alignItems: 'flex-end' },
   clockTime: { fontSize: 28, fontFamily: fonts.serifBold, color: colors.goldBrightText, letterSpacing: 1 },
   clockDate: { fontSize: 11, fontFamily: fonts.sansBold, color: colors.gold, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 4 },
