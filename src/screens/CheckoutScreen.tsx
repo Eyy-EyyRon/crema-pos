@@ -6,12 +6,17 @@ import {
   AppendOrderBanner,
   CashTenderBlock,
   CheckoutErrorBanner,
+  CustomerLoyaltyBlock,
   CustomerNameField,
   DiscountRow,
+  GcashConfirmBlock,
+  GiftCardPaymentBlock,
   OrderTypeRow,
   PaymentMethodRow,
   ProcessPaymentButton,
+  ReceiptEmailField,
   SectionLabel,
+  SplitPaymentBlock,
   SummaryCard,
 } from '../components/CheckoutShared';
 import { BackHeader } from '../components/Header';
@@ -33,11 +38,51 @@ interface CheckoutScreenProps {
   discounts: Discount[];
   discountName: string;
   discountPct: number;
+  discountLabel?: string;
   onSelectDiscount: (name: string) => void;
   payMethod: PayMethod;
   onSelectCash: () => void;
   onSelectGcash: () => void;
+  onSelectGiftCard: () => void;
   onViewGcashQr: () => void;
+  giftCardCode: string;
+  onChangeGiftCardCode: (v: string) => void;
+  onCheckGiftCardBalance: () => void;
+  giftCardChecking: boolean;
+  giftCardBalance: number | null;
+  giftCardError: string | null;
+  customerPhone: string;
+  onChangeCustomerPhone: (v: string) => void;
+  onLookupCustomer: () => void;
+  customerLookupStatus: 'idle' | 'searching' | 'found' | 'not_found';
+  foundCustomerName: string | null;
+  foundCustomerPoints: number;
+  newCustomerName: string;
+  onChangeNewCustomerName: (v: string) => void;
+  onCreateCustomer: () => void;
+  customerCreating: boolean;
+  onClearCustomer: () => void;
+  loyaltyEnabled: boolean;
+  loyaltyPointValuePhp: number;
+  redeemPoints: string;
+  onChangeRedeemPoints: (v: string) => void;
+  maxRedeemablePoints: number;
+  pointsToEarnPreview: number;
+  loyaltyRedemptionAmount: number;
+  amountDue: number;
+  receiptEmail: string;
+  onChangeReceiptEmail: (v: string) => void;
+  gcashReference: string;
+  onChangeGcashReference: (v: string) => void;
+  gcashConfirmed: boolean;
+  onToggleGcashConfirmed: () => void;
+  splitEnabled: boolean;
+  onToggleSplit: () => void;
+  splitCashAmount: string;
+  onChangeSplitCashAmount: (v: string) => void;
+  splitGcashAmount: string;
+  onChangeSplitGcashAmount: (v: string) => void;
+  splitAmountMismatch: boolean;
   tendered: string;
   onChangeTendered: (v: string) => void;
   quickCash: number[];
@@ -76,11 +121,51 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     discounts,
     discountName,
     discountPct,
+    discountLabel,
     onSelectDiscount,
     payMethod,
     onSelectCash,
     onSelectGcash,
+    onSelectGiftCard,
     onViewGcashQr,
+    giftCardCode,
+    onChangeGiftCardCode,
+    onCheckGiftCardBalance,
+    giftCardChecking,
+    giftCardBalance,
+    giftCardError,
+    customerPhone,
+    onChangeCustomerPhone,
+    onLookupCustomer,
+    customerLookupStatus,
+    foundCustomerName,
+    foundCustomerPoints,
+    newCustomerName,
+    onChangeNewCustomerName,
+    onCreateCustomer,
+    customerCreating,
+    onClearCustomer,
+    loyaltyEnabled,
+    loyaltyPointValuePhp,
+    redeemPoints,
+    onChangeRedeemPoints,
+    maxRedeemablePoints,
+    pointsToEarnPreview,
+    loyaltyRedemptionAmount,
+    amountDue,
+    receiptEmail,
+    onChangeReceiptEmail,
+    gcashReference,
+    onChangeGcashReference,
+    gcashConfirmed,
+    onToggleGcashConfirmed,
+    splitEnabled,
+    onToggleSplit,
+    splitCashAmount,
+    onChangeSplitCashAmount,
+    splitGcashAmount,
+    onChangeSplitGcashAmount,
+    splitAmountMismatch,
     tendered,
     onChangeTendered,
     quickCash,
@@ -127,6 +212,27 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
 
             <SectionLabel style={styles.sectionSpacing}>Name for Order</SectionLabel>
             <CustomerNameField value={customerName} onChangeText={onChangeCustomerName} />
+
+            <SectionLabel style={styles.sectionSpacing}>Customer</SectionLabel>
+            <CustomerLoyaltyBlock
+              phone={customerPhone}
+              onChangePhone={onChangeCustomerPhone}
+              onLookup={onLookupCustomer}
+              lookupStatus={customerLookupStatus}
+              foundName={foundCustomerName}
+              foundPoints={foundCustomerPoints}
+              newCustomerName={newCustomerName}
+              onChangeNewCustomerName={onChangeNewCustomerName}
+              onCreateCustomer={onCreateCustomer}
+              creating={customerCreating}
+              onClear={onClearCustomer}
+              loyaltyEnabled={loyaltyEnabled}
+              pointValuePhp={loyaltyPointValuePhp}
+              redeemPoints={redeemPoints}
+              onChangeRedeemPoints={onChangeRedeemPoints}
+              maxRedeemablePoints={maxRedeemablePoints}
+              pointsToEarnPreview={pointsToEarnPreview}
+            />
           </>
         )}
 
@@ -134,33 +240,103 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         <DiscountRow discounts={discounts} activeName={discountName} onSelect={onSelectDiscount} />
 
         <SectionLabel style={styles.sectionSpacing}>Payment Method</SectionLabel>
-        <PaymentMethodRow payMethod={payMethod} onSelectCash={onSelectCash} onSelectGcash={onSelectGcash} onViewGcashQr={onViewGcashQr} />
+        <PaymentMethodRow
+          payMethod={payMethod}
+          onSelectCash={onSelectCash}
+          onSelectGcash={onSelectGcash}
+          onSelectGiftCard={isAppend ? undefined : onSelectGiftCard}
+          onViewGcashQr={onViewGcashQr}
+          splitEnabled={isAppend ? undefined : splitEnabled}
+          onToggleSplit={isAppend ? undefined : onToggleSplit}
+        />
 
-        {payMethod === 'cash' && (
+        {splitEnabled && !isAppend ? (
           <>
-            <SectionLabel style={styles.sectionSpacing}>Cash Tendered</SectionLabel>
-            <CashTenderBlock
-              tendered={tendered}
-              onChangeTendered={onChangeTendered}
-              quickCash={quickCash}
-              onQuickCash={onQuickCash}
-              tenderNum={tenderNum}
-              change={change}
-              shortfall={shortfall}
+            <SectionLabel style={styles.sectionSpacing}>Split Payment</SectionLabel>
+            <SplitPaymentBlock
+              total={total}
+              cashAmount={splitCashAmount}
+              onChangeCashAmount={onChangeSplitCashAmount}
+              gcashAmount={splitGcashAmount}
+              onChangeGcashAmount={onChangeSplitGcashAmount}
+              mismatch={splitAmountMismatch}
             />
+            {Number(splitGcashAmount) > 0 && (
+              <>
+                <SectionLabel style={styles.sectionSpacing}>Confirm GCash Payment</SectionLabel>
+                <GcashConfirmBlock
+                  reference={gcashReference}
+                  onChangeReference={onChangeGcashReference}
+                  confirmed={gcashConfirmed}
+                  onToggleConfirmed={onToggleGcashConfirmed}
+                />
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            {payMethod === 'gcash' && (
+              <>
+                <SectionLabel style={styles.sectionSpacing}>Confirm GCash Payment</SectionLabel>
+                <GcashConfirmBlock
+                  reference={gcashReference}
+                  onChangeReference={onChangeGcashReference}
+                  confirmed={gcashConfirmed}
+                  onToggleConfirmed={onToggleGcashConfirmed}
+                />
+              </>
+            )}
+
+            {payMethod === 'cash' && (
+              <>
+                <SectionLabel style={styles.sectionSpacing}>Cash Tendered</SectionLabel>
+                <CashTenderBlock
+                  tendered={tendered}
+                  onChangeTendered={onChangeTendered}
+                  quickCash={quickCash}
+                  onQuickCash={onQuickCash}
+                  tenderNum={tenderNum}
+                  change={change}
+                  shortfall={shortfall}
+                />
+              </>
+            )}
+
+            {payMethod === 'gift_card' && (
+              <>
+                <SectionLabel style={styles.sectionSpacing}>Gift Card</SectionLabel>
+                <GiftCardPaymentBlock
+                  code={giftCardCode}
+                  onChangeCode={onChangeGiftCardCode}
+                  onCheckBalance={onCheckGiftCardBalance}
+                  checking={giftCardChecking}
+                  balance={giftCardBalance}
+                  error={giftCardError}
+                  amountDue={amountDue}
+                />
+              </>
+            )}
+          </>
+        )}
+
+        {!isAppend && (
+          <>
+            <SectionLabel style={styles.sectionSpacing}>Email Receipt</SectionLabel>
+            <ReceiptEmailField value={receiptEmail} onChangeText={onChangeReceiptEmail} />
           </>
         )}
 
         <SectionLabel style={styles.sectionSpacing}>Summary</SectionLabel>
         <SummaryCard
-          subtotal={subtotal} discount={discount} discountPct={discountPct} service={service} tax={tax} total={total}
+          subtotal={subtotal} discount={discount} discountPct={discountPct} discountLabel={discountLabel}
+          service={service} tax={tax} total={total} loyaltyRedemption={loyaltyRedemptionAmount} amountDue={amountDue}
           taxRatePct={taxRatePct} isTaxInclusive={isTaxInclusive} serviceChargePct={serviceChargePct}
         />
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: 20 + insets.bottom }]}>
         {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
         <ProcessPaymentButton
-          totalStr={peso(total)}
+          totalStr={peso(isAppend ? total : amountDue)}
           disabled={!canPay}
           busy={checkoutBusy}
           onPress={onPay}
