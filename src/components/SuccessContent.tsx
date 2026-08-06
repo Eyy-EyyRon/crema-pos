@@ -41,6 +41,21 @@ export function SuccessContent({
       <Text style={styles.subtitle}>
         {success.method} · {orderTypeLabel}{success.customerName ? ` · ${success.customerName}` : ''}
       </Text>
+      {!!success.gcashReference && (
+        <Text style={styles.gcashRefText}>GCash Ref# {success.gcashReference}</Text>
+      )}
+      {!!success.giftCardCode && (
+        <Text style={styles.gcashRefText}>Gift Card {success.giftCardCode}</Text>
+      )}
+      {!!success.loyaltyPointsRedeemed && success.loyaltyPointsRedeemed > 0 && (
+        <Text style={styles.gcashRefText}>Redeemed {success.loyaltyPointsRedeemed} pts (−₱{(success.loyaltyRedemptionAmount ?? 0).toFixed(2)})</Text>
+      )}
+      {!!success.loyaltyPointsEarned && success.loyaltyPointsEarned > 0 && (
+        <Text style={styles.gcashRefText}>Earned {success.loyaltyPointsEarned} loyalty pts</Text>
+      )}
+      {!!success.receiptEmail && (
+        <Text style={styles.gcashRefText}>Receipt emailed to {success.receiptEmail}</Text>
+      )}
       <View style={styles.receipt}>
         <View style={styles.receiptHeader}>
           <View>
@@ -114,6 +129,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     marginTop: 3,
+  },
+  gcashRefText: {
+    fontSize: 11.5,
+    fontFamily: fonts.sansBold,
+    color: colors.textLabel,
+    marginTop: 4,
   },
   receipt: {
     width: '100%',
