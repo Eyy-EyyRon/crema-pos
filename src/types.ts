@@ -1,5 +1,5 @@
 export type OrderType = 'dine-in' | 'takeout';
-export type PayMethod = 'cash' | 'gcash';
+export type PayMethod = 'cash' | 'gcash' | 'split' | 'gift_card';
 export type Screen = 'orderType' | 'menu' | 'checkout' | 'success' | 'queue' | 'history';
 
 export interface MenuItem {
@@ -43,13 +43,30 @@ export interface Discount {
   id: string | null;
   n: string;
   p: number;
+  /** 'percent' uses `p` as-is; 'fixed' is a flat peso amount off; 'bogo' deducts the cheapest cart line's unit price. */
+  type: 'percent' | 'fixed' | 'bogo';
+  fixedAmount: number | null;
+  minSpend: number | null;
+  validFromHour: number | null;
+  validToHour: number | null;
+}
+
+export interface Customer {
+  id: string;
+  phone: string;
+  fullName: string | null;
+  email: string | null;
+  loyaltyPoints: number;
 }
 
 export interface QueueItemLine {
+  /** order_items.id — absent for a still-local outbox entry that hasn't synced to a real row yet. */
+  id?: string;
   name: string;
   qty: number;
   /** Modifiers + special note, joined into one display string (e.g. "Oat Milk · No Sugar · Note: extra hot"). */
   mods?: string;
+  prepStatus?: 'pending' | 'in_progress' | 'ready';
 }
 
 export interface QueueEntry {
@@ -72,11 +89,17 @@ export interface QueueEntry {
 export interface SuccessInfo {
   no: string;
   total: number;
-  method: 'Cash' | 'GCash';
+  method: string;
   items: { qtyName: string; lineStr: string; modsStr?: string }[];
   showChange: boolean;
   change: number;
   customerName?: string | null;
+  gcashReference?: string | null;
+  giftCardCode?: string | null;
+  loyaltyPointsEarned?: number;
+  loyaltyPointsRedeemed?: number;
+  loyaltyRedemptionAmount?: number;
+  receiptEmail?: string | null;
 }
 
 export interface UserProfile {
@@ -84,6 +107,8 @@ export interface UserProfile {
   full_name: string;
   role: 'manager' | 'barista';
   avatar_url?: string | null;
+  is_senior_barista?: boolean;
+  self_void_threshold_php?: number;
 }
 
 export interface Shift {
