@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { peso0 } from '../format';
 import { MinusIcon, PlusIcon, TrashIcon } from '../icons';
-import { tapLight, warning } from '../lib/haptics';
+import { tapLight, tapMedium } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { CartItem } from '../types';
 import { Shot } from './Shot';
@@ -28,13 +28,13 @@ export function CartRow({ item, shotSize = 44, onInc, onDec, onRemove }: CartRow
       </View>
       <View style={styles.right}>
         <Pressable
-          onPress={() => { warning(); onRemove(); }}
+          onPress={() => { tapMedium(); onRemove(); }}
           style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
-          hitSlop={8}
+          hitSlop={{ top: 6, left: 6, right: 6, bottom: 0 }}
           accessibilityRole="button"
           accessibilityLabel={`Remove ${item.name} from cart`}
         >
-          <TrashIcon size={15} color={colors.danger} strokeWidth={1.8} />
+          <TrashIcon size={16} color={colors.danger} strokeWidth={1.8} />
         </Pressable>
         <View style={styles.stepper}>
           <Pressable
@@ -95,9 +95,19 @@ const styles = StyleSheet.create({
   right: {
     alignItems: 'flex-end',
     justifyContent: 'space-between',
+    // Guarantees real separation from the stepper even for a plain item with no modifiers
+    // (where the row's height — set by the product thumbnail — used to leave space-between
+    // almost nothing to distribute). `gap` sets a floor; space-between still spreads any
+    // extra room on top of it for taller, mod-heavy rows.
+    gap: 10,
   },
   removeBtn: {
-    padding: 2,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,107,122,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stepper: {
     flexDirection: 'row',
