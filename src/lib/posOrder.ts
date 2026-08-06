@@ -359,6 +359,9 @@ export async function deductStockForOrderItems(orderItems: PosOrderItem[]): Prom
           });
       });
 
+      // Crossings accumulate here instead of emailing per-ingredient — a single order that
+      // depletes five ingredients at once sends one digest, not five separate emails.
+      const lowStockCrossings: { ingredientName: string; currentStock: number; parLevel: number }[] = [];
       for (const [ingredientId, amount] of Object.entries(deductions)) {
         const { data: rpcData, error: rpcErr } = await supabase
           .rpc('decrement_ingredient_stock', { p_ingredient_id: ingredientId, p_amount: amount })
@@ -371,23 +374,22 @@ export async function deductStockForOrderItems(orderItems: PosOrderItem[]): Prom
           const ingredientName = (rpcData as any).ingredient_name as string;
 
           if (oldStock >= parLevel && newStock < parLevel) {
-            const { data: settings } = await supabase
-              .from('store_settings')
-              .select('alert_email, alert_low_stock')
-              .eq('id', 1)
-              .single();
-
-            if (settings && settings.alert_low_stock && settings.alert_email) {
-              await supabase.functions.invoke('send-alert', {
-                body: {
-                  email: settings.alert_email,
-                  ingredientName,
-                  currentStock: newStock,
-                  parLevel,
-                },
-              });
-            }
+            lowStockCrossings.push({ ingredientName, currentStock: newStock, parLevel });
           }
+        }
+      }
+
+      if (lowStockCrossings.length > 0) {
+        const { data: settings } = await supabase
+          .from('store_settings')
+          .select('alert_email, alert_low_stock')
+          .eq('id', 1)
+          .single();
+
+        if (settings && settings.alert_low_stock && settings.alert_email) {
+          await supabase.functions.invoke('send-alert', {
+            body: { email: settings.alert_email, ingredients: lowStockCrossings },
+          });
         }
       }
     }
