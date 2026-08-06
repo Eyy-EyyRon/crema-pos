@@ -1,5 +1,7 @@
 import {
+  computeDiscountAmount,
   computeOrderTotals,
+  computeOrderTotalsMultiRate,
   getIngredientReservations,
   getMaxAddableQty,
   isOutOfStock,
@@ -49,6 +51,106 @@ describe('computeOrderTotals', () => {
     });
     expect(t.serviceChargeAmount).toBe(0);
     expect(t.total).toBe(200);
+  });
+});
+
+describe('computeOrderTotalsMultiRate', () => {
+  it('matches computeOrderTotals exactly when every line shares the same rate (inclusive, dine-in)', () => {
+    const single = computeOrderTotals({
+      subtotal: 1000, discountPct: 0.1, orderType: 'dine-in', taxRatePct: 12, isTaxInclusive: true, serviceChargePct: 5,
+    });
+    const multi = computeOrderTotalsMultiRate({
+      items: [{ lineTotal: 600, taxRatePct: 12 }, { lineTotal: 400, taxRatePct: 12 }],
+      discountPct: 0.1, orderType: 'dine-in', isTaxInclusive: true, serviceChargePct: 5, defaultTaxRatePct: 12,
+    });
+    expect(multi.discountAmount).toBeCloseTo(single.discountAmount);
+    expect(multi.discountedSubtotal).toBeCloseTo(single.discountedSubtotal);
+    expect(multi.serviceChargeAmount).toBeCloseTo(single.serviceChargeAmount);
+    expect(multi.taxAmount).toBeCloseTo(single.taxAmount);
+    expect(multi.total).toBeCloseTo(single.total);
+  });
+
+  it('matches computeOrderTotals exactly when every line shares the same rate (exclusive, takeout)', () => {
+    const single = computeOrderTotals({
+      subtotal: 500, discountPct: 0, orderType: 'takeout', taxRatePct: 12, isTaxInclusive: false, serviceChargePct: 5,
+    });
+    const multi = computeOrderTotalsMultiRate({
+      items: [{ lineTotal: 500, taxRatePct: 12 }],
+      discountPct: 0, orderType: 'takeout', isTaxInclusive: false, serviceChargePct: 5, defaultTaxRatePct: 12,
+    });
+    expect(multi.serviceChargeAmount).toBe(single.serviceChargeAmount);
+    expect(multi.taxAmount).toBeCloseTo(single.taxAmount);
+    expect(multi.total).toBeCloseTo(single.total);
+  });
+
+  it('taxes each line at its own rate and the service charge at the store default rate (exclusive)', () => {
+    // ₱600 at 12% + ₱400 tax-exempt (0%), 5% service charge on the ₱1000 subtotal (dine-in),
+    // service charge itself taxed at the 12% default rate since it isn't tied to one item.
+    const t = computeOrderTotalsMultiRate({
+      items: [{ lineTotal: 600, taxRatePct: 12 }, { lineTotal: 400, taxRatePct: 0 }],
+      discountPct: 0, orderType: 'dine-in', isTaxInclusive: false, serviceChargePct: 5, defaultTaxRatePct: 12,
+    });
+    expect(t.serviceChargeAmount).toBeCloseTo(50);
+    expect(t.taxAmount).toBeCloseTo(72 + 6); // 600*12% item tax + 50*12% service-charge tax
+    expect(t.total).toBeCloseTo(1128);
+  });
+
+  it('taxes each line at its own rate with no addition for the inclusive service charge', () => {
+    const t = computeOrderTotalsMultiRate({
+      items: [{ lineTotal: 600, taxRatePct: 12 }, { lineTotal: 400, taxRatePct: 0 }],
+      discountPct: 0, orderType: 'dine-in', isTaxInclusive: true, serviceChargePct: 5, defaultTaxRatePct: 12,
+    });
+    expect(t.serviceChargeAmount).toBeCloseTo(50);
+    expect(t.taxAmount).toBeCloseTo(600 - 600 / 1.12);
+    expect(t.total).toBeCloseTo(1050);
+  });
+
+  it('apportions a whole-order discount across lines proportionally before taxing each one', () => {
+    const t = computeOrderTotalsMultiRate({
+      items: [{ lineTotal: 600, taxRatePct: 12 }, { lineTotal: 400, taxRatePct: 0 }],
+      discountPct: 0.1, orderType: 'takeout', isTaxInclusive: false, serviceChargePct: 5, defaultTaxRatePct: 12,
+    });
+    // 10% off each line: 540 @ 12% => 64.8 tax; 360 @ 0% => 0 tax. No service charge on takeout.
+    expect(t.discountAmount).toBeCloseTo(100);
+    expect(t.serviceChargeAmount).toBe(0);
+    expect(t.taxAmount).toBeCloseTo(64.8);
+    expect(t.total).toBeCloseTo(900 + 64.8);
+  });
+});
+
+describe('computeDiscountAmount', () => {
+  it('returns null-safe zero when no discount is selected', () => {
+    expect(computeDiscountAmount(null, 1000, [100, 200])).toBe(0);
+  });
+
+  it('matches subtotal * percentPct for a percent discount — identical to the pre-feature formula', () => {
+    const amt = computeDiscountAmount({ type: 'percent', percentPct: 0.2, fixedAmount: null }, 1000, [100, 200]);
+    expect(amt).toBeCloseTo(200);
+  });
+
+  it('deducts the flat fixed amount, uncapped when it fits under the subtotal', () => {
+    const amt = computeDiscountAmount({ type: 'fixed', percentPct: 0, fixedAmount: 150 }, 1000, [100, 200]);
+    expect(amt).toBeCloseTo(150);
+  });
+
+  it('caps a fixed discount at the subtotal so it can never make the order negative', () => {
+    const amt = computeDiscountAmount({ type: 'fixed', percentPct: 0, fixedAmount: 999 }, 500, [100, 200]);
+    expect(amt).toBeCloseTo(500);
+  });
+
+  it('deducts the cheapest cart unit price for a bogo discount', () => {
+    const amt = computeDiscountAmount({ type: 'bogo', percentPct: 0, fixedAmount: null }, 1000, [150, 80, 300]);
+    expect(amt).toBeCloseTo(80);
+  });
+
+  it('caps a bogo discount at the subtotal for a single cheap item cart', () => {
+    const amt = computeDiscountAmount({ type: 'bogo', percentPct: 0, fixedAmount: null }, 50, [80]);
+    expect(amt).toBeCloseTo(50);
+  });
+
+  it('treats an empty cart as a zero-value bogo discount', () => {
+    const amt = computeDiscountAmount({ type: 'bogo', percentPct: 0, fixedAmount: null }, 0, []);
+    expect(amt).toBe(0);
   });
 });
 
