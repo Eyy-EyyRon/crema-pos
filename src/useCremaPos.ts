@@ -10,21 +10,41 @@ import { logActivity } from './lib/activityLog';
 import { closeShift as closeShiftApi, getOpenShift, openShift as openShiftApi } from './lib/cashDrawer';
 import { success as successHaptic, error as errorHaptic } from './lib/haptics';
 import {
+  PaymentSplitComponent,
   PosOrderData,
   PosOrderItem,
   RecipeRow,
   addItemsToExistingOrder,
   buildRecipesByItem,
-  computeOrderTotals,
+  computeDiscountAmount,
+  computeOrderTotalsMultiRate,
   getMaxAddableQty,
   isOutOfStock,
   modsDisplayString,
   restoreStockForOrderItems,
 } from './lib/posOrder';
-import { OutboxEntry, getOutboxOrders, isOnline, submitOrder, syncOutbox } from './lib/syncEngine';
+import { REASON_CODE_LABELS, ReasonCode } from './lib/reasonCodes';
+import { playNewOrderChime } from './lib/sound';
+import { cacheManagerPinOnVerify, tryOfflineManagerPin } from './lib/managerPinCache';
+import { applyLoyaltyPoints, createCustomer, lookupCustomerByPhone } from './lib/customers';
+import { checkGiftCardBalance, redeemGiftCard } from './lib/giftCards';
+import { sendReceiptEmail } from './lib/receiptEmail';
+import {
+  OutboxEntry,
+  deleteOutboxEntry as deleteOutboxEntryApi,
+  getOutboxCount,
+  getOutboxOrders,
+  isOnline,
+  queueAction,
+  retryOutboxEntry as retryOutboxEntryApi,
+  submitOrder,
+  syncActionOutbox,
+  syncOutbox,
+} from './lib/syncEngine';
 import { clockIn, clockOut } from './lib/timeClock';
 import {
   CartItem,
+  Customer,
   Discount,
   ModGroupDef,
   ModOptionDef,
@@ -52,6 +72,9 @@ interface StoreSettings {
   phone: string;
   tin: string;
   receiptFooter: string;
+  loyaltyEnabled: boolean;
+  loyaltyPhpPerPoint: number;
+  loyaltyPointValuePhp: number;
 }
 
 const DEFAULT_STORE_SETTINGS: StoreSettings = {
@@ -66,6 +89,9 @@ const DEFAULT_STORE_SETTINGS: StoreSettings = {
   phone: '',
   tin: '',
   receiptFooter: 'Thank you for visiting Crema!',
+  loyaltyEnabled: false,
+  loyaltyPhpPerPoint: 20,
+  loyaltyPointValuePhp: 0.5,
 };
 
 // Below this many sellable units left, the menu grid flags the item as low
@@ -76,6 +102,18 @@ const LOW_STOCK_THRESHOLD = 5;
 // the register can still take orders (menu, prices, stock badges, mods,
 // discounts) if the tablet loses connectivity after the first successful load.
 const MENU_DATA_CACHE_KEY = 'crema_menu_data_cache';
+
+// Mirrors get_cash_drawer_reconciliation()'s return row (supabase/migrations/
+// 20260731130000_cash_drawer_reconciliation.sql) — shown to the barista right before logout so
+// the shift-close reconciliation isn't manager-web-only.
+export interface ShiftCloseSummary {
+  startingCash: number;
+  actualEndingCash: number | null;
+  cashSales: number;
+  cashRefunds: number;
+  expectedEndingCash: number;
+  variance: number | null;
+}
 
 export interface MenuItemStock {
   unavailable: boolean;
@@ -88,6 +126,10 @@ interface PosState {
   screen: Screen;
   showQueue: boolean;
   showAccount: boolean;
+  showOutbox: boolean;
+  outboxCount: number;
+  /** Set briefly when a NEW order lands in the queue that this terminal's barista didn't place. */
+  newOrderAlert: { orderNo: string } | null;
   orderType: OrderType;
   selCat: string;
   search: string;
@@ -97,8 +139,26 @@ interface PosState {
   note: string;
   payMethod: PayMethod;
   tendered: string;
+  /** True when the customer is paying with two methods (cash + GCash) on one order. */
+  splitEnabled: boolean;
+  splitCashAmount: string;
+  splitGcashAmount: string;
   discountName: string;
   customerName: string;
+  /** Phone number typed into the checkout customer-lookup field — not yet confirmed against the customers table. */
+  customerPhone: string;
+  customerLookupStatus: 'idle' | 'searching' | 'found' | 'not_found';
+  selectedCustomer: Customer | null;
+  newCustomerName: string;
+  customerCreating: boolean;
+  /** Loyalty points the barista has typed in to redeem on this order — a string so the input can be empty, clamped at checkout time. */
+  redeemPoints: string;
+  giftCardCode: string;
+  giftCardBalance: number | null;
+  giftCardChecking: boolean;
+  giftCardError: string | null;
+  /** Optional email to send this order's receipt to — captured at checkout, not required. */
+  receiptEmail: string;
   cart: CartItem[];
   nextId: number;
   success: SuccessInfo | null;
@@ -106,6 +166,10 @@ interface PosState {
   /** Count of orders placed today, server-side — used to show the upcoming ticket number before checkout. */
   todayOrderCount: number;
   showGcashQr: boolean;
+  /** GCash reference/transaction number typed in by the barista, required to confirm a GCash payment. */
+  gcashReference: string;
+  /** Barista's explicit attestation that the customer's GCash payment went through. */
+  gcashConfirmed: boolean;
   /** Set while the cart being built is meant to top up an already-queued order rather than create a new one. */
   appendTargetOrderId: string | null;
   appendTargetOrderNo: string | null;
@@ -116,18 +180,23 @@ interface PosState {
   authLoading: boolean;
   shift: Shift | null;
   shiftLoading: boolean;
+  shiftCloseSummary: ShiftCloseSummary | null;
   isOffline: boolean;
   checkoutBusy: boolean;
   checkoutError: string | null;
   avatarUploading: boolean;
 
   // live backend data
-  menuItems: { id: string; name: string; price: number; category: string }[];
+  menuItems: { id: string; name: string; price: number; category: string; tax_rate_id: string | null }[];
   categories: string[];
   discountsList: Discount[];
   modifierGroupsByItem: Record<string, ModGroupDef[]>;
   recipesByItem: Record<string, RecipeRow[]>;
   ingredientStock: Record<string, number>;
+  ingredientsList: { id: string; name: string; unit: string; current_stock: number }[];
+  /** Non-default tax rates a menu item can be explicitly assigned via tax_rate_id — a menu item
+   *  left unassigned always resolves to storeSettings.taxRatePct, never a row from here. */
+  taxRateById: Record<string, number>;
   storeSettings: StoreSettings;
 }
 
@@ -135,6 +204,9 @@ const initialState: PosState = {
   screen: 'orderType',
   showQueue: false,
   showAccount: false,
+  showOutbox: false,
+  outboxCount: 0,
+  newOrderAlert: null,
   orderType: 'dine-in',
   selCat: 'All',
   search: '',
@@ -144,14 +216,30 @@ const initialState: PosState = {
   note: '',
   payMethod: 'cash',
   tendered: '',
+  splitEnabled: false,
+  splitCashAmount: '',
+  splitGcashAmount: '',
   discountName: 'None',
   customerName: '',
+  customerPhone: '',
+  customerLookupStatus: 'idle',
+  selectedCustomer: null,
+  newCustomerName: '',
+  customerCreating: false,
+  redeemPoints: '',
+  giftCardCode: '',
+  giftCardBalance: null,
+  giftCardChecking: false,
+  giftCardError: null,
+  receiptEmail: '',
   cart: [],
   nextId: 1,
   success: null,
   queue: [],
   todayOrderCount: 0,
   showGcashQr: false,
+  gcashReference: '',
+  gcashConfirmed: false,
   appendTargetOrderId: null,
   appendTargetOrderNo: null,
   upcomingShifts: [],
@@ -160,6 +248,7 @@ const initialState: PosState = {
   authLoading: true,
   shift: null,
   shiftLoading: true,
+  shiftCloseSummary: null,
   isOffline: false,
   checkoutBusy: false,
   checkoutError: null,
@@ -167,10 +256,12 @@ const initialState: PosState = {
 
   menuItems: [],
   categories: ['All'],
-  discountsList: [{ id: null, n: 'None', p: 0 }],
+  discountsList: [{ id: null, n: 'None', p: 0, type: 'percent', fixedAmount: null, minSpend: null, validFromHour: null, validToHour: null }],
   modifierGroupsByItem: {},
   recipesByItem: {},
   ingredientStock: {},
+  ingredientsList: [],
+  taxRateById: {},
   storeSettings: DEFAULT_STORE_SETTINGS,
 };
 
@@ -213,6 +304,14 @@ export function useCremaPos() {
   // cash_drawer_shifts row (barista_id = current_profile_id() no longer matches) and wrongly
   // re-prompts them to open a new shift. Same staleness pattern as menuFetchSeq above.
   const loginSeqRef = useRef(0);
+  // Tracks which order ids fetchQueue has already seen, so a newly-arrived order (placed by a
+  // DIFFERENT barista/terminal) can trigger the new-order alert exactly once. Starts null so the
+  // very first load — which is the whole existing queue, not "new" orders — never fires it.
+  const seenOrderIdsRef = useRef<Set<string> | null>(null);
+  // Mirrors state.currentUser?.id for fetchQueue's stable (deps: []) closure to read without
+  // becoming stale — an order this same barista just placed themselves must never trigger their
+  // own new-order alert.
+  const currentUserIdRef = useRef<string | null>(null);
 
   const patch = useCallback((p: Partial<PosState>) => {
     setState((s) => ({ ...s, ...p }));
@@ -361,7 +460,7 @@ export function useCremaPos() {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, full_name, role, avatar_url')
+      .select('id, full_name, role, avatar_url, is_senior_barista, self_void_threshold_php')
       .eq('id', profileId)
       .single();
     if (!profile) return { error: 'Profile not found' };
@@ -477,13 +576,47 @@ export function useCremaPos() {
     if (!(await isOnline())) return 'Closing the cash drawer requires an internet connection. Please reconnect and try again.';
     try {
       await closeShiftApi(state.shift.id, endingCash);
-      // Read the barista id before logout() clears state.currentUser.
+
+      // Reconciliation summary before logout — best-effort: the shift is already physically
+      // closed at this point, so a failure here must never block logout, it just means the
+      // barista skips straight past the summary screen.
+      if (state.currentUser) {
+        const { data } = await supabase.rpc('get_cash_drawer_reconciliation', {
+          p_barista_id: state.currentUser.id,
+          p_limit: 1,
+        });
+        const row = data?.[0];
+        if (row) {
+          patch({
+            shiftCloseSummary: {
+              startingCash: Number(row.starting_cash),
+              actualEndingCash: row.actual_ending_cash !== null ? Number(row.actual_ending_cash) : null,
+              cashSales: Number(row.cash_sales),
+              cashRefunds: Number(row.cash_refunds),
+              expectedEndingCash: Number(row.expected_ending_cash),
+              variance: row.variance !== null ? Number(row.variance) : null,
+            },
+          });
+          return;
+        }
+      }
+      // No summary available — fall through to the old behavior (log + logout immediately).
       if (state.currentUser) logActivity(state.currentUser.id, 'shift_closed', `Closed shift with ₱${endingCash.toFixed(2)} ending cash`);
       await logout();
     } catch (e: any) {
       return e.message || 'Could not close shift. Check your connection and try again.';
     }
-  }, [state.shift, state.currentUser, logout]);
+  }, [state.shift, state.currentUser, logout, patch]);
+
+  // Called once the barista dismisses the post-close reconciliation summary — logs the shift
+  // close (deferred from closeShiftAction so the summary has time to be seen) and logs out.
+  const dismissShiftCloseSummary = useCallback(async () => {
+    if (state.currentUser && state.shift) {
+      logActivity(state.currentUser.id, 'shift_closed', `Closed shift with ₱${(state.shiftCloseSummary?.actualEndingCash ?? 0).toFixed(2)} ending cash`);
+    }
+    patch({ shiftCloseSummary: null });
+    await logout();
+  }, [state.currentUser, state.shift, state.shiftCloseSummary, logout, patch]);
 
   // ─────────────────────────────────────────────
   // MENU / MODS / DISCOUNTS / STORE SETTINGS
@@ -519,6 +652,7 @@ export function useCremaPos() {
       { data: ingredients },
       { data: discountsData },
       { data: settings },
+      { data: taxRatesData },
     ] = await Promise.all([
       supabase.from('menu_items').select('*').neq('is_active', false),
       supabase.from('menu_categories').select('name').order('sort_order', { ascending: true }),
@@ -526,9 +660,10 @@ export function useCremaPos() {
       supabase.from('modifier_options').select('*').order('sort_order', { ascending: true }),
       supabase.from('menu_item_modifiers').select('menu_item_id, modifier_group_id'),
       supabase.from('recipe_costing').select('menu_item_id, ingredient_id, recipe_qty'),
-      supabase.from('ingredients').select('id, current_stock'),
+      supabase.from('ingredients').select('id, name, unit, current_stock'),
       supabase.from('discounts').select('*').order('percentage', { ascending: false }),
-      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url, store_name, tagline, address, phone, tin, receipt_footer').eq('id', 1).maybeSingle(),
+      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url, store_name, tagline, address, phone, tin, receipt_footer, loyalty_enabled, loyalty_php_per_point, loyalty_point_value_php').eq('id', 1).maybeSingle(),
+      supabase.from('tax_rates').select('id, rate, is_default'),
     ]);
     if (itemsError) throw itemsError;
 
@@ -565,21 +700,49 @@ export function useCremaPos() {
       price: Number(mi.price),
       category: mi.category,
       image_url: mi.image_url,
+      tax_rate_id: mi.tax_rate_id ?? null,
     }));
+
+    // Multi-tax-rate: store_settings.tax_rate stays the ONE authoritative "default rate" — same
+    // field Settings has always edited — so there's no second place a manager needs to update
+    // it and no drift risk between two sources of truth. tax_rates only supplies ADDITIONAL,
+    // non-default rates that a menu item can be explicitly assigned via tax_rate_id; a menu item
+    // with tax_rate_id left null always resolves to the store default below, never to whatever
+    // row happens to be flagged is_default in this table.
+    const taxRateById: Record<string, number> = {};
+    (taxRatesData ?? []).forEach((r: any) => { taxRateById[r.id] = Number(r.rate); });
 
     const categories = ['All', ...(cats ?? []).map((c: any) => c.name)];
 
     // Always keep a synthetic 0% "None" entry first regardless of what's in
     // the real table, so the discount row always has a "No Discount" chip.
     const discountsList: Discount[] = [
-      { id: null, n: 'None', p: 0 },
-      ...(discountsData ?? []).map((d: any) => ({ id: d.id, n: d.name, p: Number(d.percentage) })),
+      { id: null, n: 'None', p: 0, type: 'percent', fixedAmount: null, minSpend: null, validFromHour: null, validToHour: null },
+      ...(discountsData ?? []).map((d: any) => ({
+        id: d.id,
+        n: d.name,
+        p: Number(d.percentage),
+        type: (d.discount_type ?? 'percent') as Discount['type'],
+        fixedAmount: d.fixed_amount != null ? Number(d.fixed_amount) : null,
+        minSpend: d.min_spend != null ? Number(d.min_spend) : null,
+        validFromHour: d.valid_from_hour != null ? Number(d.valid_from_hour) : null,
+        validToHour: d.valid_to_hour != null ? Number(d.valid_to_hour) : null,
+      })),
     ];
 
     const ingredientStock: Record<string, number> = {};
     (ingredients ?? []).forEach((i: any) => {
       ingredientStock[i.id] = Number(i.current_stock);
     });
+    // Named/unit'd list for the manual stock-adjustment picker (AccountSheet's "Adjust Stock"
+    // row) — ingredientStock above stays a bare id->qty map since every other consumer of it
+    // (getMaxAddableQty, isOutOfStock) only ever needs the number.
+    const ingredientsList = (ingredients ?? []).map((i: any) => ({
+      id: i.id,
+      name: i.name as string,
+      unit: i.unit as string,
+      current_stock: Number(i.current_stock),
+    }));
 
     const recipesByItem = buildRecipesByItem((recipes ?? []) as RecipeRow[]);
 
@@ -596,6 +759,9 @@ export function useCremaPos() {
           phone: settings.phone || '',
           tin: settings.tin || '',
           receiptFooter: settings.receipt_footer || DEFAULT_STORE_SETTINGS.receiptFooter,
+          loyaltyEnabled: settings.loyalty_enabled ?? DEFAULT_STORE_SETTINGS.loyaltyEnabled,
+          loyaltyPhpPerPoint: Number(settings.loyalty_php_per_point ?? DEFAULT_STORE_SETTINGS.loyaltyPhpPerPoint),
+          loyaltyPointValuePhp: Number(settings.loyalty_point_value_php ?? DEFAULT_STORE_SETTINGS.loyaltyPointValuePhp),
         }
       : undefined;
 
@@ -615,6 +781,8 @@ export function useCremaPos() {
         modifierGroupsByItem,
         recipesByItem,
         ingredientStock,
+        ingredientsList,
+        taxRateById,
         storeSettings: resolvedStoreSettings ?? DEFAULT_STORE_SETTINGS,
       })
     ).catch(() => {});
@@ -627,6 +795,8 @@ export function useCremaPos() {
       modifierGroupsByItem,
       recipesByItem,
       ingredientStock,
+      ingredientsList,
+      taxRateById,
       storeSettings: resolvedStoreSettings ?? s.storeSettings,
     }));
   }, []);
@@ -645,6 +815,8 @@ export function useCremaPos() {
         modifierGroupsByItem: cached.modifierGroupsByItem ?? s.modifierGroupsByItem,
         recipesByItem: cached.recipesByItem ?? s.recipesByItem,
         ingredientStock: cached.ingredientStock ?? s.ingredientStock,
+        ingredientsList: cached.ingredientsList ?? s.ingredientsList,
+        taxRateById: cached.taxRateById ?? s.taxRateById,
         storeSettings: cached.storeSettings ?? s.storeSettings,
       }));
     } catch (e) {
@@ -678,9 +850,11 @@ export function useCremaPos() {
       type: o.order_type === 'takeout' ? 'Takeout' : 'Dine-In',
       mins: elapsedMinutes(o.created_at),
       items: (o.order_items ?? []).map((oi: any) => ({
+        id: oi.id,
         name: oi.menu_items?.name ?? 'Item',
         qty: oi.qty,
         mods: modsDisplayString(oi.modifiers_json, oi.special_note),
+        prepStatus: oi.prep_status ?? 'pending',
       })),
       total: Number(o.total ?? o.total_amount ?? 0),
       restoreItems: (o.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty })),
@@ -702,6 +876,10 @@ export function useCremaPos() {
       barista_id: e.orderData.barista_id,
     }));
 
+  useEffect(() => {
+    currentUserIdRef.current = state.currentUser?.id ?? null;
+  }, [state.currentUser?.id]);
+
   const fetchQueue = useCallback(async () => {
     // Same stale/anon-session race as fetchMenuData above — orders is authenticated-only, so
     // firing this before the fast-path login's background session swap lands would silently
@@ -711,7 +889,7 @@ export function useCremaPos() {
       supabase
         .from('orders')
         .select(
-          'id, receipt_number, created_at, total, total_amount, order_type, customer_name, barista_id, order_items(qty, menu_item_id, modifiers_json, special_note, menu_items(name))'
+          'id, receipt_number, created_at, total, total_amount, order_type, customer_name, barista_id, order_items(id, qty, menu_item_id, modifiers_json, special_note, prep_status, menu_items(name))'
         )
         .eq('status', 'pending')
         .order('created_at', { ascending: true }),
@@ -722,8 +900,53 @@ export function useCremaPos() {
     // De-dupe by receipt number — the same client-generated receipt briefly
     // exists on both the outbox stand-in and the real row during the handoff.
     const outboxTickets = buildQueueFromOutbox(outboxEntries).filter((o) => !real.some((r) => r.no === o.no));
-    setState((s) => ({ ...s, queue: [...real, ...outboxTickets] }));
+
+    // New-order alert: fires when an order this barista didn't just place appears in the queue
+    // for the first time — covers another terminal/barista firing a ticket while this one isn't
+    // being watched. Skipped on the very first load (seenOrderIdsRef starts null) so the
+    // existing queue on login/screen-open never triggers it.
+    let alert: { orderNo: string } | null = null;
+    if (seenOrderIdsRef.current) {
+      const newlyArrived = real.filter((r) => !seenOrderIdsRef.current!.has(r.id) && r.barista_id !== currentUserIdRef.current);
+      if (newlyArrived.length > 0) {
+        alert = { orderNo: newlyArrived[0].no };
+        playNewOrderChime();
+      }
+    }
+    seenOrderIdsRef.current = new Set(real.map((r) => r.id));
+
+    setState((s) => ({ ...s, queue: [...real, ...outboxTickets], ...(alert ? { newOrderAlert: alert } : {}) }));
   }, []);
+
+  // ─────────────────────────────────────────────
+  // OUTBOX INSPECT / RETRY / DELETE — manual visibility into the offline order outbox
+  // ─────────────────────────────────────────────
+  const [outboxOrderEntries, setOutboxOrderEntries] = useState<OutboxEntry[]>([]);
+
+  const openOutbox = useCallback(async () => {
+    const entries = await getOutboxOrders();
+    setOutboxOrderEntries(entries);
+    patch({ showOutbox: true });
+  }, [patch]);
+
+  const closeOutbox = useCallback(() => patch({ showOutbox: false }), [patch]);
+
+  const retryOutboxEntry = useCallback(async (id: string): Promise<{ error?: string }> => {
+    const res = await retryOutboxEntryApi(id);
+    const entries = await getOutboxOrders();
+    setOutboxOrderEntries(entries);
+    patch({ outboxCount: entries.length });
+    if (!res.error) fetchQueue();
+    return res;
+  }, [patch, fetchQueue]);
+
+  const deleteOutboxEntry = useCallback(async (id: string): Promise<void> => {
+    await deleteOutboxEntryApi(id);
+    const entries = await getOutboxOrders();
+    setOutboxOrderEntries(entries);
+    patch({ outboxCount: entries.length });
+    fetchQueue();
+  }, [patch, fetchQueue]);
 
   const fetchTodayOrderCount = useCallback(async () => {
     if (authSyncRef.current) await authSyncRef.current;
@@ -766,10 +989,11 @@ export function useCremaPos() {
     const iv = setInterval(async () => {
       const online = await isOnline();
       patch({ isOffline: !online });
-      if (online) await syncOutbox();
+      if (online) { await syncOutbox(); await syncActionOutbox(); }
       fetchQueue();
       fetchTodayOrderCount();
       fetchUpcomingShifts();
+      getOutboxCount().then((n) => patch({ outboxCount: n }));
     }, 10000);
     return () => {
       supabase.removeChannel(channel);
@@ -795,19 +1019,79 @@ export function useCremaPos() {
       });
   }, [fetchQueue]);
 
-  const flagVoidOrder = useCallback(async (orderId: string, reason: string): Promise<{ error?: string }> => {
-    const { error } = await supabase.from('orders').update({ status: 'void_requested', void_reason: reason }).eq('id', orderId);
-    if (error) return { error: error.message };
+  const PREP_STATUS_CYCLE: Record<'pending' | 'in_progress' | 'ready', 'pending' | 'in_progress' | 'ready'> = {
+    pending: 'in_progress',
+    in_progress: 'ready',
+    ready: 'pending',
+  };
+
+  // Cycles a single line item's kitchen state (pending -> in_progress -> ready -> pending).
+  // Optimistic locally, falls back to a full requery on failure rather than leaving the UI
+  // showing a state the server never actually saved.
+  const advanceItemPrepStatus = useCallback((orderItemId: string) => {
+    let nextStatus: 'pending' | 'in_progress' | 'ready' = 'pending';
+    setState((s) => ({
+      ...s,
+      queue: s.queue.map((ticket) => ({
+        ...ticket,
+        items: ticket.items.map((item) => {
+          if (item.id !== orderItemId) return item;
+          nextStatus = PREP_STATUS_CYCLE[item.prepStatus ?? 'pending'];
+          return { ...item, prepStatus: nextStatus };
+        }),
+      })),
+    }));
+    supabase
+      .from('order_items')
+      .update({ prep_status: nextStatus })
+      .eq('id', orderItemId)
+      .then(({ error }) => {
+        if (error) fetchQueue();
+      });
+  }, [fetchQueue]);
+
+  // Flag-for-manager-review needs no PIN, so it's safe to queue offline — unlike managerVoidOrder
+  // below, there's no live authorization check being deferred here.
+  const flagVoidOrder = useCallback(async (orderId: string, reasonCode: string, detail: string): Promise<{ error?: string }> => {
+    const finalReason = detail.trim() || REASON_CODE_LABELS[reasonCode as ReasonCode] || reasonCode;
     const ticket = state.queue.find((q) => q.id === orderId);
     const actorId = ticket?.barista_id ?? state.currentUser?.id;
-    if (actorId) logActivity(actorId, 'void_requested', `Void requested for order ${ticket?.no ?? orderId.slice(0, 8).toUpperCase()} — ${reason}`);
+
+    if (!(await isOnline())) {
+      if (!actorId) return { error: 'Not logged in' };
+      await queueAction({ kind: 'flag_void', orderId, orderNo: ticket?.no ?? orderId.slice(0, 8).toUpperCase(), reasonCode, detail, baristaId: actorId });
+      setState((s) => ({ ...s, queue: s.queue.filter((q) => q.id !== orderId) }));
+      return {};
+    }
+
+    const { error } = await supabase.from('orders').update({ status: 'void_requested', void_reason: finalReason, void_reason_code: reasonCode }).eq('id', orderId);
+    if (error) return { error: error.message };
+    if (actorId) logActivity(actorId, 'void_requested', `Void requested for order ${ticket?.no ?? orderId.slice(0, 8).toUpperCase()} — ${finalReason}`);
     await fetchQueue();
     return {};
   }, [fetchQueue, state.queue, state.currentUser]);
 
-  const managerVoidOrder = useCallback(async (orderId: string, reason: string, pin: string): Promise<{ error?: string }> => {
-    const online = await isOnline();
-    if (!online) return { error: 'Manager PIN verification requires an internet connection' };
+  const managerVoidOrder = useCallback(async (orderId: string, reasonCode: string, detail: string, pin: string): Promise<{ error?: string }> => {
+    const ticket = state.queue.find((q) => q.id === orderId);
+    const finalReason = detail.trim() || REASON_CODE_LABELS[reasonCode as ReasonCode] || reasonCode;
+
+    if (!(await isOnline())) {
+      if (!state.currentUser) return { error: 'Not logged in' };
+      const offline = await tryOfflineManagerPin(state.currentUser.id, pin);
+      if (!offline.ok) return { error: offline.error };
+      await queueAction({
+        kind: 'manager_void',
+        orderId,
+        orderNo: ticket?.no ?? orderId.slice(0, 8).toUpperCase(),
+        reasonCode,
+        detail,
+        managerId: offline.managerId,
+        managerName: offline.managerName,
+        restoreItems: ticket?.restoreItems ?? [],
+      });
+      setState((s) => ({ ...s, queue: s.queue.filter((q) => q.id !== orderId) }));
+      return {};
+    }
 
     // verify_manager_pin runs server-side (never exposes pin_code to the client) and applies
     // the same 5-attempt/15-minute lockout as login, keyed off this barista's own session.
@@ -818,11 +1102,11 @@ export function useCremaPos() {
     if (pinErr) return { error: pinErr.message || 'Could not verify manager PIN. Check your connection and try again.' };
     const manager = managers?.[0];
     if (!manager) return { error: 'Invalid manager PIN' };
+    cacheManagerPinOnVerify(manager.id, manager.full_name, pin);
 
-    const ticket = state.queue.find((q) => q.id === orderId);
     const { error: voidErr } = await supabase
       .from('orders')
-      .update({ status: 'voided', void_reason: reason, voided_by: manager.id })
+      .update({ status: 'voided', void_reason: finalReason, void_reason_code: reasonCode, voided_by: manager.id })
       .eq('id', orderId);
     if (voidErr) return { error: voidErr.message };
 
@@ -831,12 +1115,40 @@ export function useCremaPos() {
     supabase.rpc('adjust_sales_for_order', { p_order_id: orderId }).then(({ error }) => {
       if (error) console.warn('adjust_sales_for_order failed:', error.message);
     });
-    logActivity(ticket?.barista_id ?? manager.id, 'void_approved', `Order ${ticket?.no ?? orderId.slice(0, 8).toUpperCase()} voided by manager ${manager.full_name} — ${reason}`);
+    logActivity(ticket?.barista_id ?? manager.id, 'void_approved', `Order ${ticket?.no ?? orderId.slice(0, 8).toUpperCase()} voided by manager ${manager.full_name} — ${finalReason}`);
 
     if (ticket && ticket.restoreItems.length > 0) await restoreStockForOrderItems(ticket.restoreItems);
     await fetchQueue();
     return {};
-  }, [state.queue, fetchQueue]);
+  }, [state.queue, state.currentUser, fetchQueue]);
+
+  // Worked example of a granular permission: a senior barista (or manager) may void a still-
+  // pending order under their own self_void_threshold_php without a manager PIN. The real
+  // authorization check lives server-side in self_void_order() — this function just calls it and
+  // does the same post-void housekeeping (stock restore, sales adjustment, activity log) that
+  // managerVoidOrder does.
+  const selfVoidOrder = useCallback(async (orderId: string, reasonCode: string, detail: string): Promise<{ error?: string }> => {
+    if (!state.currentUser) return { error: 'Not logged in' };
+    if (!(await isOnline())) return { error: 'Voiding an order requires an internet connection' };
+
+    const finalReason = detail.trim() || REASON_CODE_LABELS[reasonCode as ReasonCode] || reasonCode;
+    const { error: voidErr } = await supabase.rpc('self_void_order', {
+      p_order_id: orderId,
+      p_reason: finalReason,
+      p_reason_code: reasonCode,
+    });
+    if (voidErr) return { error: voidErr.message };
+
+    const ticket = state.queue.find((q) => q.id === orderId);
+    supabase.rpc('adjust_sales_for_order', { p_order_id: orderId }).then(({ error }) => {
+      if (error) console.warn('adjust_sales_for_order failed:', error.message);
+    });
+    logActivity(ticket?.barista_id ?? state.currentUser.id, 'void_approved', `Order ${ticket?.no ?? orderId.slice(0, 8).toUpperCase()} self-voided by ${state.currentUser.full_name} — ${finalReason}`);
+
+    if (ticket && ticket.restoreItems.length > 0) await restoreStockForOrderItems(ticket.restoreItems);
+    await fetchQueue();
+    return {};
+  }, [state.queue, state.currentUser, fetchQueue]);
 
   // Mirrors cafe-web-dashboard's manager Transactions page refund flow exactly (same
   // refund_amount/refunded_at/refund_reason/refunded_by columns, same MVP scope: an arbitrary
@@ -845,10 +1157,11 @@ export function useCremaPos() {
   // there's no reliable amount-to-ingredient mapping for less than the whole order). Gated by
   // the same manager-PIN check as managerVoidOrder since, unlike the web dashboard, this runs on
   // a shared kiosk device with no per-manager login.
-  const managerRefundOrder = useCallback(async (orderId: string, amount: number, reason: string, pin: string): Promise<{ error?: string }> => {
+  const managerRefundOrder = useCallback(async (orderId: string, amount: number, reasonCode: string, detail: string, pin: string): Promise<{ error?: string }> => {
     const online = await isOnline();
     if (!online) return { error: 'Manager PIN verification requires an internet connection' };
-    if (!reason.trim()) return { error: 'A refund reason is required' };
+    if (!reasonCode) return { error: 'Select a refund reason' };
+    if (reasonCode === 'other' && !detail.trim()) return { error: 'Add a detail for "Other"' };
 
     const { data: managers, error: pinErr } = await supabase.rpc('verify_manager_pin', { p_pin: pin });
     if (pinErr) return { error: pinErr.message || 'Could not verify manager PIN. Check your connection and try again.' };
@@ -869,6 +1182,7 @@ export function useCremaPos() {
       return { error: `Refund amount must be between ₱0.01 and ${peso0(total)}.` };
     }
 
+    const finalReason = detail.trim() || REASON_CODE_LABELS[reasonCode as ReasonCode] || reasonCode;
     const isFull = amount === total;
     const { error: refundErr } = await supabase
       .from('orders')
@@ -876,7 +1190,8 @@ export function useCremaPos() {
         status: isFull ? 'refunded' : 'partially_refunded',
         refund_amount: amount,
         refunded_at: new Date().toISOString(),
-        refund_reason: reason.trim(),
+        refund_reason: finalReason,
+        refund_reason_code: reasonCode,
         refunded_by: manager.id,
       })
       .eq('id', orderId);
@@ -888,7 +1203,7 @@ export function useCremaPos() {
     logActivity(
       order.barista_id ?? manager.id,
       'refund_issued',
-      `₱${amount.toFixed(2)} refunded for order ${order.receipt_number ?? orderId.slice(0, 8).toUpperCase()} by manager ${manager.full_name} — ${reason.trim()}`
+      `₱${amount.toFixed(2)} refunded for order ${order.receipt_number ?? orderId.slice(0, 8).toUpperCase()} by manager ${manager.full_name} — ${finalReason}`
     );
 
     if (isFull) {
@@ -897,6 +1212,41 @@ export function useCremaPos() {
     }
     return {};
   }, []);
+
+  // Manual stock correction (miscount/spoilage) from the mobile register — the only other paths
+  // that move ingredients.current_stock are checkout deduction and void/refund restoration.
+  // Manager-PIN-gated like refund, and deliberately kept online-only (an occasional correction,
+  // not a floor-operations blocker the way void/refund/append are).
+  const adjustStockManual = useCallback(async (
+    ingredientId: string,
+    delta: number,
+    reason: string,
+    pin: string
+  ): Promise<{ error?: string }> => {
+    if (!reason.trim()) return { error: 'A reason is required' };
+    if (!(await isOnline())) return { error: 'Adjusting stock requires an internet connection' };
+
+    const { data: managers, error: pinErr } = await supabase.rpc('verify_manager_pin', { p_pin: pin });
+    if (pinErr) return { error: pinErr.message || 'Could not verify manager PIN. Check your connection and try again.' };
+    const manager = managers?.[0];
+    if (!manager) return { error: 'Invalid manager PIN' };
+
+    const rpcName = delta >= 0 ? 'restore_ingredient_stock' : 'decrement_ingredient_stock';
+    const { error: adjustErr } = await supabase.rpc(rpcName, { p_ingredient_id: ingredientId, p_amount: Math.abs(delta) });
+    if (adjustErr) return { error: adjustErr.message };
+
+    await supabase.from('inventory_adjustments').insert({
+      ingredient_id: ingredientId,
+      delta,
+      reason: reason.trim(),
+      adjusted_by: manager.id,
+    });
+    const ingredientName = state.ingredientsList.find((i) => i.id === ingredientId)?.name ?? ingredientId.slice(0, 8);
+    logActivity(manager.id, 'stock_adjusted', `${delta > 0 ? '+' : ''}${delta} ${ingredientName} adjusted by manager ${manager.full_name} — ${reason.trim()}`);
+
+    await fetchMenuData();
+    return {};
+  }, [state.ingredientsList, fetchMenuData]);
 
   // Puts the register into "add to an already-queued order" mode instead of building a new
   // order — for something like "customer adds one more cookie" after the ticket's already
@@ -914,7 +1264,21 @@ export function useCremaPos() {
       discountName: 'None',
       payMethod: 'cash',
       tendered: '',
+      splitEnabled: false,
+      splitCashAmount: '',
+      splitGcashAmount: '',
+      gcashReference: '',
+      gcashConfirmed: false,
       customerName: '',
+      customerPhone: '',
+      customerLookupStatus: 'idle',
+      selectedCustomer: null,
+      newCustomerName: '',
+      redeemPoints: '',
+      giftCardCode: '',
+      giftCardBalance: null,
+      giftCardError: null,
+      receiptEmail: '',
       showQueue: false,
       screen: 'menu',
     }));
@@ -1003,23 +1367,152 @@ export function useCremaPos() {
     setState((s) => ({ ...s, cart: s.cart.filter((c) => c.cartId !== cartId) }));
   }, []);
 
-  const discountPct = useMemo(
-    () => state.discountsList.find((d) => d.n === state.discountName)?.p ?? 0,
+  // Raw pre-discount subtotal, needed both to size a 'fixed'/'bogo' discount (capped so it can
+  // never exceed the order) and to convert whichever discount type is active into an equivalent
+  // percentage for computeOrderTotalsMultiRate below — that function only knows one discount
+  // shape (a pct of subtotal), so 'fixed'/'bogo' are expressed as subtotal-relative fractions
+  // rather than teaching it a second discount model.
+  const subtotalRaw = useMemo(() => state.cart.reduce((s, c) => s + c.unit * c.qty, 0), [state.cart]);
+
+  const selectedDiscount = useMemo(
+    () => state.discountsList.find((d) => d.n === state.discountName) ?? state.discountsList[0],
     [state.discountsList, state.discountName]
   );
 
+  const discountAmountRaw = useMemo(() => {
+    const d = selectedDiscount;
+    if (!d || d.n === 'None') return 0;
+    // Every cart line's `unit` already prices in its own modifiers, so the cheapest line's unit
+    // price is the cheapest actual unit sold — exactly what a 'bogo' discount needs.
+    return computeDiscountAmount({ type: d.type, percentPct: d.p, fixedAmount: d.fixedAmount }, subtotalRaw, state.cart.map((c) => c.unit));
+  }, [selectedDiscount, subtotalRaw, state.cart]);
+
+  // For a 'percent' discount this is exactly d.p (subtotalRaw * d.p / subtotalRaw), so every
+  // existing percent-only store sees zero change in this value versus before this feature shipped.
+  const discountPct = subtotalRaw > 0 ? discountAmountRaw / subtotalRaw : 0;
+
+  const discountLabel = useMemo(() => {
+    const d = selectedDiscount;
+    if (!d || d.n === 'None' || d.type === 'percent') return undefined; // percent keeps SummaryCard's default "X% off" phrasing
+    return d.type === 'fixed' ? `Discount (${d.n})` : `Discount (${d.n} · BOGO)`;
+  }, [selectedDiscount]);
+
+  // A discount chip is only offered while its min-spend is met and (if set) the current
+  // store-local hour falls inside its valid window — "None" is always offered.
+  const eligibleDiscounts = useMemo(() => {
+    const hour = new Date().getHours();
+    return state.discountsList.filter((d) => {
+      if (d.n === 'None') return true;
+      if (d.minSpend != null && subtotalRaw < d.minSpend) return false;
+      if (d.validFromHour != null && d.validToHour != null && (hour < d.validFromHour || hour >= d.validToHour)) return false;
+      return true;
+    });
+  }, [state.discountsList, subtotalRaw]);
+
+  // If the cart shrinks below a min-spend or the clock rolls past a discount's valid window
+  // mid-checkout, the now-ineligible selection silently falls back to "None" instead of letting
+  // a stale discount keep applying.
+  useEffect(() => {
+    if (state.discountName !== 'None' && !eligibleDiscounts.some((d) => d.n === state.discountName)) {
+      patch({ discountName: 'None' });
+    }
+  }, [eligibleDiscounts, state.discountName, patch]);
+
   const totals = useMemo(() => {
-    const subtotal = state.cart.reduce((sum, c) => sum + c.unit * c.qty, 0);
-    const t = computeOrderTotals({
-      subtotal,
+    // Each cart line resolves its own tax rate: the menu item's assigned tax_rate_id if it has
+    // one, otherwise the store default — see computeOrderTotalsMultiRate's own comment for why
+    // this reduces to the exact same math as the old flat-rate computeOrderTotals when nothing
+    // has been assigned a non-default rate (i.e. every existing store, unchanged).
+    const items = state.cart.map((c) => {
+      const mi = state.menuItems.find((m) => m.id === c.menuId);
+      const taxRatePct = mi?.tax_rate_id ? (state.taxRateById[mi.tax_rate_id] ?? state.storeSettings.taxRatePct) : state.storeSettings.taxRatePct;
+      return { lineTotal: c.unit * c.qty, taxRatePct };
+    });
+    const t = computeOrderTotalsMultiRate({
+      items,
       discountPct,
       orderType: state.orderType,
-      taxRatePct: state.storeSettings.taxRatePct,
       isTaxInclusive: state.storeSettings.isTaxInclusive,
       serviceChargePct: state.storeSettings.serviceChargePct,
+      defaultTaxRatePct: state.storeSettings.taxRatePct,
     });
     return { sub: t.subtotal, disc: t.discountAmount, service: t.serviceChargeAmount, tax: t.taxAmount, total: t.total };
-  }, [state.cart, discountPct, state.orderType, state.storeSettings]);
+  }, [state.cart, state.menuItems, state.taxRateById, discountPct, state.orderType, state.storeSettings]);
+
+  // ─────────────────────────────────────────────
+  // LOYALTY — a redemption is a straight peso reduction applied to the already-fully-computed
+  // total (not re-plumbed through computeOrderTotalsMultiRate's pre-tax discount), so it can
+  // never change how tax/service charge were computed — it behaves like a gift-certificate-style
+  // payment-side deduction. Mutually exclusive with a % discount for v1: the UI resets whichever
+  // of the two the barista isn't actively using (see PosApp.tsx's onSelectDiscount/
+  // onChangeRedeemPoints), so in practice only one of discountPct/redeemPoints is ever nonzero.
+  const redeemPointsNum = Number(state.redeemPoints) || 0;
+  const pointValuePhp = state.storeSettings.loyaltyPointValuePhp;
+  const phpPerPoint = state.storeSettings.loyaltyPhpPerPoint;
+
+  const maxRedeemablePoints = useMemo(() => {
+    if (!state.selectedCustomer || pointValuePhp <= 0) return 0;
+    const byOrderValue = Math.floor(totals.total / pointValuePhp);
+    return Math.max(0, Math.min(state.selectedCustomer.loyaltyPoints, byOrderValue));
+  }, [state.selectedCustomer, pointValuePhp, totals.total]);
+
+  const loyaltyRedemptionAmount = Math.min(redeemPointsNum, maxRedeemablePoints) * pointValuePhp;
+  const amountDue = Math.max(0, totals.total - loyaltyRedemptionAmount);
+
+  const pointsToEarnPreview = useMemo(() => {
+    if (!state.storeSettings.loyaltyEnabled || !state.selectedCustomer || phpPerPoint <= 0) return 0;
+    return Math.floor(amountDue / phpPerPoint);
+  }, [state.storeSettings.loyaltyEnabled, state.selectedCustomer, phpPerPoint, amountDue]);
+
+  // ─────────────────────────────────────────────
+  // CUSTOMER LOOKUP / CREATE
+  // ─────────────────────────────────────────────
+  const lookupCustomer = useCallback(async () => {
+    const phone = state.customerPhone.trim();
+    if (!phone) return;
+    patch({ customerLookupStatus: 'searching' });
+    try {
+      const found = await lookupCustomerByPhone(phone);
+      if (found) {
+        patch({ selectedCustomer: found, customerLookupStatus: 'found' });
+      } else {
+        patch({ selectedCustomer: null, customerLookupStatus: 'not_found', newCustomerName: '' });
+      }
+    } catch {
+      patch({ customerLookupStatus: 'not_found' });
+    }
+  }, [state.customerPhone, patch]);
+
+  const createCustomerInline = useCallback(async () => {
+    const phone = state.customerPhone.trim();
+    if (!phone || !state.newCustomerName.trim()) return;
+    patch({ customerCreating: true });
+    try {
+      const created = await createCustomer(phone, state.newCustomerName);
+      patch({ selectedCustomer: created, customerLookupStatus: 'found', customerCreating: false });
+    } catch (e: any) {
+      patch({ customerCreating: false, checkoutError: e?.message || 'Could not save new customer.' });
+    }
+  }, [state.customerPhone, state.newCustomerName, patch]);
+
+  const clearSelectedCustomer = useCallback(() => {
+    patch({ customerPhone: '', selectedCustomer: null, customerLookupStatus: 'idle', newCustomerName: '', redeemPoints: '' });
+  }, [patch]);
+
+  // ─────────────────────────────────────────────
+  // GIFT CARD BALANCE CHECK
+  // ─────────────────────────────────────────────
+  const checkGiftCardBalanceAction = useCallback(async () => {
+    const code = state.giftCardCode.trim();
+    if (!code) return;
+    patch({ giftCardChecking: true, giftCardError: null });
+    const result = await checkGiftCardBalance(code);
+    if (!result || !result.isActive) {
+      patch({ giftCardChecking: false, giftCardBalance: null, giftCardError: 'Gift card not found or inactive.' });
+    } else {
+      patch({ giftCardChecking: false, giftCardBalance: result.balance, giftCardError: null });
+    }
+  }, [state.giftCardCode, patch]);
 
   // ─────────────────────────────────────────────
   // CHECKOUT
@@ -1037,20 +1530,62 @@ export function useCremaPos() {
       return;
     }
 
+    // Split payment isn't offered on an append/top-up — keeping that flow to a single method
+    // avoids compounding two deliberately-scoped-down features (append + split) at once.
+    const isSplit = state.splitEnabled && !isAppend;
+    const splitCashAmt = isSplit ? Number(state.splitCashAmount) || 0 : 0;
+    const splitGcashAmt = isSplit ? Number(state.splitGcashAmount) || 0 : 0;
+    if (isSplit && Math.abs(splitCashAmt + splitGcashAmt - totals.total) > 0.01) {
+      patch({ checkoutBusy: false, checkoutError: `Split amounts must add up to ${peso(totals.total)}.` });
+      return;
+    }
+
+    const isGcash = !isSplit && state.payMethod === 'gcash';
+    const gcashInvolved = isGcash || (isSplit && splitGcashAmt > 0);
+    // Defense-in-depth behind the canPay gate in PosApp.tsx — GCash has no merchant API to
+    // verify against, so the barista's attestation + a typed reference number IS the record
+    // that the payment happened. Applies whether GCash is the sole method or one leg of a split.
+    if (gcashInvolved && (!state.gcashConfirmed || !state.gcashReference.trim())) {
+      patch({ checkoutBusy: false, checkoutError: 'Confirm the GCash payment and enter the reference number before charging.' });
+      return;
+    }
+
+    // Gift cards are exclusive-payment-method-only for v1 (see redeem_gift_card() migration
+    // comment) — not offered on a split or an append/top-up. The debit is an online-only RPC
+    // (no offline outbox path for it), so it's required up front, same as append above.
+    const isGiftCard = !isAppend && !isSplit && state.payMethod === 'gift_card';
+    if (isGiftCard && !(await isOnline())) {
+      patch({ checkoutBusy: false, checkoutError: 'Paying with a gift card requires an internet connection. Please reconnect and try again.' });
+      return;
+    }
+
     const receiptNumber = 'REC-' + Date.now().toString().slice(-6) + Math.random().toString(36).slice(2, 5).toUpperCase();
     const tenderNum = state.tendered !== '' && !isNaN(Number(state.tendered)) ? Number(state.tendered) : null;
-    const isCash = state.payMethod === 'cash';
-    const change = isCash && tenderNum !== null ? tenderNum - totals.total : 0;
+    const isCash = !isSplit && state.payMethod === 'cash';
+    // Loyalty-point redemption isn't offered on an append or a split order (see redeemPoints'
+    // mutual-exclusion in PosApp.tsx), so amountDue === totals.total for those two flows — cash
+    // change and the split-mismatch check above behave exactly as before this feature shipped.
+    const chargeAmount = isAppend ? totals.total : amountDue;
+    const change = isCash && tenderNum !== null ? tenderNum - chargeAmount : 0;
+    const gcashReference = gcashInvolved ? state.gcashReference.trim() : null;
+    const effectivePayMethod: PayMethod = isSplit ? 'split' : state.payMethod;
+    const customerId = isAppend ? null : state.selectedCustomer?.id ?? null;
+    const pointsRedeemed = isAppend ? 0 : Math.min(redeemPointsNum, maxRedeemablePoints);
+    const pointsEarned = isAppend || !state.storeSettings.loyaltyEnabled || !customerId || phpPerPoint <= 0
+      ? 0
+      : Math.floor(chargeAmount / phpPerPoint);
+    const giftCardCode = isGiftCard ? state.giftCardCode.trim() : null;
+    const receiptEmail = state.receiptEmail.trim() || null;
 
     const orderData: PosOrderData = {
-      total: totals.total,
-      total_amount: totals.total,
-      payment_method: state.payMethod,
+      total: chargeAmount,
+      total_amount: chargeAmount,
+      payment_method: effectivePayMethod,
       receipt_number: receiptNumber,
       barista_id: state.currentUser.id,
       status: 'pending',
       order_type: state.orderType,
-      customer_name: state.customerName.trim() || null,
+      customer_name: state.customerName.trim() || state.selectedCustomer?.fullName || null,
       discount_name: state.discountName !== 'None' ? state.discountName : null,
       discount_id: state.discountsList.find((d) => d.n === state.discountName)?.id ?? null,
       subtotal: totals.sub,
@@ -1059,7 +1594,19 @@ export function useCremaPos() {
       service_charge_amount: totals.service,
       is_tax_inclusive: state.storeSettings.isTaxInclusive,
       rush_mode: state.storeSettings.rushModeEnabled,
+      gcash_reference: gcashReference,
+      customer_id: customerId,
+      loyalty_points_earned: pointsEarned,
+      loyalty_points_redeemed: pointsRedeemed,
+      gift_card_code: giftCardCode,
+      receipt_email: receiptEmail,
     };
+    const paymentSplit: PaymentSplitComponent[] | undefined = isSplit
+      ? [
+          ...(splitCashAmt > 0 ? [{ method: 'cash' as PayMethod, amount: splitCashAmt }] : []),
+          ...(splitGcashAmt > 0 ? [{ method: 'gcash' as PayMethod, amount: splitGcashAmt }] : []),
+        ]
+      : undefined;
     const orderItems: PosOrderItem[] = state.cart.map((c) => ({
       menu_item_id: c.menuId,
       qty: c.qty,
@@ -1074,6 +1621,21 @@ export function useCremaPos() {
     };
     const displayItems = state.cart.map((c) => ({ name: c.name, qty: c.qty, mods: cartModsStr(c) }));
 
+    // Debited BEFORE the order is created — an order must never be rung up against a card that
+    // can't actually cover it. If the order insert below fails after this succeeds, the debit
+    // still stands (a rare crash/session-loss window, not a network hiccup — submitOrder's own
+    // outbox fallback still carries gift_card_code/total through to the eventually-synced order,
+    // so no double-debit and no silently lost sale) — an accepted, documented tradeoff rather
+    // than a client-side two-phase commit this app has no way to implement.
+    if (isGiftCard && giftCardCode) {
+      try {
+        await redeemGiftCard(giftCardCode, chargeAmount);
+      } catch (e: any) {
+        patch({ checkoutBusy: false, checkoutError: e?.message || 'Gift card redemption failed.' });
+        return;
+      }
+    }
+
     try {
       if (isAppend) {
         await addItemsToExistingOrder(state.appendTargetOrderId!, orderItems, state.payMethod, {
@@ -1082,9 +1644,9 @@ export function useCremaPos() {
           tax_amount: totals.tax,
           service_charge_amount: totals.service,
           total: totals.total,
-        });
+        }, gcashReference);
       } else {
-        await submitOrder(orderData, orderItems, displayItems);
+        await submitOrder(orderData, orderItems, displayItems, paymentSplit);
       }
     } catch (e: any) {
       errorHaptic();
@@ -1096,16 +1658,42 @@ export function useCremaPos() {
     const items = state.cart.map((c) => ({ qtyName: `${c.qty}× ${c.name}`, lineStr: peso0(c.unit * c.qty), modsStr: cartModsStr(c) }));
     const success: SuccessInfo = {
       no: isAppend ? state.appendTargetOrderNo! : receiptNumber,
-      total: totals.total,
-      method: isCash ? 'Cash' : 'GCash',
+      total: chargeAmount,
+      method: isSplit ? `Split (Cash ${peso0(splitCashAmt)} + GCash ${peso0(splitGcashAmt)})` : isGiftCard ? 'Gift Card' : isCash ? 'Cash' : 'GCash',
       items,
       showChange: isCash && change >= 0,
       change,
       customerName: isAppend ? null : orderData.customer_name,
+      gcashReference,
+      giftCardCode,
+      loyaltyPointsEarned: pointsEarned,
+      loyaltyPointsRedeemed: pointsRedeemed,
+      loyaltyRedemptionAmount: isAppend ? 0 : loyaltyRedemptionAmount,
+      receiptEmail,
     };
+
+    // Best-effort, mirrors the non-fatal stock-deduction/low-stock-alert convention in
+    // posOrder.ts — the sale itself already succeeded above; a points/email hiccup shouldn't
+    // block the barista from moving on to the next customer.
+    if (customerId && (pointsEarned > 0 || pointsRedeemed > 0)) {
+      applyLoyaltyPoints(customerId, pointsEarned, pointsRedeemed).catch((e) => console.error('Failed to apply loyalty points:', e));
+    }
+    if (receiptEmail) {
+      const orderTypeLabel = state.orderType === 'dine-in' ? 'Dine-In' : 'Takeout';
+      const store = state.storeSettings;
+      sendReceiptEmail(receiptEmail, success, orderTypeLabel, {
+        storeName: store.storeName,
+        tagline: store.tagline,
+        address: store.address,
+        phone: store.phone,
+        tin: store.tin,
+        receiptFooter: store.receiptFooter,
+      }).catch((e) => console.error('Failed to send receipt email:', e));
+    }
+
     patch({ success, screen: 'success', checkoutBusy: false, checkoutError: null });
     fetchQueue();
-  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, totals, patch, fetchQueue]);
+  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.splitEnabled, state.splitCashAmount, state.splitGcashAmount, state.gcashReference, state.gcashConfirmed, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, state.selectedCustomer, state.giftCardCode, state.receiptEmail, state.discountName, state.discountsList, redeemPointsNum, maxRedeemablePoints, phpPerPoint, amountDue, totals, patch, fetchQueue]);
 
   const done = useCallback(() => {
     setState((s) => ({
@@ -1116,6 +1704,9 @@ export function useCremaPos() {
       qty: 1,
       note: '',
       tendered: '',
+      splitEnabled: false,
+      splitCashAmount: '',
+      splitGcashAmount: '',
       discountName: 'None',
       customerName: '',
       payMethod: 'cash',
@@ -1123,8 +1714,19 @@ export function useCremaPos() {
       selCat: 'All',
       search: '',
       showGcashQr: false,
+      gcashReference: '',
+      gcashConfirmed: false,
       appendTargetOrderId: null,
       appendTargetOrderNo: null,
+      customerPhone: '',
+      customerLookupStatus: 'idle',
+      selectedCustomer: null,
+      newCustomerName: '',
+      redeemPoints: '',
+      giftCardCode: '',
+      giftCardBalance: null,
+      giftCardError: null,
+      receiptEmail: '',
     }));
   }, []);
 
@@ -1203,8 +1805,16 @@ export function useCremaPos() {
     () => (state.tendered !== '' && !isNaN(Number(state.tendered)) ? Number(state.tendered) : null),
     [state.tendered]
   );
-  const change = tenderNum !== null ? tenderNum - totals.total : null;
-  const shortfall = state.payMethod === 'cash' && tenderNum !== null && tenderNum < totals.total;
+  // Split stays pinned to totals.total (redeeming loyalty points is mutually exclusive with a
+  // split payment — see PosApp.tsx), so amountDue === totals.total whenever splitEnabled.
+  const change = tenderNum !== null ? tenderNum - amountDue : null;
+  const shortfall = !state.splitEnabled && state.payMethod === 'cash' && tenderNum !== null && tenderNum < amountDue;
+  const splitAmountMismatch = state.splitEnabled
+    && Math.abs((Number(state.splitCashAmount) || 0) + (Number(state.splitGcashAmount) || 0) - totals.total) > 0.01;
+  const gcashUnconfirmed = (state.splitEnabled ? (Number(state.splitGcashAmount) || 0) > 0 : state.payMethod === 'gcash')
+    && (!state.gcashConfirmed || !state.gcashReference.trim());
+  const giftCardInsufficient = !state.splitEnabled && state.payMethod === 'gift_card'
+    && (state.giftCardBalance === null || state.giftCardBalance < amountDue);
   const cartCount = state.cart.reduce((s, c) => s + c.qty, 0);
 
   return {
@@ -1220,13 +1830,27 @@ export function useCremaPos() {
     checkout,
     done,
     completeQueueTicket,
+    advanceItemPrepStatus,
     flagVoidOrder,
     managerVoidOrder,
+    selfVoidOrder,
     managerRefundOrder,
+    adjustStockManual,
     startAddToOrder,
     cancelAddToOrder,
     totals,
     discountPct,
+    discountLabel,
+    eligibleDiscounts,
+    amountDue,
+    loyaltyRedemptionAmount,
+    maxRedeemablePoints,
+    pointsToEarnPreview,
+    lookupCustomer,
+    createCustomerInline,
+    clearSelectedCustomer,
+    checkGiftCardBalanceAction,
+    giftCardInsufficient,
     cartQtyByMenuId,
     stockByMenuId,
     filteredItems,
@@ -1238,6 +1862,8 @@ export function useCremaPos() {
     tenderNum,
     change,
     shortfall,
+    gcashUnconfirmed,
+    splitAmountMismatch,
     cartCount,
     categories: state.categories,
     discounts: state.discountsList,
@@ -1250,6 +1876,14 @@ export function useCremaPos() {
     uploadAvatar,
     openShiftAction,
     closeShiftAction,
+    dismissShiftCloseSummary,
+
+    // offline outbox inspect/retry/delete
+    outboxEntries: outboxOrderEntries,
+    openOutbox,
+    closeOutbox,
+    retryOutboxEntry,
+    deleteOutboxEntry,
   };
 }
 
