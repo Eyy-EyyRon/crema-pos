@@ -6,7 +6,11 @@ import { CustomizeSheet } from './components/CustomizeSheet';
 import { CustomizeSidebar } from './components/CustomizeSidebar';
 import { GcashQrModal } from './components/GcashQrModal';
 import { OfflineBanner } from './components/OfflineBanner';
+import { NewOrderAlertBanner } from './components/NewOrderAlertBanner';
+import { OutboxModal } from './components/OutboxModal';
 import { QueueModal } from './components/QueueModal';
+import { StockAdjustModal } from './components/StockAdjustModal';
+import { ShiftCloseSummaryModal } from './components/ShiftCloseSummaryModal';
 import { SuccessModal } from './components/SuccessModal';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { LoginScreen } from './screens/LoginScreen';
@@ -32,6 +36,7 @@ export function PosApp() {
   const { width } = useWindowDimensions();
   const isTablet = width >= TABLET_BREAKPOINT;
   const [closeShiftVisible, setCloseShiftVisible] = useState(false);
+  const [stockAdjustVisible, setStockAdjustVisible] = useState(false);
 
   const pos = useCremaPos();
   const { state } = pos;
@@ -70,7 +75,9 @@ export function PosApp() {
 
   const currentUser = state.currentUser;
   const orderTypeLabel = state.orderType === 'dine-in' ? 'Dine-In' : 'Takeout';
-  const canPay = state.cart.length > 0 && !pos.shortfall;
+  const giftCardReady = state.splitEnabled || state.payMethod !== 'gift_card'
+    || (!!state.giftCardCode.trim() && !pos.giftCardInsufficient);
+  const canPay = state.cart.length > 0 && !pos.shortfall && !pos.gcashUnconfirmed && !pos.splitAmountMismatch && giftCardReady;
   const userName = currentUser.full_name;
   const receiptStoreInfo = {
     storeName: state.storeSettings.storeName,
@@ -111,14 +118,47 @@ export function PosApp() {
     onSelectTakeout: () => pos.selectType('takeout'),
     customerName: state.customerName,
     onChangeCustomerName: (v: string) => pos.patch({ customerName: v }),
-    discounts: pos.discounts,
+    discounts: pos.eligibleDiscounts,
     discountName: state.discountName,
     discountPct: pos.discountPct,
-    onSelectDiscount: (name: string) => pos.patch({ discountName: name }),
+    discountLabel: pos.discountLabel,
+    onSelectDiscount: (name: string) => pos.patch({ discountName: name, redeemPoints: name !== 'None' ? '' : state.redeemPoints }),
     payMethod: state.payMethod,
-    onSelectCash: () => pos.patch({ payMethod: 'cash' as const }),
-    onSelectGcash: () => pos.patch({ payMethod: 'gcash' as const, tendered: '', showGcashQr: true }),
+    onSelectCash: () => pos.patch({ payMethod: 'cash' as const, gcashReference: '', gcashConfirmed: false, giftCardCode: '', giftCardBalance: null, giftCardError: null }),
+    onSelectGcash: () => pos.patch({ payMethod: 'gcash' as const, tendered: '', showGcashQr: true, gcashReference: '', gcashConfirmed: false, giftCardCode: '', giftCardBalance: null, giftCardError: null }),
+    onSelectGiftCard: () => pos.patch({ payMethod: 'gift_card' as const, splitEnabled: false, tendered: '', gcashReference: '', gcashConfirmed: false }),
     onViewGcashQr: () => pos.patch({ showGcashQr: true }),
+    giftCardCode: state.giftCardCode,
+    onChangeGiftCardCode: (v: string) => pos.patch({ giftCardCode: v, giftCardBalance: null, giftCardError: null }),
+    onCheckGiftCardBalance: pos.checkGiftCardBalanceAction,
+    giftCardChecking: state.giftCardChecking,
+    giftCardBalance: state.giftCardBalance,
+    giftCardError: state.giftCardError,
+    customerPhone: state.customerPhone,
+    onChangeCustomerPhone: (v: string) => pos.patch({ customerPhone: v, customerLookupStatus: 'idle' }),
+    onLookupCustomer: pos.lookupCustomer,
+    customerLookupStatus: state.customerLookupStatus,
+    foundCustomerName: state.selectedCustomer?.fullName ?? null,
+    foundCustomerPoints: state.selectedCustomer?.loyaltyPoints ?? 0,
+    newCustomerName: state.newCustomerName,
+    onChangeNewCustomerName: (v: string) => pos.patch({ newCustomerName: v }),
+    onCreateCustomer: pos.createCustomerInline,
+    customerCreating: state.customerCreating,
+    onClearCustomer: pos.clearSelectedCustomer,
+    loyaltyEnabled: state.storeSettings.loyaltyEnabled,
+    loyaltyPointValuePhp: state.storeSettings.loyaltyPointValuePhp,
+    redeemPoints: state.redeemPoints,
+    onChangeRedeemPoints: (v: string) => pos.patch({
+      redeemPoints: v,
+      discountName: Number(v) > 0 ? 'None' : state.discountName,
+      splitEnabled: Number(v) > 0 ? false : state.splitEnabled,
+    }),
+    maxRedeemablePoints: pos.maxRedeemablePoints,
+    pointsToEarnPreview: pos.pointsToEarnPreview,
+    loyaltyRedemptionAmount: pos.loyaltyRedemptionAmount,
+    amountDue: pos.amountDue,
+    receiptEmail: state.receiptEmail,
+    onChangeReceiptEmail: (v: string) => pos.patch({ receiptEmail: v }),
     tendered: state.tendered,
     onChangeTendered: (v: string) => pos.patch({ tendered: v }),
     quickCash: pos.quickCash,
@@ -126,6 +166,22 @@ export function PosApp() {
     tenderNum: pos.tenderNum,
     change: pos.change,
     shortfall: pos.shortfall,
+    gcashReference: state.gcashReference,
+    onChangeGcashReference: (v: string) => pos.patch({ gcashReference: v }),
+    gcashConfirmed: state.gcashConfirmed,
+    onToggleGcashConfirmed: () => pos.patch({ gcashConfirmed: !state.gcashConfirmed }),
+    splitEnabled: state.splitEnabled,
+    onToggleSplit: () => pos.patch({
+      splitEnabled: !state.splitEnabled,
+      splitCashAmount: '', splitGcashAmount: '',
+      gcashReference: '', gcashConfirmed: false,
+      redeemPoints: '',
+    }),
+    splitCashAmount: state.splitCashAmount,
+    onChangeSplitCashAmount: (v: string) => pos.patch({ splitCashAmount: v }),
+    splitGcashAmount: state.splitGcashAmount,
+    onChangeSplitGcashAmount: (v: string) => pos.patch({ splitGcashAmount: v }),
+    splitAmountMismatch: pos.splitAmountMismatch,
     subtotal: pos.totals.sub,
     discount: pos.totals.disc,
     service: pos.totals.service,
@@ -150,11 +206,28 @@ export function PosApp() {
         shift={state.shift}
         upcomingShifts={state.upcomingShifts}
         uploading={state.avatarUploading}
+        outboxCount={state.outboxCount}
         onClose={() => pos.patch({ showAccount: false })}
         onHistory={() => pos.patch({ showAccount: false, screen: 'history' })}
         onLock={() => { pos.patch({ showAccount: false }); pos.lockPos(); }}
         onUploadAvatar={() => { pos.uploadAvatar(); }}
         onCloseShift={() => { pos.patch({ showAccount: false }); setCloseShiftVisible(true); }}
+        onOpenOutbox={() => { pos.patch({ showAccount: false }); pos.openOutbox(); }}
+        onOpenStockAdjust={() => { pos.patch({ showAccount: false }); setStockAdjustVisible(true); }}
+      />
+      <OutboxModal
+        visible={state.showOutbox}
+        entries={pos.outboxEntries}
+        onClose={pos.closeOutbox}
+        onRetry={pos.retryOutboxEntry}
+        onDelete={pos.deleteOutboxEntry}
+      />
+      <StockAdjustModal
+        visible={stockAdjustVisible}
+        ingredients={state.ingredientsList}
+        isOffline={state.isOffline}
+        onClose={() => setStockAdjustVisible(false)}
+        onSubmit={pos.adjustStockManual}
       />
       <CloseShiftModal
         visible={closeShiftVisible}
@@ -166,6 +239,11 @@ export function PosApp() {
           return err;
         }}
       />
+      <ShiftCloseSummaryModal
+        visible={!!state.shiftCloseSummary}
+        summary={state.shiftCloseSummary}
+        onDone={pos.dismissShiftCloseSummary}
+      />
     </>
   );
 
@@ -173,6 +251,7 @@ export function PosApp() {
     return (
       <View style={styles.root}>
         <OfflineBanner visible={state.isOffline} />
+        <NewOrderAlertBanner alert={state.newOrderAlert} onDismiss={() => pos.patch({ newOrderAlert: null })} />
         <HistoryScreen
           onBack={() => pos.patch({ screen: 'menu' })}
           onFlagVoid={pos.flagVoidOrder}
@@ -190,6 +269,7 @@ export function PosApp() {
     return (
       <View style={styles.root}>
         <OfflineBanner visible={state.isOffline} />
+        <NewOrderAlertBanner alert={state.newOrderAlert} onDismiss={() => pos.patch({ newOrderAlert: null })} />
         {state.screen === 'orderType' ? (
           <OrderTypeScreen
             variant="tablet"
@@ -229,7 +309,10 @@ export function PosApp() {
             onComplete={pos.completeQueueTicket}
             onFlagVoid={pos.flagVoidOrder}
             onManagerVoid={pos.managerVoidOrder}
+            onSelfVoid={pos.selfVoidOrder}
+            currentUser={state.currentUser}
             onAddItems={pos.startAddToOrder}
+            onAdvanceItem={pos.advanceItemPrepStatus}
             isOffline={state.isOffline}
           />
         )}
@@ -246,6 +329,7 @@ export function PosApp() {
   return (
     <View style={styles.root}>
       <OfflineBanner visible={state.isOffline} />
+      <NewOrderAlertBanner alert={state.newOrderAlert} onDismiss={() => pos.patch({ newOrderAlert: null })} />
       {state.screen === 'orderType' && (
         <OrderTypeScreen
           variant="phone"
@@ -289,7 +373,10 @@ export function PosApp() {
           onComplete={pos.completeQueueTicket}
           onFlagVoid={pos.flagVoidOrder}
           onManagerVoid={pos.managerVoidOrder}
+          onSelfVoid={pos.selfVoidOrder}
+          currentUser={state.currentUser}
           onAddItems={pos.startAddToOrder}
+          onAdvanceItem={pos.advanceItemPrepStatus}
           isOffline={state.isOffline}
         />
       )}
