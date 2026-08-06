@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AlertCircleIcon, AlertTriangleIcon, XIcon } from '../icons';
 import { tapLight, tapMedium } from '../lib/haptics';
+import { REASON_CODES, ReasonCode } from '../lib/reasonCodes';
 import { colors, fonts } from '../theme';
 import { QueueEntry } from '../types';
+import { Chip } from './Chip';
 import { PinPad } from './PinPad';
 
 // Void an order from the queue — ported/adapted from CafePOS's
@@ -18,14 +20,21 @@ export function VoidModal({
   onClose,
   onFlagForManager,
   onPinSubmit,
+  selfVoidEligible,
+  onSelfVoid,
 }: {
   visible: boolean;
   order: QueueEntry | null;
   isOffline: boolean;
   onClose: () => void;
-  onFlagForManager: (reason: string) => Promise<{ error?: string }>;
-  onPinSubmit: (pin: string, reason: string) => Promise<{ error?: string }>;
+  onFlagForManager: (reasonCode: string, detail: string) => Promise<{ error?: string }>;
+  onPinSubmit: (pin: string, reasonCode: string, detail: string) => Promise<{ error?: string }>;
+  /** When true, this caller (manager, or a senior barista under their own threshold) can void
+   *  this specific order directly — skips the PIN/Flag tabs entirely. */
+  selfVoidEligible?: boolean;
+  onSelfVoid?: (reasonCode: string, detail: string) => Promise<{ error?: string }>;
 }) {
+  const [reasonCode, setReasonCode] = useState<ReasonCode | ''>('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,25 +42,27 @@ export function VoidModal({
   const [resetTick, setResetTick] = useState(0);
 
   useEffect(() => {
-    if (visible) { setReason(''); setError(''); setBusy(false); setTab('pin'); }
+    if (visible) { setReasonCode(''); setReason(''); setError(''); setBusy(false); setTab('pin'); }
   }, [visible]);
 
   if (!visible || !order) return null;
 
+  const validateReason = (): boolean => {
+    if (!reasonCode) { setError('Select a reason'); return false; }
+    if (reasonCode === 'other' && !reason.trim()) { setError('Add a detail for "Other"'); return false; }
+    return true;
+  };
+
   const handlePinComplete = async (pin: string) => {
     if (busy) return;
-    if (isOffline) {
-      setError('Manager PIN verification requires an internet connection');
-      setResetTick((t) => t + 1);
-      return;
-    }
-    if (!reason.trim()) {
-      setError('Enter a reason first');
+    if (!validateReason()) {
       setResetTick((t) => t + 1);
       return;
     }
     setBusy(true);
-    const res = await onPinSubmit(pin, reason.trim());
+    // onPinSubmit (managerVoidOrder) handles the offline case itself, via a cached-PIN-hash
+    // fallback — see lib/managerPinCache.ts — so there's no hard block here.
+    const res = await onPinSubmit(pin, reasonCode, reason.trim());
     if (res.error) {
       setError(res.error);
       setResetTick((t) => t + 1);
@@ -60,11 +71,22 @@ export function VoidModal({
   };
 
   const handleFlag = async () => {
-    if (!reason.trim()) { setError('Reason is required'); return; }
-    if (isOffline) { setError('Cannot flag while offline'); return; }
+    if (!validateReason()) return;
+    // onFlagForManager (flagVoidOrder) queues offline automatically — no PIN involved, so
+    // there's nothing here that needs a live connection.
     tapMedium();
     setBusy(true);
-    const res = await onFlagForManager(reason.trim());
+    const res = await onFlagForManager(reasonCode, reason.trim());
+    if (res.error) setError(res.error);
+    setBusy(false);
+  };
+
+  const handleSelfVoid = async () => {
+    if (!validateReason() || !onSelfVoid) return;
+    if (isOffline) { setError('Voiding requires an internet connection'); return; }
+    tapMedium();
+    setBusy(true);
+    const res = await onSelfVoid(reasonCode, reason.trim());
     if (res.error) setError(res.error);
     setBusy(false);
   };
@@ -88,23 +110,31 @@ export function VoidModal({
         </View>
 
         <Text style={s.label}>Reason for Void</Text>
+        <View style={s.reasonChips}>
+          {REASON_CODES.map((r) => (
+            <Chip key={r.code} label={r.label} active={reasonCode === r.code} onPress={() => { setReasonCode(r.code); if (error) setError(''); }} />
+          ))}
+        </View>
+        <Text style={s.label}>Additional Details {reasonCode === 'other' ? '' : '(optional)'}</Text>
         <TextInput
           style={s.input}
-          placeholder="e.g. Customer changed mind, Duplicate entry…"
+          placeholder="e.g. Duplicate entry, ticket rung up twice…"
           placeholderTextColor={colors.textDim}
           value={reason}
           onChangeText={(t) => { setReason(t); if (error) setError(''); }}
           editable={!busy}
         />
 
-        <View style={s.tabs}>
-          <Pressable style={[s.tab, tab === 'pin' && s.tabActive]} onPress={() => { tapLight(); setTab('pin'); }}>
-            <Text style={[s.tabText, tab === 'pin' && s.tabTextActive]}>Manager PIN</Text>
-          </Pressable>
-          <Pressable style={[s.tab, tab === 'flag' && s.tabActive]} onPress={() => { tapLight(); setTab('flag'); }}>
-            <Text style={[s.tabText, tab === 'flag' && s.tabTextActive]}>Flag Later</Text>
-          </Pressable>
-        </View>
+        {!selfVoidEligible && (
+          <View style={s.tabs}>
+            <Pressable style={[s.tab, tab === 'pin' && s.tabActive]} onPress={() => { tapLight(); setTab('pin'); }}>
+              <Text style={[s.tabText, tab === 'pin' && s.tabTextActive]}>Manager PIN</Text>
+            </Pressable>
+            <Pressable style={[s.tab, tab === 'flag' && s.tabActive]} onPress={() => { tapLight(); setTab('flag'); }}>
+              <Text style={[s.tabText, tab === 'flag' && s.tabTextActive]}>Flag Later</Text>
+            </Pressable>
+          </View>
+        )}
 
         {!!error && (
           <View style={s.errorRow}>
@@ -113,7 +143,13 @@ export function VoidModal({
           </View>
         )}
 
-        {tab === 'pin' ? (
+        {selfVoidEligible ? (
+          <View>
+            <Pressable style={[s.flagBtn, busy && { opacity: 0.5 }]} onPress={handleSelfVoid} disabled={busy}>
+              {busy ? <ActivityIndicator color={colors.screenBg} size="small" /> : <Text style={s.flagBtnText}>Void This Order</Text>}
+            </Pressable>
+          </View>
+        ) : tab === 'pin' ? (
           <View style={{ alignItems: 'center' }}>
             <Text style={s.panelDesc}>Manager enters their 4-digit PIN to void this order immediately.</Text>
             <PinPad
@@ -122,11 +158,11 @@ export function VoidModal({
               gap={10}
               onComplete={handlePinComplete}
               onChangeLength={() => error && setError('')}
-              disabled={busy || isOffline}
+              disabled={busy}
               error={!!error}
               resetSignal={resetTick}
             />
-            {isOffline && <Text style={s.offlineNote}>Manager PIN verification requires an internet connection</Text>}
+            {isOffline && <Text style={s.offlineNote}>Offline — this void will be queued and confirmed once reconnected</Text>}
           </View>
         ) : (
           <View>
@@ -136,10 +172,10 @@ export function VoidModal({
                 This order leaves the queue but stays pending until a manager reviews it in cafe-web-dashboard.
               </Text>
             </View>
-            <Pressable style={[s.flagBtn, (busy || isOffline) && { opacity: 0.5 }]} onPress={handleFlag} disabled={busy || isOffline}>
+            <Pressable style={[s.flagBtn, busy && { opacity: 0.5 }]} onPress={handleFlag} disabled={busy}>
               {busy ? <ActivityIndicator color={colors.screenBg} size="small" /> : <Text style={s.flagBtnText}>Flag for Manager Review</Text>}
             </Pressable>
-            {isOffline && <Text style={s.offlineNote}>Flagging requires an internet connection</Text>}
+            {isOffline && <Text style={s.offlineNote}>Offline — this will sync once reconnected</Text>}
           </View>
         )}
       </View>
@@ -170,6 +206,7 @@ const s = StyleSheet.create({
   closeBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center' },
 
   label: { fontFamily: fonts.sansExtraBold, fontSize: 10, letterSpacing: 1.8, textTransform: 'uppercase', color: colors.textLabel, marginBottom: 8 },
+  reasonChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   input: {
     backgroundColor: colors.cardBg, borderWidth: 1.5, borderColor: colors.borderGold14,
     borderRadius: 12, padding: 14, color: colors.textPrimary, fontSize: 14, marginBottom: 18,
