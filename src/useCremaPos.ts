@@ -313,6 +313,17 @@ export function useCremaPos() {
   // own new-order alert.
   const currentUserIdRef = useRef<string | null>(null);
 
+  // Undo-window for the cart trash button (see UndoToast.tsx) — deliberately separate from the
+  // main `state` object rather than folded into it, since this is ephemeral UI feedback about a
+  // removal, not persisted order data.
+  const [pendingUndo, setPendingUndo] = useState<{ item: CartItem; index: number } | null>(null);
+  const pendingUndoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearPendingUndo = useCallback(() => {
+    if (pendingUndoTimerRef.current) clearTimeout(pendingUndoTimerRef.current);
+    pendingUndoTimerRef.current = null;
+    setPendingUndo(null);
+  }, []);
+
   const patch = useCallback((p: Partial<PosState>) => {
     setState((s) => ({ ...s, ...p }));
   }, []);
@@ -1252,6 +1263,7 @@ export function useCremaPos() {
   // order — for something like "customer adds one more cookie" after the ticket's already
   // fired, without forcing a full void + re-ring of everything already sent to the kitchen.
   const startAddToOrder = useCallback((ticket: QueueEntry) => {
+    clearPendingUndo();
     setState((s) => ({
       ...s,
       appendTargetOrderId: ticket.id,
@@ -1282,11 +1294,12 @@ export function useCremaPos() {
       showQueue: false,
       screen: 'menu',
     }));
-  }, []);
+  }, [clearPendingUndo]);
 
   const cancelAddToOrder = useCallback(() => {
+    clearPendingUndo();
     setState((s) => ({ ...s, appendTargetOrderId: null, appendTargetOrderNo: null, cart: [], screen: 'menu' }));
-  }, []);
+  }, [clearPendingUndo]);
 
   // ─────────────────────────────────────────────
   // CART / CUSTOMIZE
@@ -1363,9 +1376,32 @@ export function useCremaPos() {
     }));
   }, []);
 
+  // Removal is instant (no confirmation dialog, no slowdown to the common "fix a mistake while
+  // building the order" case) — the safety net is UndoToast, not friction on the way in. Only
+  // the most recent removal stays undo-able; a second removal while a toast is still showing
+  // overwrites it rather than stacking multiple pending undos with ambiguous "which one"
+  // semantics. cartId comes from a monotonic counter that's never reused (see addToCart), so
+  // reinserting this exact same item object on undo is always collision-safe.
   const removeFromCart = useCallback((cartId: string) => {
+    const idx = state.cart.findIndex((c) => c.cartId === cartId);
+    if (idx === -1) return;
+    const removed = state.cart[idx];
     setState((s) => ({ ...s, cart: s.cart.filter((c) => c.cartId !== cartId) }));
-  }, []);
+    if (pendingUndoTimerRef.current) clearTimeout(pendingUndoTimerRef.current);
+    setPendingUndo({ item: removed, index: idx });
+    pendingUndoTimerRef.current = setTimeout(() => setPendingUndo(null), 4000);
+  }, [state.cart]);
+
+  const undoRemove = useCallback(() => {
+    if (!pendingUndo) return;
+    const { item, index } = pendingUndo;
+    setState((s) => {
+      const cart = [...s.cart];
+      cart.splice(Math.min(index, cart.length), 0, item);
+      return { ...s, cart };
+    });
+    clearPendingUndo();
+  }, [pendingUndo, clearPendingUndo]);
 
   // Raw pre-discount subtotal, needed both to size a 'fixed'/'bogo' discount (capped so it can
   // never exceed the order) and to convert whichever discount type is active into an equivalent
@@ -1696,6 +1732,7 @@ export function useCremaPos() {
   }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.splitEnabled, state.splitCashAmount, state.splitGcashAmount, state.gcashReference, state.gcashConfirmed, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, state.selectedCustomer, state.giftCardCode, state.receiptEmail, state.discountName, state.discountsList, redeemPointsNum, maxRedeemablePoints, phpPerPoint, amountDue, totals, patch, fetchQueue]);
 
   const done = useCallback(() => {
+    clearPendingUndo();
     setState((s) => ({
       ...s,
       screen: 'orderType',
@@ -1728,7 +1765,7 @@ export function useCremaPos() {
       giftCardError: null,
       receiptEmail: '',
     }));
-  }, []);
+  }, [clearPendingUndo]);
 
   const cartQtyByMenuId = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1827,6 +1864,8 @@ export function useCremaPos() {
     addToCart,
     changeQty,
     removeFromCart,
+    pendingUndo,
+    undoRemove,
     checkout,
     done,
     completeQueueTicket,
