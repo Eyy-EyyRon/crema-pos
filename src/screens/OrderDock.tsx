@@ -9,10 +9,12 @@ import {
   CheckoutErrorBanner,
   CustomerNameField,
   DiscountRow,
+  GcashConfirmBlock,
   OrderTypeRow,
   PaymentMethodRow,
   ProcessPaymentButton,
   SectionLabel,
+  SplitPaymentBlock,
   SummaryCard,
 } from '../components/CheckoutShared';
 import { peso } from '../format';
@@ -38,6 +40,17 @@ interface OrderDockProps {
   onSelectCash: () => void;
   onSelectGcash: () => void;
   onViewGcashQr: () => void;
+  gcashReference: string;
+  onChangeGcashReference: (v: string) => void;
+  gcashConfirmed: boolean;
+  onToggleGcashConfirmed: () => void;
+  splitEnabled: boolean;
+  onToggleSplit: () => void;
+  splitCashAmount: string;
+  onChangeSplitCashAmount: (v: string) => void;
+  splitGcashAmount: string;
+  onChangeSplitGcashAmount: (v: string) => void;
+  splitAmountMismatch: boolean;
   tendered: string;
   onChangeTendered: (v: string) => void;
   quickCash: number[];
@@ -81,6 +94,17 @@ export function OrderDock(props: OrderDockProps) {
     onSelectCash,
     onSelectGcash,
     onViewGcashQr,
+    gcashReference,
+    onChangeGcashReference,
+    gcashConfirmed,
+    onToggleGcashConfirmed,
+    splitEnabled,
+    onToggleSplit,
+    splitCashAmount,
+    onChangeSplitCashAmount,
+    splitGcashAmount,
+    onChangeSplitGcashAmount,
+    splitAmountMismatch,
     tendered,
     onChangeTendered,
     quickCash,
@@ -148,20 +172,67 @@ export function OrderDock(props: OrderDockProps) {
             <DiscountRow discounts={discounts} activeName={discountName} onSelect={onSelectDiscount} />
 
             <SectionLabel style={styles.sectionSpacing}>Payment Method</SectionLabel>
-            <PaymentMethodRow payMethod={payMethod} onSelectCash={onSelectCash} onSelectGcash={onSelectGcash} onViewGcashQr={onViewGcashQr} gap={9} />
+            <PaymentMethodRow
+              payMethod={payMethod}
+              onSelectCash={onSelectCash}
+              onSelectGcash={onSelectGcash}
+              onViewGcashQr={onViewGcashQr}
+              gap={9}
+              splitEnabled={isAppend ? undefined : splitEnabled}
+              onToggleSplit={isAppend ? undefined : onToggleSplit}
+            />
 
-            {payMethod === 'cash' && (
+            {splitEnabled && !isAppend ? (
               <>
-                <SectionLabel style={styles.sectionSpacing}>Cash Tendered</SectionLabel>
-                <CashTenderBlock
-                  tendered={tendered}
-                  onChangeTendered={onChangeTendered}
-                  quickCash={quickCash}
-                  onQuickCash={onQuickCash}
-                  tenderNum={tenderNum}
-                  change={change}
-                  shortfall={shortfall}
+                <SectionLabel style={styles.sectionSpacing}>Split Payment</SectionLabel>
+                <SplitPaymentBlock
+                  total={total}
+                  cashAmount={splitCashAmount}
+                  onChangeCashAmount={onChangeSplitCashAmount}
+                  gcashAmount={splitGcashAmount}
+                  onChangeGcashAmount={onChangeSplitGcashAmount}
+                  mismatch={splitAmountMismatch}
                 />
+                {Number(splitGcashAmount) > 0 && (
+                  <>
+                    <SectionLabel style={styles.sectionSpacing}>Confirm GCash Payment</SectionLabel>
+                    <GcashConfirmBlock
+                      reference={gcashReference}
+                      onChangeReference={onChangeGcashReference}
+                      confirmed={gcashConfirmed}
+                      onToggleConfirmed={onToggleGcashConfirmed}
+                    />
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                {payMethod === 'gcash' && (
+                  <>
+                    <SectionLabel style={styles.sectionSpacing}>Confirm GCash Payment</SectionLabel>
+                    <GcashConfirmBlock
+                      reference={gcashReference}
+                      onChangeReference={onChangeGcashReference}
+                      confirmed={gcashConfirmed}
+                      onToggleConfirmed={onToggleGcashConfirmed}
+                    />
+                  </>
+                )}
+
+                {payMethod === 'cash' && (
+                  <>
+                    <SectionLabel style={styles.sectionSpacing}>Cash Tendered</SectionLabel>
+                    <CashTenderBlock
+                      tendered={tendered}
+                      onChangeTendered={onChangeTendered}
+                      quickCash={quickCash}
+                      onQuickCash={onQuickCash}
+                      tenderNum={tenderNum}
+                      change={change}
+                      shortfall={shortfall}
+                    />
+                  </>
+                )}
               </>
             )}
 
