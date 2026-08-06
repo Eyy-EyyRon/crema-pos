@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { XIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
-import { QueueEntry } from '../types';
+import { QueueEntry, UserProfile } from '../types';
 import { QueueList } from './QueueList';
 import { VoidModal } from './VoidModal';
 
@@ -13,18 +13,28 @@ export function QueueModal({
   onComplete,
   onFlagVoid,
   onManagerVoid,
+  onSelfVoid,
+  currentUser,
   onAddItems,
+  onAdvanceItem,
   isOffline,
 }: {
   tickets: QueueEntry[];
   onClose: () => void;
   onComplete: (id: string) => void;
-  onFlagVoid: (orderId: string, reason: string) => Promise<{ error?: string }>;
-  onManagerVoid: (orderId: string, reason: string, pin: string) => Promise<{ error?: string }>;
+  onFlagVoid: (orderId: string, reasonCode: string, detail: string) => Promise<{ error?: string }>;
+  onManagerVoid: (orderId: string, reasonCode: string, detail: string, pin: string) => Promise<{ error?: string }>;
+  onSelfVoid: (orderId: string, reasonCode: string, detail: string) => Promise<{ error?: string }>;
+  currentUser: UserProfile | null;
   onAddItems: (ticket: QueueEntry) => void;
+  onAdvanceItem: (orderItemId: string) => void;
   isOffline: boolean;
 }) {
   const [voidTarget, setVoidTarget] = useState<QueueEntry | null>(null);
+  const selfVoidEligible = !!voidTarget && !!currentUser && (
+    currentUser.role === 'manager' ||
+    (!!currentUser.is_senior_barista && voidTarget.total <= (currentUser.self_void_threshold_php ?? 0))
+  );
 
   return (
     <View style={styles.overlay}>
@@ -49,6 +59,7 @@ export function QueueModal({
               const t = tickets.find((x) => x.id === id);
               if (t) onAddItems(t);
             }}
+            onAdvanceItem={onAdvanceItem}
           />
         </ScrollView>
       </View>
@@ -57,15 +68,22 @@ export function QueueModal({
         order={voidTarget}
         isOffline={isOffline}
         onClose={() => setVoidTarget(null)}
-        onFlagForManager={async (reason) => {
+        onFlagForManager={async (reasonCode, detail) => {
           if (!voidTarget) return {};
-          const res = await onFlagVoid(voidTarget.id, reason);
+          const res = await onFlagVoid(voidTarget.id, reasonCode, detail);
           if (!res.error) setVoidTarget(null);
           return res;
         }}
-        onPinSubmit={async (pin, reason) => {
+        onPinSubmit={async (pin, reasonCode, detail) => {
           if (!voidTarget) return {};
-          const res = await onManagerVoid(voidTarget.id, reason, pin);
+          const res = await onManagerVoid(voidTarget.id, reasonCode, detail, pin);
+          if (!res.error) setVoidTarget(null);
+          return res;
+        }}
+        selfVoidEligible={selfVoidEligible}
+        onSelfVoid={async (reasonCode, detail) => {
+          if (!voidTarget) return {};
+          const res = await onSelfVoid(voidTarget.id, reasonCode, detail);
           if (!res.error) setVoidTarget(null);
           return res;
         }}
