@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-export type PosActivityType = 'shift_opened' | 'shift_closed' | 'void_requested' | 'void_approved' | 'refund_issued';
+export type PosActivityType = 'shift_opened' | 'shift_closed' | 'void_requested' | 'void_approved' | 'refund_issued' | 'stock_adjusted';
 
 // Fire-and-forget audit trail write for the manager staff-page's Activity tab. Never throws — a
 // failed log write must not block or roll back the real action it's describing, same non-fatal
