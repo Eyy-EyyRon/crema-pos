@@ -21,6 +21,7 @@ type HistoryOrder = {
   createdAt: string;
   total: number;
   paymentMethod: string;
+  gcashReference: string | null;
   customerName: string | null;
   refundAmount: number | null;
   baristaId: string;
@@ -85,9 +86,9 @@ export function HistoryScreen({
   storeInfo,
 }: {
   onBack: () => void;
-  onFlagVoid: (orderId: string, reason: string) => Promise<{ error?: string }>;
-  onManagerVoid: (orderId: string, reason: string, pin: string) => Promise<{ error?: string }>;
-  onManagerRefund: (orderId: string, amount: number, reason: string, pin: string) => Promise<{ error?: string }>;
+  onFlagVoid: (orderId: string, reasonCode: string, detail: string) => Promise<{ error?: string }>;
+  onManagerVoid: (orderId: string, reasonCode: string, detail: string, pin: string) => Promise<{ error?: string }>;
+  onManagerRefund: (orderId: string, amount: number, reasonCode: string, detail: string, pin: string) => Promise<{ error?: string }>;
   isOffline: boolean;
   storeInfo: ReceiptStoreInfo;
 }) {
@@ -107,7 +108,7 @@ export function HistoryScreen({
     let query = supabase
       .from('orders')
       .select(
-        'id, receipt_number, created_at, total, total_amount, status, order_type, payment_method, customer_name, refund_amount, barista_id, order_items(qty, menu_item_id, unit_price, modifiers_json, special_note, menu_items(name))'
+        'id, receipt_number, created_at, total, total_amount, status, order_type, payment_method, gcash_reference, customer_name, refund_amount, barista_id, order_items(qty, menu_item_id, unit_price, modifiers_json, special_note, menu_items(name))'
       )
       .order('created_at', { ascending: false })
       .limit(100);
@@ -131,6 +132,7 @@ export function HistoryScreen({
       createdAt: o.created_at,
       total: Number(o.total ?? o.total_amount ?? 0),
       paymentMethod: o.payment_method ?? 'cash',
+      gcashReference: o.gcash_reference ?? null,
       customerName: o.customer_name ?? null,
       refundAmount: o.refund_amount !== null && o.refund_amount !== undefined ? Number(o.refund_amount) : null,
       baristaId: o.barista_id,
@@ -165,6 +167,7 @@ export function HistoryScreen({
           showChange: false,
           change: 0,
           customerName: o.customerName,
+          gcashReference: o.paymentMethod === 'gcash' ? o.gcashReference : null,
         },
         o.orderType === 'takeout' ? 'Takeout' : 'Dine-In',
         storeInfo,
@@ -295,15 +298,15 @@ export function HistoryScreen({
         order={voidableTarget}
         isOffline={isOffline}
         onClose={() => setVoidTarget(null)}
-        onFlagForManager={async (reason) => {
+        onFlagForManager={async (reasonCode, detail) => {
           if (!voidTarget) return {};
-          const res = await onFlagVoid(voidTarget.id, reason);
+          const res = await onFlagVoid(voidTarget.id, reasonCode, detail);
           if (!res.error) { await load(dateRange); setVoidTarget(null); }
           return res;
         }}
-        onPinSubmit={async (pin, reason) => {
+        onPinSubmit={async (pin, reasonCode, detail) => {
           if (!voidTarget) return {};
-          const res = await onManagerVoid(voidTarget.id, reason, pin);
+          const res = await onManagerVoid(voidTarget.id, reasonCode, detail, pin);
           if (!res.error) { setVoidTarget(null); await load(dateRange); }
           return res;
         }}
@@ -313,9 +316,9 @@ export function HistoryScreen({
         order={refundTarget ? { id: refundTarget.id, no: refundTarget.no, total: refundTarget.total } : null}
         isOffline={isOffline}
         onClose={() => setRefundTarget(null)}
-        onSubmit={async (amount, reason, pin) => {
+        onSubmit={async (amount, reasonCode, detail, pin) => {
           if (!refundTarget) return {};
-          const res = await onManagerRefund(refundTarget.id, amount, reason, pin);
+          const res = await onManagerRefund(refundTarget.id, amount, reasonCode, detail, pin);
           if (!res.error) { setRefundTarget(null); await load(dateRange); }
           return res;
         }}
