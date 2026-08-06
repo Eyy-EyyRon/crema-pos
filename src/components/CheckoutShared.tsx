@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AlertCircleIcon } from '../icons';
 import { peso, peso0 } from '../format';
-import { tapMedium, warning } from '../lib/haptics';
+import { tapLight, tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { Discount, OrderType, PayMethod } from '../types';
 import { Chip } from './Chip';
@@ -70,6 +70,13 @@ export function CustomerNameField({
   );
 }
 
+function discountChipLabel(d: Discount): string {
+  if (d.n === 'None') return 'No Discount';
+  if (d.type === 'fixed') return `${d.n} −${peso0(d.fixedAmount ?? 0)}`;
+  if (d.type === 'bogo') return `${d.n} (BOGO)`;
+  return `${d.n} ${d.p * 100}%`;
+}
+
 export function DiscountRow({
   discounts,
   activeName,
@@ -84,7 +91,7 @@ export function DiscountRow({
       {discounts.map((d) => (
         <Chip
           key={d.n}
-          label={d.p ? `${d.n} ${d.p * 100}%` : 'No Discount'}
+          label={discountChipLabel(d)}
           active={activeName === d.n}
           onPress={() => onSelect(d.n)}
         />
@@ -97,26 +104,136 @@ export function PaymentMethodRow({
   payMethod,
   onSelectCash,
   onSelectGcash,
+  onSelectGiftCard,
   onViewGcashQr,
   gap = 10,
+  splitEnabled,
+  onToggleSplit,
 }: {
   payMethod: PayMethod;
   onSelectCash: () => void;
   onSelectGcash: () => void;
+  onSelectGiftCard?: () => void;
   onViewGcashQr?: () => void;
   gap?: number;
+  splitEnabled?: boolean;
+  onToggleSplit?: () => void;
 }) {
   return (
     <View>
-      <View style={{ flexDirection: 'row', gap }}>
-        <PayButton kind="cash" active={payMethod === 'cash'} onPress={onSelectCash} />
-        <PayButton kind="gcash" active={payMethod === 'gcash'} onPress={onSelectGcash} />
+      <View style={{ flexDirection: 'row', gap, opacity: splitEnabled ? 0.4 : 1 }}>
+        <PayButton kind="cash" active={payMethod === 'cash' && !splitEnabled} onPress={onSelectCash} />
+        <PayButton kind="gcash" active={payMethod === 'gcash' && !splitEnabled} onPress={onSelectGcash} />
+        {onSelectGiftCard && (
+          <PayButton kind="gift_card" active={payMethod === 'gift_card' && !splitEnabled} onPress={onSelectGiftCard} />
+        )}
       </View>
-      {payMethod === 'gcash' && onViewGcashQr && (
+      {payMethod === 'gcash' && !splitEnabled && onViewGcashQr && (
         <Pressable onPress={onViewGcashQr} style={styles.viewQrLink}>
           <Text style={styles.viewQrLinkText}>View QR again</Text>
         </Pressable>
       )}
+      {onToggleSplit && (
+        <Pressable onPress={onToggleSplit} style={styles.splitToggleLink}>
+          <Text style={styles.splitToggleLinkText}>{splitEnabled ? '✕ Cancel split payment' : 'Split between Cash + GCash'}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+// Two-amount breakdown for an order paid part-cash, part-GCash. Shown instead of the normal
+// single-method Cash Tendered / GCash Confirm blocks when splitEnabled — the two amounts here
+// ARE the tender, so there's no separate "amount received" step layered on top.
+export function SplitPaymentBlock({
+  total,
+  cashAmount,
+  onChangeCashAmount,
+  gcashAmount,
+  onChangeGcashAmount,
+  mismatch,
+}: {
+  total: number;
+  cashAmount: string;
+  onChangeCashAmount: (v: string) => void;
+  gcashAmount: string;
+  onChangeGcashAmount: (v: string) => void;
+  mismatch: boolean;
+}) {
+  const remaining = total - (Number(cashAmount) || 0) - (Number(gcashAmount) || 0);
+  return (
+    <View>
+      <Text style={styles.splitAmountLabel}>Cash Amount</Text>
+      <View style={styles.tenderInputRow}>
+        <Text style={styles.pesoSign}>₱</Text>
+        <TextInput
+          value={cashAmount}
+          onChangeText={(v) => onChangeCashAmount(v.replace(/[^0-9.]/g, ''))}
+          placeholder="0.00"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="decimal-pad"
+          style={styles.tenderInput}
+        />
+      </View>
+      <Text style={[styles.splitAmountLabel, { marginTop: 12 }]}>GCash Amount</Text>
+      <View style={styles.tenderInputRow}>
+        <Text style={styles.pesoSign}>₱</Text>
+        <TextInput
+          value={gcashAmount}
+          onChangeText={(v) => onChangeGcashAmount(v.replace(/[^0-9.]/g, ''))}
+          placeholder="0.00"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="decimal-pad"
+          style={styles.tenderInput}
+        />
+      </View>
+      {mismatch && (
+        <Text style={styles.splitMismatchText}>
+          {remaining > 0 ? `${peso(remaining)} remaining` : `${peso(Math.abs(remaining))} over the total`}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+// GCash has no merchant API to verify a payment against, so the barista must attest the
+// customer's payment succeeded and type in the reference/transaction number shown on the
+// customer's GCash app — that pair is the only record a real GCash payment happened here.
+export function GcashConfirmBlock({
+  reference,
+  onChangeReference,
+  confirmed,
+  onToggleConfirmed,
+}: {
+  reference: string;
+  onChangeReference: (v: string) => void;
+  confirmed: boolean;
+  onToggleConfirmed: () => void;
+}) {
+  return (
+    <View>
+      <Pressable
+        onPress={() => { tapMedium(); onToggleConfirmed(); }}
+        style={styles.gcashConfirmRow}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: confirmed }}
+        accessibilityLabel="Confirm the customer's GCash payment went through"
+      >
+        <View style={[styles.gcashCheckbox, confirmed && styles.gcashCheckboxChecked]}>
+          {confirmed && <Text style={styles.gcashCheckboxMark}>✓</Text>}
+        </View>
+        <Text style={styles.gcashConfirmText}>I confirm the customer's GCash payment went through</Text>
+      </Pressable>
+      <View style={styles.gcashRefInputRow}>
+        <TextInput
+          value={reference}
+          onChangeText={onChangeReference}
+          placeholder="GCash Reference / Transaction No."
+          placeholderTextColor={colors.textMuted}
+          style={styles.gcashRefInput}
+          autoCapitalize="characters"
+        />
+      </View>
     </View>
   );
 }
@@ -171,9 +288,12 @@ export function SummaryCard({
   subtotal,
   discount,
   discountPct,
+  discountLabel,
   service,
   tax,
   total,
+  loyaltyRedemption = 0,
+  amountDue,
   taxRatePct,
   isTaxInclusive,
   serviceChargePct,
@@ -182,9 +302,12 @@ export function SummaryCard({
   subtotal: number;
   discount: number;
   discountPct: number;
+  discountLabel?: string;
   service: number;
   tax: number;
   total: number;
+  loyaltyRedemption?: number;
+  amountDue?: number;
   taxRatePct: number;
   isTaxInclusive: boolean;
   serviceChargePct: number;
@@ -200,7 +323,7 @@ export function SummaryCard({
       {discount > 0 && (
         <View style={styles.summaryRow}>
           <Text style={[styles.summaryLabel, { fontSize: fs, color: colors.danger }]}>
-            Discount ({discountPct * 100}% off)
+            {discountLabel ?? `Discount (${discountPct * 100}% off)`}
           </Text>
           <Text style={[styles.summaryValue, { fontSize: fs, color: colors.danger }]}>− {peso(discount)}</Text>
         </View>
@@ -219,9 +342,15 @@ export function SummaryCard({
           <Text style={[styles.summaryValue, { fontSize: fs }]}>{peso(tax)}</Text>
         </View>
       )}
+      {loyaltyRedemption > 0 && (
+        <View style={styles.summaryRow}>
+          <Text style={[styles.summaryLabel, { fontSize: fs, color: colors.danger }]}>Loyalty Points Redeemed</Text>
+          <Text style={[styles.summaryValue, { fontSize: fs, color: colors.danger }]}>− {peso(loyaltyRedemption)}</Text>
+        </View>
+      )}
       <View style={[styles.totalRow, dense && { paddingTop: 12, marginTop: 3 }]}>
         <Text style={[styles.totalLabel, dense && { fontSize: 14 }]}>Total Due</Text>
-        <Text style={[styles.totalValue, dense && { fontSize: 26 }]}>{peso(total)}</Text>
+        <Text style={[styles.totalValue, dense && { fontSize: 26 }]}>{peso(amountDue ?? total)}</Text>
       </View>
     </View>
   );
@@ -257,6 +386,194 @@ export function ProcessPaymentButton({
         </>
       )}
     </Pressable>
+  );
+}
+
+// Phone-number lookup + inline creation for the customer database, plus (when the store has
+// loyalty enabled and a customer is found) a points-to-redeem field. Redeeming loyalty points is
+// mutually exclusive with a % discount for v1 — enforced by the caller resetting the other one,
+// not by this component.
+export function CustomerLoyaltyBlock({
+  phone,
+  onChangePhone,
+  onLookup,
+  lookupStatus,
+  foundName,
+  foundPoints,
+  newCustomerName,
+  onChangeNewCustomerName,
+  onCreateCustomer,
+  creating,
+  onClear,
+  loyaltyEnabled,
+  pointValuePhp,
+  redeemPoints,
+  onChangeRedeemPoints,
+  maxRedeemablePoints,
+  pointsToEarnPreview,
+}: {
+  phone: string;
+  onChangePhone: (v: string) => void;
+  onLookup: () => void;
+  lookupStatus: 'idle' | 'searching' | 'found' | 'not_found';
+  foundName: string | null;
+  foundPoints: number;
+  newCustomerName: string;
+  onChangeNewCustomerName: (v: string) => void;
+  onCreateCustomer: () => void;
+  creating: boolean;
+  onClear: () => void;
+  loyaltyEnabled: boolean;
+  pointValuePhp: number;
+  redeemPoints: string;
+  onChangeRedeemPoints: (v: string) => void;
+  maxRedeemablePoints: number;
+  pointsToEarnPreview: number;
+}) {
+  if (lookupStatus === 'found') {
+    return (
+      <View>
+        <View style={styles.customerFoundRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.customerFoundName}>{foundName || phone}</Text>
+            {loyaltyEnabled && <Text style={styles.customerFoundPoints}>{foundPoints} loyalty pts</Text>}
+          </View>
+          <Pressable onPress={() => { tapMedium(); onClear(); }} style={styles.customerClearBtn}>
+            <Text style={styles.customerClearBtnText}>Change</Text>
+          </Pressable>
+        </View>
+        {loyaltyEnabled && foundPoints > 0 && (
+          <View style={{ marginTop: 9 }}>
+            <View style={styles.tenderInputRow}>
+              <TextInput
+                value={redeemPoints}
+                onChangeText={(v) => onChangeRedeemPoints(v.replace(/[^0-9]/g, ''))}
+                placeholder="Points to redeem (0)"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="number-pad"
+                style={styles.tenderInput}
+              />
+              <Pressable onPress={() => { tapLight(); onChangeRedeemPoints(String(maxRedeemablePoints)); }} style={styles.quickCashBtn}>
+                <Text style={styles.quickCashText}>Use Max ({maxRedeemablePoints})</Text>
+              </Pressable>
+            </View>
+            {Number(redeemPoints) > 0 && (
+              <Text style={styles.customerFoundPoints}>
+                − {peso(Number(redeemPoints) * pointValuePhp)} off this order
+              </Text>
+            )}
+          </View>
+        )}
+        {loyaltyEnabled && pointsToEarnPreview > 0 && (
+          <Text style={[styles.customerFoundPoints, { marginTop: 6 }]}>Will earn {pointsToEarnPreview} pts on this order</Text>
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <View style={styles.tenderInputRow}>
+        <TextInput
+          value={phone}
+          onChangeText={onChangePhone}
+          placeholder="Customer phone (optional)"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="phone-pad"
+          style={styles.tenderInput}
+        />
+        <Pressable onPress={() => { tapMedium(); onLookup(); }} style={styles.quickCashBtn}>
+          {lookupStatus === 'searching' ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Find</Text>}
+        </Pressable>
+      </View>
+      {lookupStatus === 'not_found' && (
+        <View style={{ marginTop: 9 }}>
+          <Text style={styles.customerFoundPoints}>No customer found for this number.</Text>
+          <View style={[styles.tenderInputRow, { marginTop: 8 }]}>
+            <TextInput
+              value={newCustomerName}
+              onChangeText={onChangeNewCustomerName}
+              placeholder="Name (for new customer)"
+              placeholderTextColor={colors.textMuted}
+              style={styles.tenderInput}
+            />
+            <Pressable onPress={() => { tapMedium(); onCreateCustomer(); }} style={styles.quickCashBtn}>
+              {creating ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Save New</Text>}
+            </Pressable>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// Gift cards are an exclusive payment method for v1 — the card must cover the whole order, no
+// partial coverage + a second method (that needs the split-payment schema wired in for gift
+// cards too, which isn't built yet).
+export function GiftCardPaymentBlock({
+  code,
+  onChangeCode,
+  onCheckBalance,
+  checking,
+  balance,
+  error,
+  amountDue,
+}: {
+  code: string;
+  onChangeCode: (v: string) => void;
+  onCheckBalance: () => void;
+  checking: boolean;
+  balance: number | null;
+  error: string | null;
+  amountDue: number;
+}) {
+  const insufficient = balance !== null && balance < amountDue;
+  return (
+    <View>
+      <View style={styles.tenderInputRow}>
+        <TextInput
+          value={code}
+          onChangeText={(v) => onChangeCode(v.toUpperCase())}
+          placeholder="Gift Card Code"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="characters"
+          style={styles.tenderInput}
+        />
+        <Pressable onPress={() => { tapMedium(); onCheckBalance(); }} style={styles.quickCashBtn}>
+          {checking ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Check Balance</Text>}
+        </Pressable>
+      </View>
+      {balance !== null && (
+        <Text style={[styles.tenderMsg, { color: insufficient ? colors.danger : colors.success }]}>
+          {insufficient ? `Card balance ${peso(balance)} is short of ${peso(amountDue)}` : `Card balance: ${peso(balance)}`}
+        </Text>
+      )}
+      {!!error && <Text style={[styles.tenderMsg, { color: colors.danger }]}>{error}</Text>}
+    </View>
+  );
+}
+
+// Optional email capture so a receipt can be emailed instead of (or alongside) printed — shown
+// as a small opt-in near the summary, not a required field.
+export function ReceiptEmailField({
+  value,
+  onChangeText,
+}: {
+  value: string;
+  onChangeText: (v: string) => void;
+}) {
+  return (
+    <View style={styles.nameInputRow}>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder="Email receipt to… (optional)"
+        placeholderTextColor={colors.textMuted}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        style={styles.nameInput}
+      />
+    </View>
   );
 }
 
@@ -336,6 +653,79 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontFamily: fonts.sansBold,
     color: colors.goldLight,
+  },
+  splitToggleLink: {
+    alignSelf: 'center',
+    marginTop: 10,
+  },
+  splitToggleLinkText: {
+    fontSize: 12.5,
+    fontFamily: fonts.sansBold,
+    color: colors.textMuted,
+  },
+  splitAmountLabel: {
+    fontFamily: fonts.sansExtraBold,
+    fontSize: 10,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    color: colors.textLabel,
+    marginBottom: 8,
+  },
+  splitMismatchText: {
+    fontSize: 12.5,
+    fontFamily: fonts.sansBold,
+    color: colors.danger,
+    marginTop: 8,
+  },
+  gcashConfirmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: colors.borderGold14,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 9,
+  },
+  gcashCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.borderGold25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gcashCheckboxChecked: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
+  },
+  gcashCheckboxMark: {
+    color: colors.screenBg,
+    fontSize: 13,
+    fontFamily: fonts.sansExtraBold,
+  },
+  gcashConfirmText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: fonts.sansSemiBold,
+    color: colors.textSecondary,
+  },
+  gcashRefInputRow: {
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: colors.borderGold14,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  gcashRefInput: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontFamily: fonts.sansSemiBold,
+    padding: 0,
   },
   tenderInputRow: {
     flexDirection: 'row',
@@ -463,5 +853,38 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sansSemiBold,
     color: colors.danger,
     flex: 1,
+  },
+  customerFoundRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: colors.borderGold14,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  customerFoundName: {
+    fontSize: 13.5,
+    fontFamily: fonts.sansBold,
+    color: colors.textPrimary,
+  },
+  customerFoundPoints: {
+    fontSize: 12,
+    fontFamily: fonts.sansSemiBold,
+    color: colors.goldLight,
+    marginTop: 2,
+  },
+  customerClearBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: colors.chipBg,
+  },
+  customerClearBtnText: {
+    fontSize: 11.5,
+    fontFamily: fonts.sansBold,
+    color: colors.textSecondary,
   },
 });
