@@ -262,7 +262,7 @@ export function LoginScreen({
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.screenBg, paddingTop: 50 },
-  brandBlock: { alignItems: 'center', marginBottom: 20 },
+  brandBlock: { alignItems: 'center', marginTop: 34, marginBottom: 20 },
   brand: { fontFamily: fonts.display, fontSize: 40, letterSpacing: 2, color: colors.goldBrightText },
   brandSub: { fontSize: 10, letterSpacing: 4, color: colors.gold, fontFamily: fonts.sansBold, marginTop: 2 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -294,7 +294,7 @@ const s = StyleSheet.create({
   errorText: { fontSize: 12.5, color: colors.danger, fontFamily: fonts.sansSemiBold },
   forgotPin: { marginTop: 20 },
   forgotPinText: { fontSize: 12, color: colors.textMuted, fontFamily: fonts.sansSemiBold },
-  clockWrap: { position: 'absolute', top: 40, right: 40, alignItems: 'flex-end' },
+  clockWrap: { position: 'absolute', top: 8, right: 40, alignItems: 'flex-end' },
   clockTime: { fontSize: 28, fontFamily: fonts.serifBold, color: colors.goldBrightText, letterSpacing: 1 },
   clockDate: { fontSize: 11, fontFamily: fonts.sansBold, color: colors.gold, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 4 },
   circle: { position: 'absolute', borderRadius: 9999 },

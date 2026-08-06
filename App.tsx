@@ -1,15 +1,3 @@
-import {
-  CormorantGaramond_500Medium,
-  CormorantGaramond_600SemiBold,
-  CormorantGaramond_700Bold,
-} from '@expo-google-fonts/cormorant-garamond';
-import {
-  DMSans_400Regular,
-  DMSans_500Medium,
-  DMSans_600SemiBold,
-  DMSans_700Bold,
-  DMSans_800ExtraBold,
-} from '@expo-google-fonts/dm-sans';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
@@ -20,15 +8,10 @@ import { colors } from './src/theme';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    CormorantGaramond_500Medium,
-    CormorantGaramond_600SemiBold,
-    CormorantGaramond_700Bold,
-    DMSans_400Regular,
-    DMSans_500Medium,
-    DMSans_600SemiBold,
-    DMSans_700Bold,
-    DMSans_800ExtraBold,
     CreamyChicken: require('./assets/fonts/CreamyChicken.otf'),
+    LemonMilk_400Regular: require('./assets/fonts/LemonMilk-Regular.otf'),
+    LemonMilk_500Medium: require('./assets/fonts/LemonMilk-Medium.otf'),
+    LemonMilk_700Bold: require('./assets/fonts/LemonMilk-Bold.otf'),
   });
 
   if (!fontsLoaded) {

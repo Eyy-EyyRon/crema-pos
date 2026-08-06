@@ -59,14 +59,14 @@ export const catColors: Record<string, string> = {
 };
 
 export const fonts = {
-  serif: 'CormorantGaramond_600SemiBold',
-  serifBold: 'CormorantGaramond_700Bold',
-  serifMedium: 'CormorantGaramond_500Medium',
-  sans: 'DMSans_400Regular',
-  sansMedium: 'DMSans_500Medium',
-  sansSemiBold: 'DMSans_600SemiBold',
-  sansBold: 'DMSans_700Bold',
-  sansExtraBold: 'DMSans_800ExtraBold',
+  serif: 'LemonMilk_700Bold',
+  serifBold: 'LemonMilk_700Bold',
+  serifMedium: 'LemonMilk_500Medium',
+  sans: 'LemonMilk_400Regular',
+  sansMedium: 'LemonMilk_500Medium',
+  sansSemiBold: 'LemonMilk_500Medium',
+  sansBold: 'LemonMilk_700Bold',
+  sansExtraBold: 'LemonMilk_700Bold',
   display: 'CreamyChicken',
 };
 
