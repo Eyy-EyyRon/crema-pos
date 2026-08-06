@@ -12,14 +12,27 @@ function heat(mins: number) {
   return { border: colors.borderGold12, bw: 1, bg: 'transparent', col: colors.textMuted, urgent: false, warm: false };
 }
 
+const PREP_STATUS_LABEL: Record<'pending' | 'in_progress' | 'ready', string> = {
+  pending: 'Pending',
+  in_progress: 'Making',
+  ready: 'Ready',
+};
+
+function prepStatusColors(status: 'pending' | 'in_progress' | 'ready' | undefined) {
+  if (status === 'ready') return { bg: colors.successBg16, border: colors.successBorder35, text: colors.success };
+  if (status === 'in_progress') return { bg: colors.heatMedBg, border: 'rgba(176,122,32,0.3)', text: colors.heatMedText };
+  return { bg: 'rgba(255,255,255,0.04)', border: colors.borderGold12, text: colors.textMuted };
+}
+
 interface QueueCardProps {
   ticket: QueueEntry;
   onComplete: () => void;
   onVoid: () => void;
   onAddItems: () => void;
+  onAdvanceItem: (orderItemId: string) => void;
 }
 
-export function QueueCard({ ticket, onComplete, onVoid, onAddItems }: QueueCardProps) {
+export function QueueCard({ ticket, onComplete, onVoid, onAddItems, onAdvanceItem }: QueueCardProps) {
   const h = heat(ticket.mins);
   const timeAgo = ticket.mins < 1 ? 'Just now' : `${ticket.mins} min ago`;
   const timeLabel = h.urgent ? `Urgent · ${timeAgo}` : timeAgo;
@@ -59,12 +72,30 @@ export function QueueCard({ ticket, onComplete, onVoid, onAddItems }: QueueCardP
       </View>
       {!!ticket.customerName && <Text style={styles.customerName}>For: {ticket.customerName}</Text>}
       <View style={styles.itemsList}>
-        {ticket.items.map((it, i) => (
-          <View key={i} style={styles.itemLine}>
-            <Text style={styles.itemMain}>{it.qty}× {it.name}</Text>
-            {!!it.mods && <Text style={styles.itemMods}>{it.mods}</Text>}
-          </View>
-        ))}
+        {ticket.items.map((it, i) => {
+          const pc = prepStatusColors(it.prepStatus);
+          const canAdvance = !!it.id && !locked;
+          return (
+            <Pressable
+              key={it.id ?? i}
+              style={styles.itemLine}
+              onPress={canAdvance ? () => { tapMedium(); onAdvanceItem(it.id!); } : undefined}
+              disabled={!canAdvance}
+              accessibilityRole={canAdvance ? 'button' : undefined}
+              accessibilityLabel={canAdvance ? `${it.qty}× ${it.name}, ${PREP_STATUS_LABEL[it.prepStatus ?? 'pending']}, tap to advance` : undefined}
+            >
+              <View style={styles.itemLineTop}>
+                <Text style={styles.itemMain}>{it.qty}× {it.name}</Text>
+                {canAdvance && (
+                  <View style={[styles.prepPill, { backgroundColor: pc.bg, borderColor: pc.border }]}>
+                    <Text style={[styles.prepPillText, { color: pc.text }]}>{PREP_STATUS_LABEL[it.prepStatus ?? 'pending']}</Text>
+                  </View>
+                )}
+              </View>
+              {!!it.mods && <Text style={styles.itemMods}>{it.mods}</Text>}
+            </Pressable>
+          );
+        })}
       </View>
       {locked && (
         <View style={styles.syncBadge}>
@@ -173,10 +204,28 @@ const styles = StyleSheet.create({
   itemLine: {
     gap: 1,
   },
+  itemLineTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   itemMain: {
     fontSize: 12.5,
     color: colors.textSecondary,
     lineHeight: 18,
+    flex: 1,
+  },
+  prepPill: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+  },
+  prepPillText: {
+    fontSize: 10,
+    fontFamily: fonts.sansBold,
+    letterSpacing: 0.3,
   },
   itemMods: {
     fontSize: 11,
