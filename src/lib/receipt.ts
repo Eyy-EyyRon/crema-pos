@@ -22,13 +22,16 @@ export interface ReceiptOrderInfo {
   showChange: boolean;
   change: number;
   customerName?: string | null;
+  gcashReference?: string | null;
 }
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: string, store: ReceiptStoreInfo, orderDate: Date = new Date()): string {
+// Exported so lib/receiptEmail.ts can send the exact same markup by email instead of duplicating
+// this template in the send-receipt Edge Function's separate Deno runtime.
+export function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: string, store: ReceiptStoreInfo, orderDate: Date = new Date()): string {
   const now = orderDate;
   const itemRows = success.items
     .map(
@@ -45,6 +48,9 @@ function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: string, sto
     .join('');
   const customerLine = success.customerName
     ? `<div><span>Name</span><span>${escapeHtml(success.customerName)}</span></div>`
+    : '';
+  const gcashRefLine = success.gcashReference
+    ? `<div><span>GCash Ref#</span><span>${escapeHtml(success.gcashReference)}</span></div>`
     : '';
 
   return `<!DOCTYPE html>
@@ -75,6 +81,7 @@ function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: string, sto
       <div><span>Date</span><span>${escapeHtml(now.toLocaleDateString())} ${escapeHtml(now.toLocaleTimeString())}</span></div>
       <div><span>Order Type</span><span>${escapeHtml(orderTypeLabel)}</span></div>
       <div><span>Payment</span><span>${escapeHtml(success.method)}</span></div>
+      ${gcashRefLine}
       ${customerLine}
     </div>
     <table>
