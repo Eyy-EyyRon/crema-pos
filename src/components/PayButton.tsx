@@ -1,14 +1,20 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { BanknoteIcon, CheckIcon, SmartphoneIcon } from '../icons';
+import { BanknoteIcon, CheckIcon, GiftIcon, SmartphoneIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 
 interface PayButtonProps {
-  kind: 'cash' | 'gcash';
+  kind: 'cash' | 'gcash' | 'gift_card';
   active: boolean;
   onPress: () => void;
 }
+
+const LABELS: Record<PayButtonProps['kind'], string> = {
+  cash: 'Cash',
+  gcash: 'GCash',
+  gift_card: 'Gift Card',
+};
 
 export function PayButton({ kind, active, onPress }: PayButtonProps) {
   const iconColor = active ? colors.goldLight : colors.textMuted;
@@ -25,7 +31,7 @@ export function PayButton({ kind, active, onPress }: PayButtonProps) {
       ]}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      accessibilityLabel={`${kind === 'cash' ? 'Cash' : 'GCash'} payment method`}
+      accessibilityLabel={`${LABELS[kind]} payment method`}
     >
       <View
         style={[
@@ -33,10 +39,12 @@ export function PayButton({ kind, active, onPress }: PayButtonProps) {
           { backgroundColor: active ? 'rgba(184,147,90,0.14)' : 'rgba(36,51,80,0.5)' },
         ]}
       >
-        {kind === 'cash' ? <BanknoteIcon size={18} color={iconColor} /> : <SmartphoneIcon size={18} color={iconColor} />}
+        {kind === 'cash' && <BanknoteIcon size={18} color={iconColor} />}
+        {kind === 'gcash' && <SmartphoneIcon size={18} color={iconColor} />}
+        {kind === 'gift_card' && <GiftIcon size={18} color={iconColor} />}
       </View>
       <Text style={[styles.label, { color: active ? colors.goldBrightText : colors.textMuted }]}>
-        {kind === 'cash' ? 'Cash' : 'GCash'}
+        {LABELS[kind]}
       </Text>
       {active && (
         <View style={styles.checkWrap}>
