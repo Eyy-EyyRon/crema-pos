@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,6 +8,7 @@ import { supabase } from './lib/supabase';
 import { logActivity } from './lib/activityLog';
 import { closeShift as closeShiftApi, getOpenShift, openShift as openShiftApi } from './lib/cashDrawer';
 import { success as successHaptic, error as errorHaptic } from './lib/haptics';
+import { notify } from './lib/crossAlert';
 import {
   PaymentSplitComponent,
   PosOrderData,
@@ -26,7 +26,7 @@ import {
 import { REASON_CODE_LABELS, ReasonCode } from './lib/reasonCodes';
 import { playNewOrderChime } from './lib/sound';
 import { cacheManagerPinOnVerify, tryOfflineManagerPin } from './lib/managerPinCache';
-import { applyLoyaltyPoints, createCustomer, lookupCustomerByPhone } from './lib/customers';
+import { applyLoyaltyPoints, createCustomer, lookupCustomerByPhone, lookupCustomerByCardCode } from './lib/customers';
 import { checkGiftCardBalance, redeemGiftCard } from './lib/giftCards';
 import { sendReceiptEmail } from './lib/receiptEmail';
 import {
@@ -148,6 +148,12 @@ interface PosState {
   /** Phone number typed into the checkout customer-lookup field — not yet confirmed against the customers table. */
   customerPhone: string;
   customerLookupStatus: 'idle' | 'searching' | 'found' | 'not_found';
+  /** Which lookup method the barista currently has selected — phone (default) or loyalty card code. */
+  customerLookupMode: 'phone' | 'card';
+  /** Loyalty card code typed into the checkout customer-lookup field, used when customerLookupMode === 'card'. */
+  customerCardCode: string;
+  /** Card-mode-only not-found/revoked explanation — phone mode keeps its own hardcoded message in CheckoutShared.tsx. */
+  customerLookupMessage: string | null;
   selectedCustomer: Customer | null;
   newCustomerName: string;
   customerCreating: boolean;
@@ -166,6 +172,10 @@ interface PosState {
   /** Count of orders placed today, server-side — used to show the upcoming ticket number before checkout. */
   todayOrderCount: number;
   showGcashQr: boolean;
+  /** Camera QR-scanner overlay, shared between loyalty-card and gift-card lookup — see
+   *  openQrScanner()/handleQrScanned(). Which flow it's currently serving is qrScanTarget. */
+  showQrScanner: boolean;
+  qrScanTarget: 'loyalty' | 'gift_card' | null;
   /** GCash reference/transaction number typed in by the barista, required to confirm a GCash payment. */
   gcashReference: string;
   /** Barista's explicit attestation that the customer's GCash payment went through. */
@@ -223,6 +233,9 @@ const initialState: PosState = {
   customerName: '',
   customerPhone: '',
   customerLookupStatus: 'idle',
+  customerLookupMode: 'phone',
+  customerCardCode: '',
+  customerLookupMessage: null,
   selectedCustomer: null,
   newCustomerName: '',
   customerCreating: false,
@@ -238,6 +251,8 @@ const initialState: PosState = {
   queue: [],
   todayOrderCount: 0,
   showGcashQr: false,
+  showQrScanner: false,
+  qrScanTarget: null,
   gcashReference: '',
   gcashConfirmed: false,
   appendTargetOrderId: null,
@@ -418,19 +433,19 @@ export function useCremaPos() {
               // forever). Forcing a re-login here is disruptive but bounded — much safer than
               // an entire shift's sales silently piling up unsynced with no explanation.
               console.warn('Background auth did not return a session:', error);
-              Alert.alert(
+              notify(
                 'Session Expired',
                 "Your login couldn't be verified online. Please log in again to keep taking orders safely.",
-                [{ text: 'OK', onPress: () => { lockPos(); } }]
+                () => { lockPos(); }
               );
             }
           } catch (e) {
             if (loginSeqRef.current !== seq) return;
             console.warn('Background auth failed:', e);
-            Alert.alert(
+            notify(
               'Connection Issue',
               "Couldn't verify your login with the server. Please log in again once you have a connection.",
-              [{ text: 'OK', onPress: () => { lockPos(); } }]
+              () => { lockPos(); }
             );
           } finally {
             // Only clear the ref if it's still ours — a newer login's own in-flight ref must
@@ -539,7 +554,7 @@ export function useCremaPos() {
       }));
     } catch (e: any) {
       console.warn('Avatar upload failed:', e.message);
-      Alert.alert('Upload Failed', 'Could not upload avatar: ' + e.message);
+      notify('Upload Failed', 'Could not upload avatar: ' + e.message);
     } finally {
       patch({ avatarUploading: false });
     }
@@ -1025,7 +1040,7 @@ export function useCremaPos() {
           // Ticket was optimistically removed above — put it back and say why,
           // instead of it silently reappearing a moment later with no explanation.
           fetchQueue();
-          Alert.alert('Could Not Complete Order', error.message || 'The order is still pending — check your connection and try again.');
+          notify('Could Not Complete Order', error.message || 'The order is still pending — check your connection and try again.');
         }
       });
   }, [fetchQueue]);
@@ -1284,6 +1299,9 @@ export function useCremaPos() {
       customerName: '',
       customerPhone: '',
       customerLookupStatus: 'idle',
+      customerLookupMode: 'phone',
+      customerCardCode: '',
+      customerLookupMessage: null,
       selectedCustomer: null,
       newCustomerName: '',
       redeemPoints: '',
@@ -1503,7 +1521,26 @@ export function useCremaPos() {
   // ─────────────────────────────────────────────
   // CUSTOMER LOOKUP / CREATE
   // ─────────────────────────────────────────────
-  const lookupCustomer = useCallback(async () => {
+  const lookupCustomer = useCallback(async (overrideCardCode?: string) => {
+    if (state.customerLookupMode === 'card') {
+      const code = (overrideCardCode ?? state.customerCardCode).trim();
+      if (!code) return;
+      patch({ customerLookupStatus: 'searching' });
+      try {
+        const result = await lookupCustomerByCardCode(code);
+        if (result.status === 'found') {
+          patch({ selectedCustomer: result.customer, customerLookupStatus: 'found', customerLookupMessage: null });
+        } else if (result.status === 'revoked') {
+          patch({ selectedCustomer: null, customerLookupStatus: 'not_found', customerLookupMessage: 'This card has been revoked. Ask for a replacement card or look up by phone.' });
+        } else {
+          patch({ selectedCustomer: null, customerLookupStatus: 'not_found', customerLookupMessage: 'No customer found for this card code.' });
+        }
+      } catch {
+        patch({ customerLookupStatus: 'not_found', customerLookupMessage: 'No customer found for this card code.' });
+      }
+      return;
+    }
+
     const phone = state.customerPhone.trim();
     if (!phone) return;
     patch({ customerLookupStatus: 'searching' });
@@ -1517,7 +1554,30 @@ export function useCremaPos() {
     } catch {
       patch({ customerLookupStatus: 'not_found' });
     }
-  }, [state.customerPhone, patch]);
+  }, [state.customerLookupMode, state.customerCardCode, state.customerPhone, patch]);
+
+  const changeCustomerLookupMode = useCallback((mode: 'phone' | 'card') => {
+    patch({ customerLookupMode: mode, customerLookupStatus: 'idle', customerLookupMessage: null, selectedCustomer: null });
+  }, [patch]);
+
+  // A scanned loyalty card QR always encodes "cremapos-loyalty:<code>" (see the loyalty_cards
+  // migration's qr_payload generated column) — reject anything else outright rather than trying
+  // it as a code, since an unrelated QR (a menu poster, a different app's code) would otherwise
+  // just silently produce a confusing "no customer found".
+  const scanLoyaltyCardCode = useCallback((payload: string) => {
+    const prefix = 'cremapos-loyalty:';
+    if (!payload.startsWith(prefix)) {
+      patch({ showQrScanner: false, checkoutError: 'That QR code is not a Crema loyalty card.' });
+      return;
+    }
+    const code = payload.slice(prefix.length);
+    patch({ showQrScanner: false, customerLookupMode: 'card', customerCardCode: code });
+    lookupCustomer(code);
+  }, [patch, lookupCustomer]);
+
+  const openQrScanner = useCallback((target: 'loyalty' | 'gift_card') => {
+    patch({ showQrScanner: true, qrScanTarget: target });
+  }, [patch]);
 
   const createCustomerInline = useCallback(async () => {
     const phone = state.customerPhone.trim();
@@ -1532,14 +1592,14 @@ export function useCremaPos() {
   }, [state.customerPhone, state.newCustomerName, patch]);
 
   const clearSelectedCustomer = useCallback(() => {
-    patch({ customerPhone: '', selectedCustomer: null, customerLookupStatus: 'idle', newCustomerName: '', redeemPoints: '' });
+    patch({ customerPhone: '', customerCardCode: '', customerLookupMessage: null, selectedCustomer: null, customerLookupStatus: 'idle', newCustomerName: '', redeemPoints: '' });
   }, [patch]);
 
   // ─────────────────────────────────────────────
   // GIFT CARD BALANCE CHECK
   // ─────────────────────────────────────────────
-  const checkGiftCardBalanceAction = useCallback(async () => {
-    const code = state.giftCardCode.trim();
+  const checkGiftCardBalanceAction = useCallback(async (overrideCode?: string) => {
+    const code = (overrideCode ?? state.giftCardCode).trim();
     if (!code) return;
     patch({ giftCardChecking: true, giftCardError: null });
     const result = await checkGiftCardBalance(code);
@@ -1549,6 +1609,29 @@ export function useCremaPos() {
       patch({ giftCardChecking: false, giftCardBalance: result.balance, giftCardError: null });
     }
   }, [state.giftCardCode, patch]);
+
+  // Unlike a loyalty card, a gift card's QR encodes the bare code with no prefix (see the
+  // Share modal in cafe-web-dashboard's gift-cards page) — there's no format to validate beyond
+  // "did the camera decode something at all".
+  const scanGiftCardCode = useCallback((payload: string) => {
+    const code = payload.trim().toUpperCase();
+    if (!code) {
+      patch({ showQrScanner: false, checkoutError: 'That QR code could not be read as a gift card.' });
+      return;
+    }
+    patch({ showQrScanner: false, giftCardCode: code, giftCardBalance: null, giftCardError: null });
+    checkGiftCardBalanceAction(code);
+  }, [patch, checkGiftCardBalanceAction]);
+
+  // Single entry point the QrScannerModal calls — routes the decoded payload to whichever flow
+  // opened the scanner (see openQrScanner()).
+  const handleQrScanned = useCallback((payload: string) => {
+    if (state.qrScanTarget === 'gift_card') {
+      scanGiftCardCode(payload);
+    } else {
+      scanLoyaltyCardCode(payload);
+    }
+  }, [state.qrScanTarget, scanGiftCardCode, scanLoyaltyCardCode]);
 
   // ─────────────────────────────────────────────
   // CHECKOUT
@@ -1579,10 +1662,11 @@ export function useCremaPos() {
     const isGcash = !isSplit && state.payMethod === 'gcash';
     const gcashInvolved = isGcash || (isSplit && splitGcashAmt > 0);
     // Defense-in-depth behind the canPay gate in PosApp.tsx — GCash has no merchant API to
-    // verify against, so the barista's attestation + a typed reference number IS the record
-    // that the payment happened. Applies whether GCash is the sole method or one leg of a split.
-    if (gcashInvolved && (!state.gcashConfirmed || !state.gcashReference.trim())) {
-      patch({ checkoutBusy: false, checkoutError: 'Confirm the GCash payment and enter the reference number before charging.' });
+    // verify against, so the barista's checkbox attestation IS the record that the payment
+    // happened; the reference number is optional supplementary detail on top of that, not a
+    // second requirement. Applies whether GCash is the sole method or one leg of a split.
+    if (gcashInvolved && !state.gcashConfirmed) {
+      patch({ checkoutBusy: false, checkoutError: 'Confirm the GCash payment before charging.' });
       return;
     }
 
@@ -1603,7 +1687,7 @@ export function useCremaPos() {
     // change and the split-mismatch check above behave exactly as before this feature shipped.
     const chargeAmount = isAppend ? totals.total : amountDue;
     const change = isCash && tenderNum !== null ? tenderNum - chargeAmount : 0;
-    const gcashReference = gcashInvolved ? state.gcashReference.trim() : null;
+    const gcashReference = gcashInvolved ? (state.gcashReference.trim() || null) : null;
     const effectivePayMethod: PayMethod = isSplit ? 'split' : state.payMethod;
     const customerId = isAppend ? null : state.selectedCustomer?.id ?? null;
     const pointsRedeemed = isAppend ? 0 : Math.min(redeemPointsNum, maxRedeemablePoints);
@@ -1751,12 +1835,17 @@ export function useCremaPos() {
       selCat: 'All',
       search: '',
       showGcashQr: false,
+      showQrScanner: false,
+      qrScanTarget: null,
       gcashReference: '',
       gcashConfirmed: false,
       appendTargetOrderId: null,
       appendTargetOrderNo: null,
       customerPhone: '',
       customerLookupStatus: 'idle',
+      customerLookupMode: 'phone',
+      customerCardCode: '',
+      customerLookupMessage: null,
       selectedCustomer: null,
       newCustomerName: '',
       redeemPoints: '',
@@ -1849,7 +1938,7 @@ export function useCremaPos() {
   const splitAmountMismatch = state.splitEnabled
     && Math.abs((Number(state.splitCashAmount) || 0) + (Number(state.splitGcashAmount) || 0) - totals.total) > 0.01;
   const gcashUnconfirmed = (state.splitEnabled ? (Number(state.splitGcashAmount) || 0) > 0 : state.payMethod === 'gcash')
-    && (!state.gcashConfirmed || !state.gcashReference.trim());
+    && !state.gcashConfirmed;
   const giftCardInsufficient = !state.splitEnabled && state.payMethod === 'gift_card'
     && (state.giftCardBalance === null || state.giftCardBalance < amountDue);
   const cartCount = state.cart.reduce((s, c) => s + c.qty, 0);
@@ -1886,6 +1975,9 @@ export function useCremaPos() {
     maxRedeemablePoints,
     pointsToEarnPreview,
     lookupCustomer,
+    changeCustomerLookupMode,
+    openQrScanner,
+    handleQrScanned,
     createCustomerInline,
     clearSelectedCustomer,
     checkGiftCardBalanceAction,
