@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { CalendarIcon, ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon, WifiOffIcon, LockIcon } from '../icons';
 import { tapLight, warning } from '../lib/haptics';
@@ -73,108 +73,110 @@ export function AccountSheet({
           </Pressable>
         </View>
 
-        {shift && (
-          <View style={s.shiftRow}>
-            <ClockIcon size={13} color={colors.textMuted} strokeWidth={2} />
-            <Text style={s.shiftText}>
-              Shift open {elapsedSince(shift.openedAt)} · Starting cash ₱{shift.startingCash.toFixed(0)}
-            </Text>
-          </View>
-        )}
-
-        {upcomingShifts.length > 0 && (
-          <View style={s.schedSection}>
-            <Text style={s.schedTitle}>Upcoming Shifts</Text>
-            {upcomingShifts.slice(0, 3).map((sch) => {
-              const start = new Date(sch.scheduled_start);
-              const end = new Date(sch.scheduled_end);
-              return (
-                <View key={sch.id} style={s.schedRow}>
-                  <CalendarIcon size={12} color={colors.textMuted} strokeWidth={2} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.schedDate}>
-                      {start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                    </Text>
-                    <Text style={s.schedTime}>
-                      {start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} – {end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                      {sch.notes ? ` · ${sch.notes}` : ''}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        <Pressable
-          style={({ pressed }) => [s.row, pressed && s.rowPressed]}
-          onPress={() => { tapLight(); onHistory(); }}
-          accessibilityRole="button"
-          accessibilityLabel="Order History"
-        >
-          <ReceiptIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
-          <Text style={s.rowText}>Order History</Text>
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [s.row, pressed && s.rowPressed]}
-          onPress={() => { tapLight(); onOpenOutbox(); }}
-          accessibilityRole="button"
-          accessibilityLabel={outboxCount > 0 ? `Sync Status, ${outboxCount} pending` : 'Sync Status, all synced'}
-        >
-          <WifiOffIcon size={16} color={outboxCount > 0 ? colors.heatMedText : colors.textSecondary} strokeWidth={1.7} />
-          <Text style={s.rowText}>{outboxCount > 0 ? `Sync Status — ${outboxCount} pending` : 'Sync Status — all synced'}</Text>
-          {outboxCount > 0 && (
-            <View style={s.syncBadge}>
-              <Text style={s.syncBadgeText}>{outboxCount}</Text>
+        <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+          {shift && (
+            <View style={s.shiftRow}>
+              <ClockIcon size={13} color={colors.textMuted} strokeWidth={2} />
+              <Text style={s.shiftText}>
+                Shift open {elapsedSince(shift.openedAt)} · Starting cash ₱{shift.startingCash.toFixed(0)}
+              </Text>
             </View>
           )}
-        </Pressable>
 
-        <Pressable
-          style={({ pressed }) => [s.row, pressed && s.rowPressed]}
-          onPress={() => { tapLight(); onLock(); }}
-          accessibilityRole="button"
-          accessibilityLabel="Switch Profile or Lock POS"
-        >
-          <UserIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
-          <Text style={s.rowText}>Switch Profile / Lock POS</Text>
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [s.row, pressed && s.rowPressed]}
-          onPress={() => { if (!uploading) { tapLight(); onUploadAvatar(); } }}
-          disabled={uploading}
-          accessibilityRole="button"
-          accessibilityLabel={uploading ? 'Uploading avatar photo' : 'Upload Avatar Photo'}
-        >
-          {uploading ? (
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-          ) : (
-            <ImageIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
+          {upcomingShifts.length > 0 && (
+            <View style={s.schedSection}>
+              <Text style={s.schedTitle}>Upcoming Shifts</Text>
+              {upcomingShifts.slice(0, 3).map((sch) => {
+                const start = new Date(sch.scheduled_start);
+                const end = new Date(sch.scheduled_end);
+                return (
+                  <View key={sch.id} style={s.schedRow}>
+                    <CalendarIcon size={12} color={colors.textMuted} strokeWidth={2} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.schedDate}>
+                        {start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                      </Text>
+                      <Text style={s.schedTime}>
+                        {start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} – {end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                        {sch.notes ? ` · ${sch.notes}` : ''}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
           )}
-          <Text style={s.rowText}>{uploading ? 'Uploading…' : 'Upload Avatar Photo'}</Text>
-        </Pressable>
 
-        <Pressable
-          style={({ pressed }) => [s.row, pressed && s.rowPressed]}
-          onPress={() => { tapLight(); onOpenStockAdjust(); }}
-          accessibilityRole="button"
-          accessibilityLabel="Adjust Stock"
-        >
-          <LockIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
-          <Text style={s.rowText}>Adjust Stock</Text>
-        </Pressable>
+          <Pressable
+            style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+            onPress={() => { tapLight(); onHistory(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Order History"
+          >
+            <ReceiptIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
+            <Text style={s.rowText}>Order History</Text>
+          </Pressable>
 
-        <Pressable
-          style={({ pressed }) => [s.row, s.rowDanger, pressed && s.rowPressed]}
-          onPress={() => { warning(); onCloseShift(); }}
-          accessibilityRole="button"
-          accessibilityLabel="Close Shift and Log Out"
-        >
-          <LogOutIcon size={16} color={colors.danger} strokeWidth={2} />
-          <Text style={[s.rowText, { color: colors.danger }]}>Close Shift &amp; Log Out</Text>
-        </Pressable>
+          <Pressable
+            style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+            onPress={() => { tapLight(); onOpenOutbox(); }}
+            accessibilityRole="button"
+            accessibilityLabel={outboxCount > 0 ? `Sync Status, ${outboxCount} pending` : 'Sync Status, all synced'}
+          >
+            <WifiOffIcon size={16} color={outboxCount > 0 ? colors.heatMedText : colors.textSecondary} strokeWidth={1.7} />
+            <Text style={s.rowText}>{outboxCount > 0 ? `Sync Status — ${outboxCount} pending` : 'Sync Status — all synced'}</Text>
+            {outboxCount > 0 && (
+              <View style={s.syncBadge}>
+                <Text style={s.syncBadgeText}>{outboxCount}</Text>
+              </View>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+            onPress={() => { tapLight(); onLock(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Switch Profile or Lock POS"
+          >
+            <UserIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
+            <Text style={s.rowText}>Switch Profile / Lock POS</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+            onPress={() => { if (!uploading) { tapLight(); onUploadAvatar(); } }}
+            disabled={uploading}
+            accessibilityRole="button"
+            accessibilityLabel={uploading ? 'Uploading avatar photo' : 'Upload Avatar Photo'}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            ) : (
+              <ImageIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
+            )}
+            <Text style={s.rowText}>{uploading ? 'Uploading…' : 'Upload Avatar Photo'}</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [s.row, pressed && s.rowPressed]}
+            onPress={() => { tapLight(); onOpenStockAdjust(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Adjust Stock"
+          >
+            <LockIcon size={16} color={colors.textSecondary} strokeWidth={1.7} />
+            <Text style={s.rowText}>Adjust Stock</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [s.row, s.rowDanger, pressed && s.rowPressed]}
+            onPress={() => { warning(); onCloseShift(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Close Shift and Log Out"
+          >
+            <LogOutIcon size={16} color={colors.danger} strokeWidth={2} />
+            <Text style={[s.rowText, { color: colors.danger }]}>Close Shift &amp; Log Out</Text>
+          </Pressable>
+        </ScrollView>
       </View>
     </View>
   );
@@ -184,16 +186,17 @@ const s = StyleSheet.create({
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 35,
     alignItems: 'flex-start', justifyContent: 'flex-start',
+    paddingTop: 70, paddingLeft: 16, paddingRight: 16, paddingBottom: 24,
   },
   overlayPress: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   card: {
-    marginTop: 70, marginLeft: 16,
-    width: 300, maxWidth: '90%',
+    width: 300, maxWidth: '90%', maxHeight: '100%',
     backgroundColor: colors.cardBg,
     borderWidth: 1, borderColor: colors.borderGold20,
-    borderRadius: 18, padding: 16,
+    borderRadius: 18, overflow: 'hidden',
   },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 16, marginBottom: 12 },
+  body: { paddingHorizontal: 16, paddingBottom: 16 },
   avatar: {
     width: 42, height: 42, borderRadius: 21,
     backgroundColor: 'rgba(184,147,90,0.14)',

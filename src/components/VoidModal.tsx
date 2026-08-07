@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AlertCircleIcon, AlertTriangleIcon, XIcon } from '../icons';
 import { tapLight, tapMedium } from '../lib/haptics';
 import { REASON_CODES, ReasonCode } from '../lib/reasonCodes';
@@ -109,75 +109,77 @@ export function VoidModal({
           </Pressable>
         </View>
 
-        <Text style={s.label}>Reason for Void</Text>
-        <View style={s.reasonChips}>
-          {REASON_CODES.map((r) => (
-            <Chip key={r.code} label={r.label} active={reasonCode === r.code} onPress={() => { setReasonCode(r.code); if (error) setError(''); }} />
-          ))}
-        </View>
-        <Text style={s.label}>Additional Details {reasonCode === 'other' ? '' : '(optional)'}</Text>
-        <TextInput
-          style={s.input}
-          placeholder="e.g. Duplicate entry, ticket rung up twice…"
-          placeholderTextColor={colors.textDim}
-          value={reason}
-          onChangeText={(t) => { setReason(t); if (error) setError(''); }}
-          editable={!busy}
-        />
+        <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+          <Text style={s.label}>Reason for Void</Text>
+          <View style={s.reasonChips}>
+            {REASON_CODES.map((r) => (
+              <Chip key={r.code} label={r.label} active={reasonCode === r.code} onPress={() => { setReasonCode(r.code); if (error) setError(''); }} />
+            ))}
+          </View>
+          <Text style={s.label}>Additional Details {reasonCode === 'other' ? '' : '(optional)'}</Text>
+          <TextInput
+            style={s.input}
+            placeholder="e.g. Duplicate entry, ticket rung up twice…"
+            placeholderTextColor={colors.textDim}
+            value={reason}
+            onChangeText={(t) => { setReason(t); if (error) setError(''); }}
+            editable={!busy}
+          />
 
-        {!selfVoidEligible && (
-          <View style={s.tabs}>
-            <Pressable style={[s.tab, tab === 'pin' && s.tabActive]} onPress={() => { tapLight(); setTab('pin'); }}>
-              <Text style={[s.tabText, tab === 'pin' && s.tabTextActive]}>Manager PIN</Text>
-            </Pressable>
-            <Pressable style={[s.tab, tab === 'flag' && s.tabActive]} onPress={() => { tapLight(); setTab('flag'); }}>
-              <Text style={[s.tabText, tab === 'flag' && s.tabTextActive]}>Flag Later</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {!!error && (
-          <View style={s.errorRow}>
-            <AlertCircleIcon size={13} color={colors.danger} strokeWidth={2} />
-            <Text style={s.errorText}>{error}</Text>
-          </View>
-        )}
-
-        {selfVoidEligible ? (
-          <View>
-            <Pressable style={[s.flagBtn, busy && { opacity: 0.5 }]} onPress={handleSelfVoid} disabled={busy}>
-              {busy ? <ActivityIndicator color={colors.screenBg} size="small" /> : <Text style={s.flagBtnText}>Void This Order</Text>}
-            </Pressable>
-          </View>
-        ) : tab === 'pin' ? (
-          <View style={{ alignItems: 'center' }}>
-            <Text style={s.panelDesc}>Manager enters their 4-digit PIN to void this order immediately.</Text>
-            <PinPad
-              key={visible ? 1 : 0}
-              keySize={52}
-              gap={10}
-              onComplete={handlePinComplete}
-              onChangeLength={() => error && setError('')}
-              disabled={busy}
-              error={!!error}
-              resetSignal={resetTick}
-            />
-            {isOffline && <Text style={s.offlineNote}>Offline — this void will be queued and confirmed once reconnected</Text>}
-          </View>
-        ) : (
-          <View>
-            <View style={s.flagInfo}>
-              <AlertTriangleIcon size={15} color={colors.heatMedText} strokeWidth={2} />
-              <Text style={s.flagInfoText}>
-                This order leaves the queue but stays pending until a manager reviews it in cafe-web-dashboard.
-              </Text>
+          {!selfVoidEligible && (
+            <View style={s.tabs}>
+              <Pressable style={[s.tab, tab === 'pin' && s.tabActive]} onPress={() => { tapLight(); setTab('pin'); }}>
+                <Text style={[s.tabText, tab === 'pin' && s.tabTextActive]}>Manager PIN</Text>
+              </Pressable>
+              <Pressable style={[s.tab, tab === 'flag' && s.tabActive]} onPress={() => { tapLight(); setTab('flag'); }}>
+                <Text style={[s.tabText, tab === 'flag' && s.tabTextActive]}>Flag Later</Text>
+              </Pressable>
             </View>
-            <Pressable style={[s.flagBtn, busy && { opacity: 0.5 }]} onPress={handleFlag} disabled={busy}>
-              {busy ? <ActivityIndicator color={colors.screenBg} size="small" /> : <Text style={s.flagBtnText}>Flag for Manager Review</Text>}
-            </Pressable>
-            {isOffline && <Text style={s.offlineNote}>Offline — this will sync once reconnected</Text>}
-          </View>
-        )}
+          )}
+
+          {!!error && (
+            <View style={s.errorRow}>
+              <AlertCircleIcon size={13} color={colors.danger} strokeWidth={2} />
+              <Text style={s.errorText}>{error}</Text>
+            </View>
+          )}
+
+          {selfVoidEligible ? (
+            <View>
+              <Pressable style={[s.flagBtn, busy && { opacity: 0.5 }]} onPress={handleSelfVoid} disabled={busy}>
+                {busy ? <ActivityIndicator color={colors.screenBg} size="small" /> : <Text style={s.flagBtnText}>Void This Order</Text>}
+              </Pressable>
+            </View>
+          ) : tab === 'pin' ? (
+            <View style={{ alignItems: 'center' }}>
+              <Text style={s.panelDesc}>Manager enters their 4-digit PIN to void this order immediately.</Text>
+              <PinPad
+                key={visible ? 1 : 0}
+                keySize={52}
+                gap={10}
+                onComplete={handlePinComplete}
+                onChangeLength={() => error && setError('')}
+                disabled={busy}
+                error={!!error}
+                resetSignal={resetTick}
+              />
+              {isOffline && <Text style={s.offlineNote}>Offline — this void will be queued and confirmed once reconnected</Text>}
+            </View>
+          ) : (
+            <View>
+              <View style={s.flagInfo}>
+                <AlertTriangleIcon size={15} color={colors.heatMedText} strokeWidth={2} />
+                <Text style={s.flagInfoText}>
+                  This order leaves the queue but stays pending until a manager reviews it in cafe-web-dashboard.
+                </Text>
+              </View>
+              <Pressable style={[s.flagBtn, busy && { opacity: 0.5 }]} onPress={handleFlag} disabled={busy}>
+                {busy ? <ActivityIndicator color={colors.screenBg} size="small" /> : <Text style={s.flagBtnText}>Flag for Manager Review</Text>}
+              </Pressable>
+              {isOffline && <Text style={s.offlineNote}>Offline — this will sync once reconnected</Text>}
+            </View>
+          )}
+        </ScrollView>
       </View>
     </View>
   );
@@ -190,12 +192,13 @@ const s = StyleSheet.create({
     backgroundColor: colors.overlayStrong,
   },
   card: {
-    width: 420, maxWidth: '100%',
+    width: 420, maxWidth: '100%', maxHeight: '100%',
     backgroundColor: colors.screenBg,
     borderWidth: 1, borderColor: colors.borderGold18,
-    borderRadius: 22, padding: 22,
+    borderRadius: 22, overflow: 'hidden',
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, paddingTop: 22, marginBottom: 18 },
+  body: { paddingHorizontal: 22, paddingBottom: 22 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   warnIcon: {
     width: 34, height: 34, borderRadius: 10, backgroundColor: colors.heatMedBg,

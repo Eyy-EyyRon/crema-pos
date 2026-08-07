@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { peso0 } from '../format';
 import { AlertCircleIcon, AlertTriangleIcon, XIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
@@ -96,58 +96,60 @@ export function RefundModal({
           </Pressable>
         </View>
 
-        <Text style={s.label}>Refund Amount (max {peso0(order.total)})</Text>
-        <View style={s.amountRow}>
-          <Text style={s.peso}>₱</Text>
+        <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+          <Text style={s.label}>Refund Amount (max {peso0(order.total)})</Text>
+          <View style={s.amountRow}>
+            <Text style={s.peso}>₱</Text>
+            <TextInput
+              style={s.amountInput}
+              value={amount}
+              onChangeText={(t) => { setAmount(t.replace(/[^0-9.]/g, '')); if (error) setError(''); }}
+              keyboardType="decimal-pad"
+              editable={!busy}
+            />
+          </View>
+          {!isFull && !!amount && (
+            <Text style={s.partialNote}>Partial refund — ingredient stock will not be restored.</Text>
+          )}
+
+          <Text style={[s.label, { marginTop: 14 }]}>Reason for Refund</Text>
+          <View style={s.reasonChips}>
+            {REASON_CODES.map((r) => (
+              <Chip key={r.code} label={r.label} active={reasonCode === r.code} onPress={() => { setReasonCode(r.code); if (error) setError(''); }} />
+            ))}
+          </View>
+          <Text style={s.label}>Additional Details {reasonCode === 'other' ? '' : '(optional)'}</Text>
           <TextInput
-            style={s.amountInput}
-            value={amount}
-            onChangeText={(t) => { setAmount(t.replace(/[^0-9.]/g, '')); if (error) setError(''); }}
-            keyboardType="decimal-pad"
+            style={s.input}
+            placeholder="e.g. Customer complaint, wrong order…"
+            placeholderTextColor={colors.textDim}
+            value={reason}
+            onChangeText={(t) => { setReason(t); if (error) setError(''); }}
             editable={!busy}
           />
-        </View>
-        {!isFull && !!amount && (
-          <Text style={s.partialNote}>Partial refund — ingredient stock will not be restored.</Text>
-        )}
 
-        <Text style={[s.label, { marginTop: 14 }]}>Reason for Refund</Text>
-        <View style={s.reasonChips}>
-          {REASON_CODES.map((r) => (
-            <Chip key={r.code} label={r.label} active={reasonCode === r.code} onPress={() => { setReasonCode(r.code); if (error) setError(''); }} />
-          ))}
-        </View>
-        <Text style={s.label}>Additional Details {reasonCode === 'other' ? '' : '(optional)'}</Text>
-        <TextInput
-          style={s.input}
-          placeholder="e.g. Customer complaint, wrong order…"
-          placeholderTextColor={colors.textDim}
-          value={reason}
-          onChangeText={(t) => { setReason(t); if (error) setError(''); }}
-          editable={!busy}
-        />
+          {!!error && (
+            <View style={s.errorRow}>
+              <AlertCircleIcon size={13} color={colors.danger} strokeWidth={2} />
+              <Text style={s.errorText}>{error}</Text>
+            </View>
+          )}
 
-        {!!error && (
-          <View style={s.errorRow}>
-            <AlertCircleIcon size={13} color={colors.danger} strokeWidth={2} />
-            <Text style={s.errorText}>{error}</Text>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={s.panelDesc}>Manager enters their 4-digit PIN to process this refund.</Text>
+            <PinPad
+              key={visible ? 1 : 0}
+              keySize={52}
+              gap={10}
+              onComplete={handlePinComplete}
+              onChangeLength={() => error && setError('')}
+              disabled={busy || isOffline}
+              error={!!error}
+              resetSignal={resetTick}
+            />
+            {isOffline && <Text style={s.offlineNote}>Manager PIN verification requires an internet connection</Text>}
           </View>
-        )}
-
-        <View style={{ alignItems: 'center' }}>
-          <Text style={s.panelDesc}>Manager enters their 4-digit PIN to process this refund.</Text>
-          <PinPad
-            key={visible ? 1 : 0}
-            keySize={52}
-            gap={10}
-            onComplete={handlePinComplete}
-            onChangeLength={() => error && setError('')}
-            disabled={busy || isOffline}
-            error={!!error}
-            resetSignal={resetTick}
-          />
-          {isOffline && <Text style={s.offlineNote}>Manager PIN verification requires an internet connection</Text>}
-        </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -160,12 +162,13 @@ const s = StyleSheet.create({
     backgroundColor: colors.overlayStrong,
   },
   card: {
-    width: 420, maxWidth: '100%',
+    width: 420, maxWidth: '100%', maxHeight: '100%',
     backgroundColor: colors.screenBg,
     borderWidth: 1, borderColor: colors.borderGold18,
-    borderRadius: 22, padding: 22,
+    borderRadius: 22, overflow: 'hidden',
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, paddingTop: 22, marginBottom: 18 },
+  body: { paddingHorizontal: 22, paddingBottom: 22 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   warnIcon: {
     width: 34, height: 34, borderRadius: 10, backgroundColor: colors.heatMedBg,
