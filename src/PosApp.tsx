@@ -14,6 +14,7 @@ import { StockAdjustModal } from './components/StockAdjustModal';
 import { ShiftCloseSummaryModal } from './components/ShiftCloseSummaryModal';
 import { SuccessModal } from './components/SuccessModal';
 import { UndoToast } from './components/UndoToast';
+import { UpdateBanner } from './components/UpdateBanner';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { CheckoutScreen } from './screens/CheckoutScreen';
@@ -263,6 +264,9 @@ export function PosApp() {
       <View style={styles.root}>
         <OfflineBanner visible={state.isOffline} />
         <NewOrderAlertBanner alert={state.newOrderAlert} onDismiss={() => pos.patch({ newOrderAlert: null })} />
+        {pos.updateAvailable && (
+          <UpdateBanner version={pos.updateAvailable.version} url={pos.updateAvailable.url} onDismiss={pos.dismissUpdate} />
+        )}
         <HistoryScreen
           onBack={() => pos.patch({ screen: 'menu' })}
           onFlagVoid={pos.flagVoidOrder}
@@ -282,6 +286,9 @@ export function PosApp() {
       <View style={styles.root}>
         <OfflineBanner visible={state.isOffline} />
         <NewOrderAlertBanner alert={state.newOrderAlert} onDismiss={() => pos.patch({ newOrderAlert: null })} />
+        {pos.updateAvailable && (
+          <UpdateBanner version={pos.updateAvailable.version} url={pos.updateAvailable.url} onDismiss={pos.dismissUpdate} />
+        )}
         {state.screen === 'orderType' ? (
           <OrderTypeScreen
             variant="tablet"

@@ -12,6 +12,7 @@
     "android": {
       "package": "com.crema.pos",
       "versionCode": 1,
+      "permissions": ["android.permission.REQUEST_INSTALL_PACKAGES"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

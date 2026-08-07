@@ -9,6 +9,7 @@ import { logActivity } from './lib/activityLog';
 import { closeShift as closeShiftApi, getOpenShift, openShift as openShiftApi } from './lib/cashDrawer';
 import { success as successHaptic, error as errorHaptic } from './lib/haptics';
 import { notify } from './lib/crossAlert';
+import { APP_VERSION, isNewerVersion } from './lib/appUpdate';
 import {
   PaymentSplitComponent,
   PosOrderData,
@@ -75,6 +76,8 @@ interface StoreSettings {
   loyaltyEnabled: boolean;
   loyaltyPhpPerPoint: number;
   loyaltyPointValuePhp: number;
+  appUpdateUrl: string | null;
+  appUpdateVersion: string | null;
 }
 
 const DEFAULT_STORE_SETTINGS: StoreSettings = {
@@ -92,6 +95,8 @@ const DEFAULT_STORE_SETTINGS: StoreSettings = {
   loyaltyEnabled: false,
   loyaltyPhpPerPoint: 20,
   loyaltyPointValuePhp: 0.5,
+  appUpdateUrl: null,
+  appUpdateVersion: null,
 };
 
 // Below this many sellable units left, the menu grid flags the item as low
@@ -176,6 +181,9 @@ interface PosState {
    *  openQrScanner()/handleQrScanned(). Which flow it's currently serving is qrScanTarget. */
   showQrScanner: boolean;
   qrScanTarget: 'loyalty' | 'gift_card' | null;
+  /** Dismissing the "Update available" banner only silences it for this login session — it
+   *  resets to false (and can reappear) on every fresh login/lockPos, not persisted to disk. */
+  updateDismissed: boolean;
   /** GCash reference/transaction number typed in by the barista, required to confirm a GCash payment. */
   gcashReference: string;
   /** Barista's explicit attestation that the customer's GCash payment went through. */
@@ -253,6 +261,7 @@ const initialState: PosState = {
   showGcashQr: false,
   showQrScanner: false,
   qrScanTarget: null,
+  updateDismissed: false,
   gcashReference: '',
   gcashConfirmed: false,
   appendTargetOrderId: null,
@@ -688,7 +697,7 @@ export function useCremaPos() {
       supabase.from('recipe_costing').select('menu_item_id, ingredient_id, recipe_qty'),
       supabase.from('ingredients').select('id, name, unit, current_stock'),
       supabase.from('discounts').select('*').order('percentage', { ascending: false }),
-      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url, store_name, tagline, address, phone, tin, receipt_footer, loyalty_enabled, loyalty_php_per_point, loyalty_point_value_php').eq('id', 1).maybeSingle(),
+      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url, store_name, tagline, address, phone, tin, receipt_footer, loyalty_enabled, loyalty_php_per_point, loyalty_point_value_php, app_update_url, app_update_version').eq('id', 1).maybeSingle(),
       supabase.from('tax_rates').select('id, rate, is_default'),
     ]);
     if (itemsError) throw itemsError;
@@ -788,6 +797,8 @@ export function useCremaPos() {
           loyaltyEnabled: settings.loyalty_enabled ?? DEFAULT_STORE_SETTINGS.loyaltyEnabled,
           loyaltyPhpPerPoint: Number(settings.loyalty_php_per_point ?? DEFAULT_STORE_SETTINGS.loyaltyPhpPerPoint),
           loyaltyPointValuePhp: Number(settings.loyalty_point_value_php ?? DEFAULT_STORE_SETTINGS.loyaltyPointValuePhp),
+          appUpdateUrl: settings.app_update_url ?? null,
+          appUpdateVersion: settings.app_update_version ?? null,
         }
       : undefined;
 
@@ -1943,6 +1954,12 @@ export function useCremaPos() {
     && (state.giftCardBalance === null || state.giftCardBalance < amountDue);
   const cartCount = state.cart.reduce((s, c) => s + c.qty, 0);
 
+  const { appUpdateUrl, appUpdateVersion } = state.storeSettings;
+  const updateAvailable = !state.updateDismissed && appUpdateUrl && appUpdateVersion && isNewerVersion(appUpdateVersion, APP_VERSION)
+    ? { url: appUpdateUrl, version: appUpdateVersion }
+    : null;
+  const dismissUpdate = useCallback(() => patch({ updateDismissed: true }), [patch]);
+
   return {
     state,
     patch,
@@ -1999,6 +2016,8 @@ export function useCremaPos() {
     categories: state.categories,
     discounts: state.discountsList,
     quickCash: QUICK_CASH,
+    updateAvailable,
+    dismissUpdate,
 
     // auth / shift
     login,
