@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CheckIcon } from '../icons';
+import { notify } from '../lib/crossAlert';
 import { tapLight, tapMedium } from '../lib/haptics';
 import { printReceipt, ReceiptStoreInfo } from '../lib/receipt';
 import { colors, fonts } from '../theme';
@@ -26,7 +27,7 @@ export function SuccessContent({
     try {
       await printReceipt(success, orderTypeLabel, storeInfo);
     } catch (e: any) {
-      Alert.alert('Print Failed', e?.message || 'Could not print or share the receipt.');
+      notify('Print Failed', e?.message || 'Could not print or share the receipt.');
     } finally {
       setPrinting(false);
     }

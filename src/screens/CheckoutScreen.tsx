@@ -51,10 +51,17 @@ interface CheckoutScreenProps {
   giftCardChecking: boolean;
   giftCardBalance: number | null;
   giftCardError: string | null;
+  onOpenGiftCardScanner: () => void;
   customerPhone: string;
   onChangeCustomerPhone: (v: string) => void;
   onLookupCustomer: () => void;
   customerLookupStatus: 'idle' | 'searching' | 'found' | 'not_found';
+  customerLookupMode: 'phone' | 'card';
+  onChangeCustomerLookupMode: (mode: 'phone' | 'card') => void;
+  customerCardCode: string;
+  onChangeCustomerCardCode: (v: string) => void;
+  customerLookupMessage: string | null;
+  onOpenQrScanner: () => void;
   foundCustomerName: string | null;
   foundCustomerPoints: number;
   newCustomerName: string;
@@ -134,10 +141,17 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     giftCardChecking,
     giftCardBalance,
     giftCardError,
+    onOpenGiftCardScanner,
     customerPhone,
     onChangeCustomerPhone,
     onLookupCustomer,
     customerLookupStatus,
+    customerLookupMode,
+    onChangeCustomerLookupMode,
+    customerCardCode,
+    onChangeCustomerCardCode,
+    customerLookupMessage,
+    onOpenQrScanner,
     foundCustomerName,
     foundCustomerPoints,
     newCustomerName,
@@ -219,6 +233,12 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
               onChangePhone={onChangeCustomerPhone}
               onLookup={onLookupCustomer}
               lookupStatus={customerLookupStatus}
+              mode={customerLookupMode}
+              onChangeMode={onChangeCustomerLookupMode}
+              cardCode={customerCardCode}
+              onChangeCardCode={onChangeCustomerCardCode}
+              lookupMessage={customerLookupMessage}
+              onOpenScanner={onOpenQrScanner}
               foundName={foundCustomerName}
               foundPoints={foundCustomerPoints}
               newCustomerName={newCustomerName}
@@ -313,6 +333,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
                   balance={giftCardBalance}
                   error={giftCardError}
                   amountDue={amountDue}
+                  onOpenScanner={onOpenGiftCardScanner}
                 />
               </>
             )}

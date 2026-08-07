@@ -109,6 +109,7 @@ export function PaymentMethodRow({
   gap = 10,
   splitEnabled,
   onToggleSplit,
+  compact,
 }: {
   payMethod: PayMethod;
   onSelectCash: () => void;
@@ -118,14 +119,16 @@ export function PaymentMethodRow({
   gap?: number;
   splitEnabled?: boolean;
   onToggleSplit?: () => void;
+  /** Tighter button sizing for a narrow 3-up row (see PayButton's own compact prop). */
+  compact?: boolean;
 }) {
   return (
     <View>
       <View style={{ flexDirection: 'row', gap, opacity: splitEnabled ? 0.4 : 1 }}>
-        <PayButton kind="cash" active={payMethod === 'cash' && !splitEnabled} onPress={onSelectCash} />
-        <PayButton kind="gcash" active={payMethod === 'gcash' && !splitEnabled} onPress={onSelectGcash} />
+        <PayButton kind="cash" active={payMethod === 'cash' && !splitEnabled} onPress={onSelectCash} compact={compact} />
+        <PayButton kind="gcash" active={payMethod === 'gcash' && !splitEnabled} onPress={onSelectGcash} compact={compact} />
         {onSelectGiftCard && (
-          <PayButton kind="gift_card" active={payMethod === 'gift_card' && !splitEnabled} onPress={onSelectGiftCard} />
+          <PayButton kind="gift_card" active={payMethod === 'gift_card' && !splitEnabled} onPress={onSelectGiftCard} compact={compact} />
         )}
       </View>
       {payMethod === 'gcash' && !splitEnabled && onViewGcashQr && (
@@ -197,8 +200,9 @@ export function SplitPaymentBlock({
 }
 
 // GCash has no merchant API to verify a payment against, so the barista must attest the
-// customer's payment succeeded and type in the reference/transaction number shown on the
-// customer's GCash app — that pair is the only record a real GCash payment happened here.
+// customer's payment succeeded — that checkbox is the record a real GCash payment happened
+// here. The reference/transaction number is optional supplementary detail on top of that,
+// not a second requirement.
 export function GcashConfirmBlock({
   reference,
   onChangeReference,
@@ -228,7 +232,7 @@ export function GcashConfirmBlock({
         <TextInput
           value={reference}
           onChangeText={onChangeReference}
-          placeholder="GCash Reference / Transaction No."
+          placeholder="GCash Reference / Transaction No. (optional)"
           placeholderTextColor={colors.textMuted}
           style={styles.gcashRefInput}
           autoCapitalize="characters"
@@ -411,6 +415,12 @@ export function CustomerLoyaltyBlock({
   onChangeRedeemPoints,
   maxRedeemablePoints,
   pointsToEarnPreview,
+  mode,
+  onChangeMode,
+  cardCode,
+  onChangeCardCode,
+  lookupMessage,
+  onOpenScanner,
 }: {
   phone: string;
   onChangePhone: (v: string) => void;
@@ -429,6 +439,12 @@ export function CustomerLoyaltyBlock({
   onChangeRedeemPoints: (v: string) => void;
   maxRedeemablePoints: number;
   pointsToEarnPreview: number;
+  mode: 'phone' | 'card';
+  onChangeMode: (mode: 'phone' | 'card') => void;
+  cardCode: string;
+  onChangeCardCode: (v: string) => void;
+  lookupMessage: string | null;
+  onOpenScanner?: () => void;
 }) {
   if (lookupStatus === 'found') {
     return (
@@ -473,20 +489,30 @@ export function CustomerLoyaltyBlock({
 
   return (
     <View>
+      <View style={styles.lookupModeRow}>
+        <Chip label="Phone" active={mode === 'phone'} onPress={() => onChangeMode('phone')} />
+        <Chip label="Card Code" active={mode === 'card'} onPress={() => onChangeMode('card')} />
+      </View>
       <View style={styles.tenderInputRow}>
         <TextInput
-          value={phone}
-          onChangeText={onChangePhone}
-          placeholder="Customer phone (optional)"
+          value={mode === 'phone' ? phone : cardCode}
+          onChangeText={mode === 'phone' ? onChangePhone : onChangeCardCode}
+          placeholder={mode === 'phone' ? 'Customer phone (optional)' : 'Loyalty card code (e.g. LC-AB3F9K)'}
           placeholderTextColor={colors.textMuted}
-          keyboardType="phone-pad"
+          keyboardType={mode === 'phone' ? 'phone-pad' : 'default'}
+          autoCapitalize={mode === 'card' ? 'characters' : 'none'}
           style={styles.tenderInput}
         />
         <Pressable onPress={() => { tapMedium(); onLookup(); }} style={styles.quickCashBtn}>
           {lookupStatus === 'searching' ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Find</Text>}
         </Pressable>
       </View>
-      {lookupStatus === 'not_found' && (
+      {mode === 'card' && !!onOpenScanner && (
+        <Pressable onPress={() => { tapLight(); onOpenScanner(); }} style={styles.viewQrLink}>
+          <Text style={styles.viewQrLinkText}>Scan QR code instead</Text>
+        </Pressable>
+      )}
+      {lookupStatus === 'not_found' && mode === 'phone' && (
         <View style={{ marginTop: 9 }}>
           <Text style={styles.customerFoundPoints}>No customer found for this number.</Text>
           <View style={[styles.tenderInputRow, { marginTop: 8 }]}>
@@ -503,6 +529,9 @@ export function CustomerLoyaltyBlock({
           </View>
         </View>
       )}
+      {lookupStatus === 'not_found' && mode === 'card' && (
+        <Text style={[styles.customerFoundPoints, { marginTop: 9 }]}>{lookupMessage || 'No customer found for this card code.'}</Text>
+      )}
     </View>
   );
 }
@@ -518,6 +547,7 @@ export function GiftCardPaymentBlock({
   balance,
   error,
   amountDue,
+  onOpenScanner,
 }: {
   code: string;
   onChangeCode: (v: string) => void;
@@ -526,6 +556,7 @@ export function GiftCardPaymentBlock({
   balance: number | null;
   error: string | null;
   amountDue: number;
+  onOpenScanner?: () => void;
 }) {
   const insufficient = balance !== null && balance < amountDue;
   return (
@@ -540,9 +571,14 @@ export function GiftCardPaymentBlock({
           style={styles.tenderInput}
         />
         <Pressable onPress={() => { tapMedium(); onCheckBalance(); }} style={styles.quickCashBtn}>
-          {checking ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Check Balance</Text>}
+          {checking ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Check</Text>}
         </Pressable>
       </View>
+      {!!onOpenScanner && (
+        <Pressable onPress={() => { tapLight(); onOpenScanner(); }} style={styles.viewQrLink}>
+          <Text style={styles.viewQrLinkText}>Scan gift card QR instead</Text>
+        </Pressable>
+      )}
       {balance !== null && (
         <Text style={[styles.tenderMsg, { color: insufficient ? colors.danger : colors.success }]}>
           {insufficient ? `Card balance ${peso(balance)} is short of ${peso(amountDue)}` : `Card balance: ${peso(balance)}`}
@@ -598,6 +634,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
+  },
+  lookupModeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 9,
   },
   nameInputRow: {
     backgroundColor: colors.cardBg,

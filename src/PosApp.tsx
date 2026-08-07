@@ -9,6 +9,7 @@ import { OfflineBanner } from './components/OfflineBanner';
 import { NewOrderAlertBanner } from './components/NewOrderAlertBanner';
 import { OutboxModal } from './components/OutboxModal';
 import { QueueModal } from './components/QueueModal';
+import { QrScannerModal } from './components/QrScannerModal';
 import { StockAdjustModal } from './components/StockAdjustModal';
 import { ShiftCloseSummaryModal } from './components/ShiftCloseSummaryModal';
 import { SuccessModal } from './components/SuccessModal';
@@ -141,6 +142,13 @@ export function PosApp() {
     onChangeCustomerPhone: (v: string) => pos.patch({ customerPhone: v, customerLookupStatus: 'idle' }),
     onLookupCustomer: pos.lookupCustomer,
     customerLookupStatus: state.customerLookupStatus,
+    customerLookupMode: state.customerLookupMode,
+    onChangeCustomerLookupMode: pos.changeCustomerLookupMode,
+    customerCardCode: state.customerCardCode,
+    onChangeCustomerCardCode: (v: string) => pos.patch({ customerCardCode: v, customerLookupStatus: 'idle', customerLookupMessage: null }),
+    customerLookupMessage: state.customerLookupMessage,
+    onOpenQrScanner: () => pos.openQrScanner('loyalty'),
+    onOpenGiftCardScanner: () => pos.openQrScanner('gift_card'),
     foundCustomerName: state.selectedCustomer?.fullName ?? null,
     foundCustomerPoints: state.selectedCustomer?.loyaltyPoints ?? 0,
     newCustomerName: state.newCustomerName,
@@ -326,6 +334,12 @@ export function PosApp() {
           qrUrl={state.storeSettings.gcashQrUrl}
           onClose={() => pos.patch({ showGcashQr: false })}
         />
+        <QrScannerModal
+          visible={state.showQrScanner}
+          target={state.qrScanTarget ?? 'loyalty'}
+          onScanned={pos.handleQrScanned}
+          onClose={() => pos.patch({ showQrScanner: false })}
+        />
         {accountSheet}
         <UndoToast removedItem={undoRemovedItem} onUndo={pos.undoRemove} />
       </View>
@@ -393,6 +407,12 @@ export function PosApp() {
         visible={state.showGcashQr}
         qrUrl={state.storeSettings.gcashQrUrl}
         onClose={() => pos.patch({ showGcashQr: false })}
+      />
+      <QrScannerModal
+        visible={state.showQrScanner}
+        target={state.qrScanTarget ?? 'loyalty'}
+        onScanned={pos.handleQrScanned}
+        onClose={() => pos.patch({ showQrScanner: false })}
       />
       {accountSheet}
       <UndoToast removedItem={undoRemovedItem} onUndo={pos.undoRemove} />

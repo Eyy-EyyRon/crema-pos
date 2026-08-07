@@ -1,8 +1,9 @@
 import React from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { peso0 } from '../format';
 import { AlertTriangleIcon, BanIcon, CheckIcon, PlusIcon, WifiOffIcon } from '../icons';
 import { tapMedium, warning } from '../lib/haptics';
+import { confirmAsync } from '../lib/crossAlert';
 import { colors, fonts } from '../theme';
 import { QueueEntry } from '../types';
 
@@ -42,16 +43,10 @@ export function QueueCard({ ticket, onComplete, onVoid, onAddItems, onAdvanceIte
   const timeLabel = h.urgent ? `Urgent · ${timeAgo}` : timeAgo;
   const locked = !!ticket.pendingSync;
 
-  const confirmComplete = () => {
+  const confirmComplete = async () => {
     tapMedium();
-    Alert.alert(
-      `Complete order ${ticket.no}?`,
-      'This removes the ticket from the queue.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Complete', onPress: onComplete },
-      ]
-    );
+    const confirmed = await confirmAsync(`Complete order ${ticket.no}?`, 'This removes the ticket from the queue.', 'Complete');
+    if (confirmed) onComplete();
   };
 
   return (

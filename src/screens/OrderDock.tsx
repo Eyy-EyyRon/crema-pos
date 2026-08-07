@@ -10,6 +10,7 @@ import {
   CustomerNameField,
   DiscountRow,
   GcashConfirmBlock,
+  GiftCardPaymentBlock,
   OrderTypeRow,
   PaymentMethodRow,
   ProcessPaymentButton,
@@ -39,11 +40,19 @@ interface OrderDockProps {
   payMethod: PayMethod;
   onSelectCash: () => void;
   onSelectGcash: () => void;
+  onSelectGiftCard: () => void;
   onViewGcashQr: () => void;
   gcashReference: string;
   onChangeGcashReference: (v: string) => void;
   gcashConfirmed: boolean;
   onToggleGcashConfirmed: () => void;
+  giftCardCode: string;
+  onChangeGiftCardCode: (v: string) => void;
+  onCheckGiftCardBalance: () => void;
+  giftCardChecking: boolean;
+  giftCardBalance: number | null;
+  giftCardError: string | null;
+  onOpenGiftCardScanner: () => void;
   splitEnabled: boolean;
   onToggleSplit: () => void;
   splitCashAmount: string;
@@ -93,11 +102,19 @@ export function OrderDock(props: OrderDockProps) {
     payMethod,
     onSelectCash,
     onSelectGcash,
+    onSelectGiftCard,
     onViewGcashQr,
     gcashReference,
     onChangeGcashReference,
     gcashConfirmed,
     onToggleGcashConfirmed,
+    giftCardCode,
+    onChangeGiftCardCode,
+    onCheckGiftCardBalance,
+    giftCardChecking,
+    giftCardBalance,
+    giftCardError,
+    onOpenGiftCardScanner,
     splitEnabled,
     onToggleSplit,
     splitCashAmount,
@@ -176,10 +193,12 @@ export function OrderDock(props: OrderDockProps) {
               payMethod={payMethod}
               onSelectCash={onSelectCash}
               onSelectGcash={onSelectGcash}
+              onSelectGiftCard={isAppend ? undefined : onSelectGiftCard}
               onViewGcashQr={onViewGcashQr}
               gap={9}
               splitEnabled={isAppend ? undefined : splitEnabled}
               onToggleSplit={isAppend ? undefined : onToggleSplit}
+              compact
             />
 
             {splitEnabled && !isAppend ? (
@@ -230,6 +249,22 @@ export function OrderDock(props: OrderDockProps) {
                       tenderNum={tenderNum}
                       change={change}
                       shortfall={shortfall}
+                    />
+                  </>
+                )}
+
+                {payMethod === 'gift_card' && (
+                  <>
+                    <SectionLabel style={styles.sectionSpacing}>Gift Card</SectionLabel>
+                    <GiftCardPaymentBlock
+                      code={giftCardCode}
+                      onChangeCode={onChangeGiftCardCode}
+                      onCheckBalance={onCheckGiftCardBalance}
+                      checking={giftCardChecking}
+                      balance={giftCardBalance}
+                      error={giftCardError}
+                      amountDue={total}
+                      onOpenScanner={onOpenGiftCardScanner}
                     />
                   </>
                 )}

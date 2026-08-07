@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BackHeader } from '../components/Header';
 import { ReceiptIcon } from '../icons';
 import { RefundModal } from '../components/RefundModal';
 import { SearchBar } from '../components/SearchBar';
 import { VoidModal } from '../components/VoidModal';
 import { peso0 } from '../format';
+import { notify } from '../lib/crossAlert';
 import { tapLight } from '../lib/haptics';
 import { modsDisplayString } from '../lib/posOrder';
 import { printReceipt, ReceiptStoreInfo } from '../lib/receipt';
@@ -174,7 +175,7 @@ export function HistoryScreen({
         new Date(o.createdAt)
       );
     } catch (e: any) {
-      Alert.alert('Print Failed', e?.message || 'Could not print or share the receipt.');
+      notify('Print Failed', e?.message || 'Could not print or share the receipt.');
     } finally {
       setPrintingId(null);
     }
