@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DownloadIcon, XIcon } from '../icons';
-import { downloadAndInstallApk } from '../lib/appUpdate';
+import { downloadAndInstallApk } from '../lib/apkInstaller';
 import { tapLight, tapMedium } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 
 type Status = 'idle' | 'downloading' | 'installing' | 'error';
 
-// Android-only self-update prompt — see lib/appUpdate.ts for why iOS can't do this. Stays
+// Android-only self-update prompt — see lib/apkInstaller.ts for why iOS can't do this. Stays
 // mounted across dismiss/reappear like OfflineBanner, but (unlike OfflineBanner) is interactive:
 // it owns its own download/install lifecycle rather than just reporting state up.
 export function UpdateBanner({

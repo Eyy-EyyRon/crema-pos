@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
@@ -1955,7 +1956,8 @@ export function useCremaPos() {
   const cartCount = state.cart.reduce((s, c) => s + c.qty, 0);
 
   const { appUpdateUrl, appUpdateVersion } = state.storeSettings;
-  const updateAvailable = !state.updateDismissed && appUpdateUrl && appUpdateVersion && isNewerVersion(appUpdateVersion, APP_VERSION)
+  const updateAvailable = Platform.OS === 'android' && !state.updateDismissed && appUpdateUrl && appUpdateVersion
+      && isNewerVersion(appUpdateVersion, APP_VERSION)
     ? { url: appUpdateUrl, version: appUpdateVersion }
     : null;
   const dismissUpdate = useCallback(() => patch({ updateDismissed: true }), [patch]);
