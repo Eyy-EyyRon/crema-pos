@@ -1,7 +1,7 @@
 // Bump this alongside app.json's expo.version on every native release — this is what a
 // pasted store_settings.app_update_version is compared against to decide whether a tablet
 // is actually behind, so the two must move together.
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.1.2';
 
 export function isNewerVersion(remote: string, current: string): boolean {
   const r = remote.trim().split('.').map(Number);

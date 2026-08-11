@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
+import { CrossAlertHost } from './src/components/CrossAlertHost';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { PosApp } from './src/PosApp';
 import { colors } from './src/theme';
@@ -42,6 +43,7 @@ export default function App() {
         <ErrorBoundary>
           <PosApp />
         </ErrorBoundary>
+        <CrossAlertHost />
         <StatusBar style="light" />
       </View>
     </SafeAreaProvider>
