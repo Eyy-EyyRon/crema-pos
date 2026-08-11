@@ -1,6 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { AlertCircleIcon } from '../icons';
+import { Image } from 'expo-image';
+import { AlertCircleIcon, CameraIcon } from '../icons';
 import { peso, peso0 } from '../format';
 import { tapLight, tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
@@ -208,11 +209,19 @@ export function GcashConfirmBlock({
   onChangeReference,
   confirmed,
   onToggleConfirmed,
+  proofUri,
+  proofUploading,
+  proofFailed,
+  onCapturePhoto,
 }: {
   reference: string;
   onChangeReference: (v: string) => void;
   confirmed: boolean;
   onToggleConfirmed: () => void;
+  proofUri: string | null;
+  proofUploading: boolean;
+  proofFailed: boolean;
+  onCapturePhoto: () => void;
 }) {
   return (
     <View>
@@ -238,6 +247,27 @@ export function GcashConfirmBlock({
           autoCapitalize="characters"
         />
       </View>
+      <Pressable
+        onPress={() => { tapLight(); onCapturePhoto(); }}
+        style={styles.gcashProofRow}
+        accessibilityRole="button"
+        accessibilityLabel={proofUri ? 'Retake payment confirmation photo' : 'Photograph payment confirmation screen'}
+      >
+        {proofUri ? (
+          <Image source={{ uri: proofUri }} style={styles.gcashProofThumb} contentFit="cover" />
+        ) : (
+          <View style={styles.gcashProofThumbPlaceholder}>
+            <CameraIcon size={18} color={colors.textMuted} strokeWidth={1.8} />
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.gcashConfirmText}>
+            {proofUri ? 'Retake payment confirmation photo' : 'Photograph payment confirmation (optional)'}
+          </Text>
+          {proofUploading && <Text style={styles.gcashProofHint}>Uploading…</Text>}
+          {proofFailed && <Text style={styles.gcashProofHintWarn}>Couldn't upload — checkout will still work</Text>}
+        </View>
+      </Pressable>
     </View>
   );
 }
@@ -767,6 +797,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: fonts.sansSemiBold,
     padding: 0,
+  },
+  gcashProofRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: colors.borderGold14,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 9,
+  },
+  gcashProofThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+  },
+  gcashProofThumbPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: colors.chipBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gcashProofHint: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  gcashProofHintWarn: {
+    fontSize: 11,
+    fontFamily: fonts.sansBold,
+    color: colors.danger,
+    marginTop: 2,
   },
   tenderInputRow: {
     flexDirection: 'row',

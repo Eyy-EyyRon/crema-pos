@@ -45,7 +45,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Crema needs access to your camera to scan loyalty card QR codes.",
+          "cameraPermission": "Crema needs access to your camera to scan loyalty card QR codes and photograph GCash payment confirmations.",
           "microphonePermission": false,
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true

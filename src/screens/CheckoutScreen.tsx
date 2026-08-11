@@ -83,6 +83,10 @@ interface CheckoutScreenProps {
   onChangeGcashReference: (v: string) => void;
   gcashConfirmed: boolean;
   onToggleGcashConfirmed: () => void;
+  gcashProofUri: string | null;
+  gcashProofUploading: boolean;
+  gcashProofFailed: boolean;
+  onOpenGcashProofCamera: () => void;
   splitEnabled: boolean;
   onToggleSplit: () => void;
   splitCashAmount: string;
@@ -173,6 +177,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     onChangeGcashReference,
     gcashConfirmed,
     onToggleGcashConfirmed,
+    gcashProofUri,
+    gcashProofUploading,
+    gcashProofFailed,
+    onOpenGcashProofCamera,
     splitEnabled,
     onToggleSplit,
     splitCashAmount,
@@ -289,6 +297,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
                   onChangeReference={onChangeGcashReference}
                   confirmed={gcashConfirmed}
                   onToggleConfirmed={onToggleGcashConfirmed}
+                  proofUri={gcashProofUri}
+                  proofUploading={gcashProofUploading}
+                  proofFailed={gcashProofFailed}
+                  onCapturePhoto={onOpenGcashProofCamera}
                 />
               </>
             )}
@@ -303,6 +315,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
                   onChangeReference={onChangeGcashReference}
                   confirmed={gcashConfirmed}
                   onToggleConfirmed={onToggleGcashConfirmed}
+                  proofUri={gcashProofUri}
+                  proofUploading={gcashProofUploading}
+                  proofFailed={gcashProofFailed}
+                  onCapturePhoto={onOpenGcashProofCamera}
                 />
               </>
             )}

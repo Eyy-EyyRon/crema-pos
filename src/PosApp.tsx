@@ -4,6 +4,7 @@ import { AccountSheet } from './components/AccountSheet';
 import { CloseShiftModal, OpenShiftModal } from './components/ShiftModal';
 import { CustomizeSheet } from './components/CustomizeSheet';
 import { CustomizeSidebar } from './components/CustomizeSidebar';
+import { GcashProofCameraModal } from './components/GcashProofCameraModal';
 import { GcashQrModal } from './components/GcashQrModal';
 import { OfflineBanner } from './components/OfflineBanner';
 import { NewOrderAlertBanner } from './components/NewOrderAlertBanner';
@@ -82,7 +83,7 @@ export function PosApp() {
   const orderTypeLabel = state.orderType === 'dine-in' ? 'Dine-In' : 'Takeout';
   const giftCardReady = state.splitEnabled || state.payMethod !== 'gift_card'
     || (!!state.giftCardCode.trim() && !pos.giftCardInsufficient);
-  const canPay = state.cart.length > 0 && !pos.shortfall && !pos.gcashUnconfirmed && !pos.splitAmountMismatch && giftCardReady;
+  const canPay = state.cart.length > 0 && !pos.shortfall && !pos.gcashUnconfirmed && !pos.splitAmountMismatch && giftCardReady && !state.gcashProofUploading;
   const userName = currentUser.full_name;
   const receiptStoreInfo = {
     storeName: state.storeSettings.storeName,
@@ -129,9 +130,9 @@ export function PosApp() {
     discountLabel: pos.discountLabel,
     onSelectDiscount: (name: string) => pos.patch({ discountName: name, redeemPoints: name !== 'None' ? '' : state.redeemPoints }),
     payMethod: state.payMethod,
-    onSelectCash: () => pos.patch({ payMethod: 'cash' as const, gcashReference: '', gcashConfirmed: false, giftCardCode: '', giftCardBalance: null, giftCardError: null }),
-    onSelectGcash: () => pos.patch({ payMethod: 'gcash' as const, tendered: '', showGcashQr: true, gcashReference: '', gcashConfirmed: false, giftCardCode: '', giftCardBalance: null, giftCardError: null }),
-    onSelectGiftCard: () => pos.patch({ payMethod: 'gift_card' as const, splitEnabled: false, tendered: '', gcashReference: '', gcashConfirmed: false }),
+    onSelectCash: () => pos.patch({ payMethod: 'cash' as const, gcashReference: '', gcashConfirmed: false, gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false, giftCardCode: '', giftCardBalance: null, giftCardError: null }),
+    onSelectGcash: () => pos.patch({ payMethod: 'gcash' as const, tendered: '', showGcashQr: true, gcashReference: '', gcashConfirmed: false, gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false, giftCardCode: '', giftCardBalance: null, giftCardError: null }),
+    onSelectGiftCard: () => pos.patch({ payMethod: 'gift_card' as const, splitEnabled: false, tendered: '', gcashReference: '', gcashConfirmed: false, gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false }),
     onViewGcashQr: () => pos.patch({ showGcashQr: true }),
     giftCardCode: state.giftCardCode,
     onChangeGiftCardCode: (v: string) => pos.patch({ giftCardCode: v, giftCardBalance: null, giftCardError: null }),
@@ -182,11 +183,16 @@ export function PosApp() {
     onChangeGcashReference: (v: string) => pos.patch({ gcashReference: v }),
     gcashConfirmed: state.gcashConfirmed,
     onToggleGcashConfirmed: () => pos.patch({ gcashConfirmed: !state.gcashConfirmed }),
+    gcashProofUri: state.gcashProofUri,
+    gcashProofUploading: state.gcashProofUploading,
+    gcashProofFailed: !!state.gcashProofUri && !state.gcashProofUrl && !state.gcashProofUploading,
+    onOpenGcashProofCamera: () => pos.patch({ showGcashProofCamera: true }),
     splitEnabled: state.splitEnabled,
     onToggleSplit: () => pos.patch({
       splitEnabled: !state.splitEnabled,
       splitCashAmount: '', splitGcashAmount: '',
       gcashReference: '', gcashConfirmed: false,
+      gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false,
       redeemPoints: '',
     }),
     splitCashAmount: state.splitCashAmount,
@@ -347,6 +353,11 @@ export function PosApp() {
           onScanned={pos.handleQrScanned}
           onClose={() => pos.patch({ showQrScanner: false })}
         />
+        <GcashProofCameraModal
+          visible={state.showGcashProofCamera}
+          onCaptured={pos.handleGcashProofCaptured}
+          onClose={() => pos.patch({ showGcashProofCamera: false })}
+        />
         {accountSheet}
         <UndoToast removedItem={undoRemovedItem} onUndo={pos.undoRemove} />
       </View>
@@ -420,6 +431,11 @@ export function PosApp() {
         target={state.qrScanTarget ?? 'loyalty'}
         onScanned={pos.handleQrScanned}
         onClose={() => pos.patch({ showQrScanner: false })}
+      />
+      <GcashProofCameraModal
+        visible={state.showGcashProofCamera}
+        onCaptured={pos.handleGcashProofCaptured}
+        onClose={() => pos.patch({ showGcashProofCamera: false })}
       />
       {accountSheet}
       <UndoToast removedItem={undoRemovedItem} onUndo={pos.undoRemove} />

@@ -46,6 +46,10 @@ interface OrderDockProps {
   onChangeGcashReference: (v: string) => void;
   gcashConfirmed: boolean;
   onToggleGcashConfirmed: () => void;
+  gcashProofUri: string | null;
+  gcashProofUploading: boolean;
+  gcashProofFailed: boolean;
+  onOpenGcashProofCamera: () => void;
   giftCardCode: string;
   onChangeGiftCardCode: (v: string) => void;
   onCheckGiftCardBalance: () => void;
@@ -108,6 +112,10 @@ export function OrderDock(props: OrderDockProps) {
     onChangeGcashReference,
     gcashConfirmed,
     onToggleGcashConfirmed,
+    gcashProofUri,
+    gcashProofUploading,
+    gcashProofFailed,
+    onOpenGcashProofCamera,
     giftCardCode,
     onChangeGiftCardCode,
     onCheckGiftCardBalance,
@@ -220,6 +228,10 @@ export function OrderDock(props: OrderDockProps) {
                       onChangeReference={onChangeGcashReference}
                       confirmed={gcashConfirmed}
                       onToggleConfirmed={onToggleGcashConfirmed}
+                      proofUri={gcashProofUri}
+                      proofUploading={gcashProofUploading}
+                      proofFailed={gcashProofFailed}
+                      onCapturePhoto={onOpenGcashProofCamera}
                     />
                   </>
                 )}
@@ -234,6 +246,10 @@ export function OrderDock(props: OrderDockProps) {
                       onChangeReference={onChangeGcashReference}
                       confirmed={gcashConfirmed}
                       onToggleConfirmed={onToggleGcashConfirmed}
+                      proofUri={gcashProofUri}
+                      proofUploading={gcashProofUploading}
+                      proofFailed={gcashProofFailed}
+                      onCapturePhoto={onOpenGcashProofCamera}
                     />
                   </>
                 )}

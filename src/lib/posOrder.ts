@@ -258,6 +258,7 @@ export type PosOrderData = {
   is_tax_inclusive?: boolean;
   rush_mode?: boolean;
   gcash_reference?: string | null;
+  gcash_proof_url?: string | null;
   customer_id?: string | null;
   loyalty_points_earned?: number;
   loyalty_points_redeemed?: number;
@@ -408,11 +409,12 @@ export async function addItemsToExistingOrder(
   orderItems: PosOrderItem[],
   incrementalPaymentMethod: PayMethod,
   incrementalAmounts: { subtotal: number; discount_amount: number; tax_amount: number; service_charge_amount: number; total: number },
-  gcashReference?: string | null
+  gcashReference?: string | null,
+  gcashProofUrl?: string | null
 ): Promise<void> {
   const { data: order, error: orderErr } = await supabase
     .from('orders')
-    .select('subtotal, discount_amount, tax_amount, service_charge_amount, total, total_amount, barista_id, order_type, gcash_reference')
+    .select('subtotal, discount_amount, tax_amount, service_charge_amount, total, total_amount, barista_id, order_type, gcash_reference, gcash_proof_url')
     .eq('id', orderId)
     .single();
   if (orderErr) throw orderErr;
@@ -427,6 +429,10 @@ export async function addItemsToExistingOrder(
   const mergedGcashReference = gcashReference
     ? (order.gcash_reference ? `${order.gcash_reference}; ${gcashReference}` : gcashReference)
     : order.gcash_reference;
+  // Unlike the reference number, a photo can't usefully coexist with a prior one in a single
+  // <img> thumbnail — take the newest, falling back to the existing photo (not null) when this
+  // top-up didn't include a new one, so the original evidence isn't discarded.
+  const mergedGcashProofUrl = gcashProofUrl ?? order.gcash_proof_url;
   const { error: updateErr } = await supabase
     .from('orders')
     .update({
@@ -437,6 +443,7 @@ export async function addItemsToExistingOrder(
       tax_amount: Number(order.tax_amount ?? 0) + incrementalAmounts.tax_amount,
       service_charge_amount: Number(order.service_charge_amount ?? 0) + incrementalAmounts.service_charge_amount,
       gcash_reference: mergedGcashReference,
+      gcash_proof_url: mergedGcashProofUrl,
     })
     .eq('id', orderId);
   if (updateErr) throw updateErr;

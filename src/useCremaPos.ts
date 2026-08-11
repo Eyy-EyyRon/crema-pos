@@ -189,6 +189,15 @@ interface PosState {
   gcashReference: string;
   /** Barista's explicit attestation that the customer's GCash payment went through. */
   gcashConfirmed: boolean;
+  showGcashProofCamera: boolean;
+  /** Local file uri of a barista-captured photo of the customer's payment-confirmation screen —
+   *  kept even after upload succeeds so the thumbnail renders instantly. Optional/best-effort,
+   *  same contract as gcashReference: never blocks checkout. */
+  gcashProofUri: string | null;
+  /** Public Supabase Storage URL once upload succeeds — this, not gcashProofUri, is what reaches
+   *  the order. Null while never captured, still uploading, or failed. */
+  gcashProofUrl: string | null;
+  gcashProofUploading: boolean;
   /** Set while the cart being built is meant to top up an already-queued order rather than create a new one. */
   appendTargetOrderId: string | null;
   appendTargetOrderNo: string | null;
@@ -265,6 +274,10 @@ const initialState: PosState = {
   updateDismissed: false,
   gcashReference: '',
   gcashConfirmed: false,
+  showGcashProofCamera: false,
+  gcashProofUri: null,
+  gcashProofUrl: null,
+  gcashProofUploading: false,
   appendTargetOrderId: null,
   appendTargetOrderNo: null,
   upcomingShifts: [],
@@ -567,6 +580,29 @@ export function useCremaPos() {
       notify('Upload Failed', 'Could not upload avatar: ' + e.message);
     } finally {
       patch({ avatarUploading: false });
+    }
+  }, [state.currentUser, patch]);
+
+  // Optional/best-effort, same contract as gcashReference — never surfaces a blocking alert on
+  // failure, since checkout must still be able to proceed without this photo. Uses photo.format
+  // rather than parsing an extension off the uri (unlike uploadAvatar) because on web
+  // CameraCapturedPicture.uri is a data: URI with no trailing '.ext' token to parse.
+  const handleGcashProofCaptured = useCallback(async (uri: string, format: 'jpg' | 'png') => {
+    if (!state.currentUser) return;
+    patch({ gcashProofUri: uri, gcashProofUrl: null, gcashProofUploading: true });
+    try {
+      const res = await fetch(uri);
+      const blob = await res.blob();
+      const filename = `${state.currentUser.id}-${Date.now()}.${format}`;
+      const { error } = await supabase.storage.from('gcash-proofs').upload(filename, blob, { upsert: true });
+      if (error) throw error;
+      const { data: publicUrlData } = supabase.storage.from('gcash-proofs').getPublicUrl(filename);
+      // Guard against a stale upload's completion clobbering a photo the barista already retook
+      // while this one was still in flight.
+      setState((s) => (s.gcashProofUri === uri ? { ...s, gcashProofUrl: publicUrlData.publicUrl, gcashProofUploading: false } : s));
+    } catch (e: any) {
+      console.warn('GCash proof upload failed:', e.message);
+      setState((s) => (s.gcashProofUri === uri ? { ...s, gcashProofUploading: false } : s));
     }
   }, [state.currentUser, patch]);
 
@@ -1308,6 +1344,9 @@ export function useCremaPos() {
       splitGcashAmount: '',
       gcashReference: '',
       gcashConfirmed: false,
+      gcashProofUri: null,
+      gcashProofUrl: null,
+      gcashProofUploading: false,
       customerName: '',
       customerPhone: '',
       customerLookupStatus: 'idle',
@@ -1700,6 +1739,7 @@ export function useCremaPos() {
     const chargeAmount = isAppend ? totals.total : amountDue;
     const change = isCash && tenderNum !== null ? tenderNum - chargeAmount : 0;
     const gcashReference = gcashInvolved ? (state.gcashReference.trim() || null) : null;
+    const gcashProofUrl = gcashInvolved ? (state.gcashProofUrl || null) : null;
     const effectivePayMethod: PayMethod = isSplit ? 'split' : state.payMethod;
     const customerId = isAppend ? null : state.selectedCustomer?.id ?? null;
     const pointsRedeemed = isAppend ? 0 : Math.min(redeemPointsNum, maxRedeemablePoints);
@@ -1727,6 +1767,7 @@ export function useCremaPos() {
       is_tax_inclusive: state.storeSettings.isTaxInclusive,
       rush_mode: state.storeSettings.rushModeEnabled,
       gcash_reference: gcashReference,
+      gcash_proof_url: gcashProofUrl,
       customer_id: customerId,
       loyalty_points_earned: pointsEarned,
       loyalty_points_redeemed: pointsRedeemed,
@@ -1776,7 +1817,7 @@ export function useCremaPos() {
           tax_amount: totals.tax,
           service_charge_amount: totals.service,
           total: totals.total,
-        }, gcashReference);
+        }, gcashReference, gcashProofUrl);
       } else {
         await submitOrder(orderData, orderItems, displayItems, paymentSplit);
       }
@@ -1825,7 +1866,7 @@ export function useCremaPos() {
 
     patch({ success, screen: 'success', checkoutBusy: false, checkoutError: null });
     fetchQueue();
-  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.splitEnabled, state.splitCashAmount, state.splitGcashAmount, state.gcashReference, state.gcashConfirmed, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, state.selectedCustomer, state.giftCardCode, state.receiptEmail, state.discountName, state.discountsList, redeemPointsNum, maxRedeemablePoints, phpPerPoint, amountDue, totals, patch, fetchQueue]);
+  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.splitEnabled, state.splitCashAmount, state.splitGcashAmount, state.gcashReference, state.gcashConfirmed, state.gcashProofUrl, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, state.selectedCustomer, state.giftCardCode, state.receiptEmail, state.discountName, state.discountsList, redeemPointsNum, maxRedeemablePoints, phpPerPoint, amountDue, totals, patch, fetchQueue]);
 
   const done = useCallback(() => {
     clearPendingUndo();
@@ -1849,8 +1890,12 @@ export function useCremaPos() {
       showGcashQr: false,
       showQrScanner: false,
       qrScanTarget: null,
+      showGcashProofCamera: false,
       gcashReference: '',
       gcashConfirmed: false,
+      gcashProofUri: null,
+      gcashProofUrl: null,
+      gcashProofUploading: false,
       appendTargetOrderId: null,
       appendTargetOrderNo: null,
       customerPhone: '',
@@ -2026,6 +2071,7 @@ export function useCremaPos() {
     logout,
     lockPos,
     uploadAvatar,
+    handleGcashProofCaptured,
     openShiftAction,
     closeShiftAction,
     dismissShiftCloseSummary,
