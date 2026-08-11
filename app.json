@@ -12,7 +12,9 @@
     "android": {
       "package": "com.crema.pos",
       "versionCode": 2,
-      "permissions": ["android.permission.REQUEST_INSTALL_PACKAGES"],
+      "permissions": [
+        "android.permission.REQUEST_INSTALL_PACKAGES"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -49,6 +51,15 @@
           "microphonePermission": false,
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0A121A"
         }
       ]
     ]
