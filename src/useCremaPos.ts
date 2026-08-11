@@ -119,6 +119,9 @@ export interface ShiftCloseSummary {
   cashRefunds: number;
   expectedEndingCash: number;
   variance: number | null;
+  /** Informational only — GCash never touches the physical drawer, so this plays no part in
+   *  expectedEndingCash/variance above; it's shown so a shift's GCash sales aren't invisible. */
+  gcashSales: number;
 }
 
 export interface MenuItemStock {
@@ -667,6 +670,7 @@ export function useCremaPos() {
               cashRefunds: Number(row.cash_refunds),
               expectedEndingCash: Number(row.expected_ending_cash),
               variance: row.variance !== null ? Number(row.variance) : null,
+              gcashSales: Number(row.gcash_sales ?? 0),
             },
           });
           return;

@@ -55,7 +55,16 @@ export function ShiftCloseSummaryModal({
             <Text style={s.rowLabel}>Actual Ending Cash</Text>
             <Text style={s.rowValue}>{summary.actualEndingCash !== null ? peso0(summary.actualEndingCash) : '—'}</Text>
           </View>
+          {summary.gcashSales > 0 && (
+            <View style={[s.row, s.rowDivider]}>
+              <Text style={s.rowLabel}>GCash Sales</Text>
+              <Text style={s.rowValue}>{peso0(summary.gcashSales)}</Text>
+            </View>
+          )}
         </View>
+        {summary.gcashSales > 0 && (
+          <Text style={s.gcashNote}>GCash doesn't go in the drawer, so it's not part of the cash math above — shown here just so it isn't invisible.</Text>
+        )}
 
         <View style={[s.varianceBox, { backgroundColor: balanced ? colors.successBg16 : 'rgba(255,107,122,0.1)', borderColor: balanced ? colors.successBorder35 : 'rgba(255,107,122,0.3)' }]}>
           <Text style={[s.varianceLabel, { color: balanced ? colors.success : colors.danger }]}>
@@ -96,6 +105,7 @@ const s = StyleSheet.create({
   rowDivider: { borderTopWidth: 1, borderTopColor: colors.divider, marginTop: 4, paddingTop: 10 },
   rowLabel: { fontSize: 12.5, color: colors.textMuted, fontFamily: fonts.sansSemiBold },
   rowValue: { fontSize: 13, color: colors.textPrimary, fontFamily: fonts.sansBold },
+  gcashNote: { fontSize: 10.5, color: colors.textDim, lineHeight: 15, marginTop: -6, marginBottom: 14 },
   varianceBox: {
     width: '100%', borderWidth: 1, borderRadius: 12,
     paddingVertical: 12, alignItems: 'center', marginBottom: 20,
