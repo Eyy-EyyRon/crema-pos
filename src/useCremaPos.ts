@@ -109,19 +109,15 @@ const LOW_STOCK_THRESHOLD = 5;
 // discounts) if the tablet loses connectivity after the first successful load.
 const MENU_DATA_CACHE_KEY = 'crema_menu_data_cache';
 
-// Mirrors get_cash_drawer_reconciliation()'s return row (supabase/migrations/
-// 20260731130000_cash_drawer_reconciliation.sql) — shown to the barista right before logout so
-// the shift-close reconciliation isn't manager-web-only.
+// Deliberately NOT the get_cash_drawer_reconciliation() reconciliation (cash_sales/
+// expected_ending_cash/variance/gcash_sales) — this is just a receipt of what the barista
+// themselves already knew (their starting float, and the ending count they just entered), shown
+// right before logout. Keeping the barista blind to the expected/GCash figures is the point: they
+// have to actually count the drawer instead of typing back a number the app hands them. The real
+// reconciliation stays manager-only, reviewed on cafe-web-dashboard's Staff page.
 export interface ShiftCloseSummary {
   startingCash: number;
-  actualEndingCash: number | null;
-  cashSales: number;
-  cashRefunds: number;
-  expectedEndingCash: number;
-  variance: number | null;
-  /** Informational only — GCash never touches the physical drawer, so this plays no part in
-   *  expectedEndingCash/variance above; it's shown so a shift's GCash sales aren't invisible. */
-  gcashSales: number;
+  actualEndingCash: number;
 }
 
 export interface MenuItemStock {
@@ -651,38 +647,11 @@ export function useCremaPos() {
     if (!(await isOnline())) return 'Closing the cash drawer requires an internet connection. Please reconnect and try again.';
     try {
       await closeShiftApi(state.shift.id, endingCash);
-
-      // Reconciliation summary before logout — best-effort: the shift is already physically
-      // closed at this point, so a failure here must never block logout, it just means the
-      // barista skips straight past the summary screen.
-      if (state.currentUser) {
-        const { data } = await supabase.rpc('get_cash_drawer_reconciliation', {
-          p_barista_id: state.currentUser.id,
-          p_limit: 1,
-        });
-        const row = data?.[0];
-        if (row) {
-          patch({
-            shiftCloseSummary: {
-              startingCash: Number(row.starting_cash),
-              actualEndingCash: row.actual_ending_cash !== null ? Number(row.actual_ending_cash) : null,
-              cashSales: Number(row.cash_sales),
-              cashRefunds: Number(row.cash_refunds),
-              expectedEndingCash: Number(row.expected_ending_cash),
-              variance: row.variance !== null ? Number(row.variance) : null,
-              gcashSales: Number(row.gcash_sales ?? 0),
-            },
-          });
-          return;
-        }
-      }
-      // No summary available — fall through to the old behavior (log + logout immediately).
-      if (state.currentUser) logActivity(state.currentUser.id, 'shift_closed', `Closed shift with ₱${endingCash.toFixed(2)} ending cash`);
-      await logout();
+      patch({ shiftCloseSummary: { startingCash: state.shift.startingCash, actualEndingCash: endingCash } });
     } catch (e: any) {
       return e.message || 'Could not close shift. Check your connection and try again.';
     }
-  }, [state.shift, state.currentUser, logout, patch]);
+  }, [state.shift, patch]);
 
   // Called once the barista dismisses the post-close reconciliation summary — logs the shift
   // close (deferred from closeShiftAction so the summary has time to be seen) and logs out.
