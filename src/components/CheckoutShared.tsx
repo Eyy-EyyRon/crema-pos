@@ -410,7 +410,15 @@ export function ProcessPaymentButton({
       style={[styles.payBtn, { opacity: blocked ? 0.4 : 1 }]}
     >
       {busy ? (
-        <ActivityIndicator color={colors.screenBg} />
+        <>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <ActivityIndicator size="small" color={colors.goldBrightText} />
+            <Text style={styles.payBtnLabel}>Processing…</Text>
+          </View>
+          <View style={styles.payBtnAmountWrap}>
+            <Text style={styles.payBtnAmount}>{totalStr}</Text>
+          </View>
+        </>
       ) : (
         <>
           <Text style={styles.payBtnLabel}>{label}</Text>
