@@ -29,18 +29,20 @@ interface OrderDockProps {
   onDec: (cartId: string) => void;
   onRemove: (cartId: string) => void;
   orderType: OrderType;
-  onSelectDineIn: () => void;
-  onSelectTakeout: () => void;
+  onSelectDineIn?: () => void;
+  onSelectTakeout?: () => void;
   customerName: string;
   onChangeCustomerName: (v: string) => void;
+  customerNameRequired: boolean;
   discounts: Discount[];
   discountName: string;
   discountPct: number;
   onSelectDiscount: (name: string) => void;
+  allowDiscounts: boolean;
   payMethod: PayMethod;
-  onSelectCash: () => void;
-  onSelectGcash: () => void;
-  onSelectGiftCard: () => void;
+  onSelectCash?: () => void;
+  onSelectGcash?: () => void;
+  onSelectGiftCard?: () => void;
   onViewGcashQr: () => void;
   gcashReference: string;
   onChangeGcashReference: (v: string) => void;
@@ -58,7 +60,7 @@ interface OrderDockProps {
   giftCardError: string | null;
   onOpenGiftCardScanner: () => void;
   splitEnabled: boolean;
-  onToggleSplit: () => void;
+  onToggleSplit?: () => void;
   splitCashAmount: string;
   onChangeSplitCashAmount: (v: string) => void;
   splitGcashAmount: string;
@@ -99,10 +101,12 @@ export function OrderDock(props: OrderDockProps) {
     onSelectTakeout,
     customerName,
     onChangeCustomerName,
+    customerNameRequired,
     discounts,
     discountName,
     discountPct,
     onSelectDiscount,
+    allowDiscounts,
     payMethod,
     onSelectCash,
     onSelectGcash,
@@ -189,12 +193,16 @@ export function OrderDock(props: OrderDockProps) {
                 <OrderTypeRow orderType={orderType} onSelectDineIn={onSelectDineIn} onSelectTakeout={onSelectTakeout} gap={9} />
 
                 <SectionLabel style={styles.sectionSpacing}>Name for Order</SectionLabel>
-                <CustomerNameField value={customerName} onChangeText={onChangeCustomerName} />
+                <CustomerNameField value={customerName} onChangeText={onChangeCustomerName} required={customerNameRequired} />
               </>
             )}
 
-            <SectionLabel style={styles.sectionSpacing}>Discount</SectionLabel>
-            <DiscountRow discounts={discounts} activeName={discountName} onSelect={onSelectDiscount} />
+            {allowDiscounts && (
+              <>
+                <SectionLabel style={styles.sectionSpacing}>Discount</SectionLabel>
+                <DiscountRow discounts={discounts} activeName={discountName} onSelect={onSelectDiscount} />
+              </>
+            )}
 
             <SectionLabel style={styles.sectionSpacing}>Payment Method</SectionLabel>
             <PaymentMethodRow

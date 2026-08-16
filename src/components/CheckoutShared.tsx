@@ -38,14 +38,14 @@ export function OrderTypeRow({
   gap = 10,
 }: {
   orderType: OrderType;
-  onSelectDineIn: () => void;
-  onSelectTakeout: () => void;
+  onSelectDineIn?: () => void;
+  onSelectTakeout?: () => void;
   gap?: number;
 }) {
   return (
     <View style={{ flexDirection: 'row', gap }}>
-      <TypeButton kind="dine-in" active={orderType === 'dine-in'} onPress={onSelectDineIn} />
-      <TypeButton kind="takeout" active={orderType === 'takeout'} onPress={onSelectTakeout} />
+      {onSelectDineIn && <TypeButton kind="dine-in" active={orderType === 'dine-in'} onPress={onSelectDineIn} />}
+      {onSelectTakeout && <TypeButton kind="takeout" active={orderType === 'takeout'} onPress={onSelectTakeout} />}
     </View>
   );
 }
@@ -53,16 +53,18 @@ export function OrderTypeRow({
 export function CustomerNameField({
   value,
   onChangeText,
+  required,
 }: {
   value: string;
   onChangeText: (v: string) => void;
+  required?: boolean;
 }) {
   return (
     <View style={styles.nameInputRow}>
       <TextInput
         value={value}
         onChangeText={onChangeText}
-        placeholder="Name for the order (optional)"
+        placeholder={required ? 'Name for the order (required)' : 'Name for the order (optional)'}
         placeholderTextColor={colors.textMuted}
         style={styles.nameInput}
         maxLength={60}
@@ -113,8 +115,8 @@ export function PaymentMethodRow({
   compact,
 }: {
   payMethod: PayMethod;
-  onSelectCash: () => void;
-  onSelectGcash: () => void;
+  onSelectCash?: () => void;
+  onSelectGcash?: () => void;
   onSelectGiftCard?: () => void;
   onViewGcashQr?: () => void;
   gap?: number;
@@ -126,8 +128,12 @@ export function PaymentMethodRow({
   return (
     <View>
       <View style={{ flexDirection: 'row', gap, opacity: splitEnabled ? 0.4 : 1 }}>
-        <PayButton kind="cash" active={payMethod === 'cash' && !splitEnabled} onPress={onSelectCash} compact={compact} />
-        <PayButton kind="gcash" active={payMethod === 'gcash' && !splitEnabled} onPress={onSelectGcash} compact={compact} />
+        {onSelectCash && (
+          <PayButton kind="cash" active={payMethod === 'cash' && !splitEnabled} onPress={onSelectCash} compact={compact} />
+        )}
+        {onSelectGcash && (
+          <PayButton kind="gcash" active={payMethod === 'gcash' && !splitEnabled} onPress={onSelectGcash} compact={compact} />
+        )}
         {onSelectGiftCard && (
           <PayButton kind="gift_card" active={payMethod === 'gift_card' && !splitEnabled} onPress={onSelectGiftCard} compact={compact} />
         )}
@@ -448,6 +454,7 @@ export function CustomerLoyaltyBlock({
   creating,
   onClear,
   loyaltyEnabled,
+  allowRedemption = true,
   pointValuePhp,
   redeemPoints,
   onChangeRedeemPoints,
@@ -472,6 +479,8 @@ export function CustomerLoyaltyBlock({
   creating: boolean;
   onClear: () => void;
   loyaltyEnabled: boolean;
+  /** Gates only the redeem-points input — accrual display/preview still follows loyaltyEnabled alone. */
+  allowRedemption?: boolean;
   pointValuePhp: number;
   redeemPoints: string;
   onChangeRedeemPoints: (v: string) => void;
@@ -496,7 +505,7 @@ export function CustomerLoyaltyBlock({
             <Text style={styles.customerClearBtnText}>Change</Text>
           </Pressable>
         </View>
-        {loyaltyEnabled && foundPoints > 0 && (
+        {loyaltyEnabled && allowRedemption && foundPoints > 0 && (
           <View style={{ marginTop: 9 }}>
             <View style={styles.tenderInputRow}>
               <TextInput

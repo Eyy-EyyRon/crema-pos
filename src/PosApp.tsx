@@ -83,7 +83,25 @@ export function PosApp() {
   const orderTypeLabel = state.orderType === 'dine-in' ? 'Dine-In' : 'Takeout';
   const giftCardReady = state.splitEnabled || state.payMethod !== 'gift_card'
     || (!!state.giftCardCode.trim() && !pos.giftCardInsufficient);
-  const canPay = state.cart.length > 0 && !pos.shortfall && !pos.gcashUnconfirmed && !pos.splitAmountMismatch && giftCardReady && !state.gcashProofUploading;
+
+  // Checkout customization (manager's Feature Toggles page, cafe-web-dashboard) — gates which
+  // handlers get wired below. useCremaPos's fetchMenuData already keeps payMethod/orderType/
+  // splitEnabled/discountName/redeemPoints valid whenever these flags change; this is just what
+  // decides which buttons/sections are even reachable in between those corrections.
+  const { storeSettings } = state;
+  const allowCash = storeSettings.checkoutAllowCash;
+  const allowGcash = storeSettings.checkoutAllowGcash;
+  const allowGiftCard = storeSettings.checkoutAllowGiftCard;
+  const allowSplitPayment = storeSettings.checkoutAllowSplitPayment;
+  const allowDineIn = storeSettings.checkoutAllowDineIn;
+  const allowTakeout = storeSettings.checkoutAllowTakeout;
+  const allowDiscounts = storeSettings.checkoutAllowDiscounts;
+  const allowLoyaltyRedemption = storeSettings.checkoutAllowLoyaltyRedemption;
+  const customerNameMissing = !state.appendTargetOrderId && storeSettings.checkoutRequireCustomerName
+    && !state.customerName.trim() && !state.selectedCustomer?.fullName;
+
+  const canPay = state.cart.length > 0 && !pos.shortfall && !pos.gcashUnconfirmed && !pos.splitAmountMismatch
+    && giftCardReady && !state.gcashProofUploading && !customerNameMissing;
   const userName = currentUser.full_name;
   const receiptStoreInfo = {
     storeName: state.storeSettings.storeName,
@@ -120,19 +138,21 @@ export function PosApp() {
     onDec: (cartId: string) => pos.changeQty(cartId, -1),
     onRemove: pos.removeFromCart,
     orderType: state.orderType,
-    onSelectDineIn: () => pos.selectType('dine-in'),
-    onSelectTakeout: () => pos.selectType('takeout'),
+    onSelectDineIn: allowDineIn ? () => pos.selectType('dine-in') : undefined,
+    onSelectTakeout: allowTakeout ? () => pos.selectType('takeout') : undefined,
     customerName: state.customerName,
     onChangeCustomerName: (v: string) => pos.patch({ customerName: v }),
+    customerNameRequired: storeSettings.checkoutRequireCustomerName,
     discounts: pos.eligibleDiscounts,
     discountName: state.discountName,
     discountPct: pos.discountPct,
     discountLabel: pos.discountLabel,
     onSelectDiscount: (name: string) => pos.patch({ discountName: name, redeemPoints: name !== 'None' ? '' : state.redeemPoints }),
+    allowDiscounts,
     payMethod: state.payMethod,
-    onSelectCash: () => pos.patch({ payMethod: 'cash' as const, gcashReference: '', gcashConfirmed: false, gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false, giftCardCode: '', giftCardBalance: null, giftCardError: null }),
-    onSelectGcash: () => pos.patch({ payMethod: 'gcash' as const, tendered: '', showGcashQr: true, gcashReference: '', gcashConfirmed: false, gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false, giftCardCode: '', giftCardBalance: null, giftCardError: null }),
-    onSelectGiftCard: () => pos.patch({ payMethod: 'gift_card' as const, splitEnabled: false, tendered: '', gcashReference: '', gcashConfirmed: false, gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false }),
+    onSelectCash: allowCash ? () => pos.patch({ payMethod: 'cash' as const, gcashReference: '', gcashConfirmed: false, gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false, giftCardCode: '', giftCardBalance: null, giftCardError: null }) : undefined,
+    onSelectGcash: allowGcash ? () => pos.patch({ payMethod: 'gcash' as const, tendered: '', showGcashQr: true, gcashReference: '', gcashConfirmed: false, gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false, giftCardCode: '', giftCardBalance: null, giftCardError: null }) : undefined,
+    onSelectGiftCard: allowGiftCard ? () => pos.patch({ payMethod: 'gift_card' as const, splitEnabled: false, tendered: '', gcashReference: '', gcashConfirmed: false, gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false }) : undefined,
     onViewGcashQr: () => pos.patch({ showGcashQr: true }),
     giftCardCode: state.giftCardCode,
     onChangeGiftCardCode: (v: string) => pos.patch({ giftCardCode: v, giftCardBalance: null, giftCardError: null }),
@@ -159,6 +179,7 @@ export function PosApp() {
     customerCreating: state.customerCreating,
     onClearCustomer: pos.clearSelectedCustomer,
     loyaltyEnabled: state.storeSettings.loyaltyEnabled,
+    allowLoyaltyRedemption,
     loyaltyPointValuePhp: state.storeSettings.loyaltyPointValuePhp,
     redeemPoints: state.redeemPoints,
     onChangeRedeemPoints: (v: string) => pos.patch({
@@ -188,13 +209,13 @@ export function PosApp() {
     gcashProofFailed: !!state.gcashProofUri && !state.gcashProofUrl && !state.gcashProofUploading,
     onOpenGcashProofCamera: () => pos.patch({ showGcashProofCamera: true }),
     splitEnabled: state.splitEnabled,
-    onToggleSplit: () => pos.patch({
+    onToggleSplit: allowSplitPayment ? () => pos.patch({
       splitEnabled: !state.splitEnabled,
       splitCashAmount: '', splitGcashAmount: '',
       gcashReference: '', gcashConfirmed: false,
       gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false,
       redeemPoints: '',
-    }),
+    }) : undefined,
     splitCashAmount: state.splitCashAmount,
     onChangeSplitCashAmount: (v: string) => pos.patch({ splitCashAmount: v }),
     splitGcashAmount: state.splitGcashAmount,
@@ -299,8 +320,8 @@ export function PosApp() {
           <OrderTypeScreen
             variant="tablet"
             orderNumber={state.todayOrderCount + 1}
-            onSelectDineIn={() => pos.selectType('dine-in')}
-            onSelectTakeout={() => pos.selectType('takeout')}
+            onSelectDineIn={allowDineIn ? () => pos.selectType('dine-in') : undefined}
+            onSelectTakeout={allowTakeout ? () => pos.selectType('takeout') : undefined}
           />
         ) : (
           <View style={styles.tabletMain}>

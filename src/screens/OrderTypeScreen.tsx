@@ -11,8 +11,8 @@ export function OrderTypeScreen({
 }: {
   variant?: 'phone' | 'tablet';
   orderNumber: number;
-  onSelectDineIn: () => void;
-  onSelectTakeout: () => void;
+  onSelectDineIn?: () => void;
+  onSelectTakeout?: () => void;
 }) {
   const orderLabel = `New Order · #${String(orderNumber).padStart(4, '0')}`;
 
@@ -24,8 +24,8 @@ export function OrderTypeScreen({
         <Text style={[styles.lbl, { marginTop: 34, marginBottom: 6 }]}>{orderLabel}</Text>
         <Text style={styles.titleTablet}>How are we serving this order?</Text>
         <View style={styles.tilesRowTablet}>
-          <OrderTypeTile kind="dine-in" variant="tablet" onPress={onSelectDineIn} />
-          <OrderTypeTile kind="takeout" variant="tablet" onPress={onSelectTakeout} />
+          {onSelectDineIn && <OrderTypeTile kind="dine-in" variant="tablet" onPress={onSelectDineIn} />}
+          {onSelectTakeout && <OrderTypeTile kind="takeout" variant="tablet" onPress={onSelectTakeout} />}
         </View>
       </View>
     );
@@ -42,8 +42,8 @@ export function OrderTypeScreen({
         <Text style={styles.title}>How are we serving{'\n'}this order?</Text>
       </View>
       <View style={styles.tilesCol}>
-        <OrderTypeTile kind="dine-in" variant="phone" onPress={onSelectDineIn} />
-        <OrderTypeTile kind="takeout" variant="phone" onPress={onSelectTakeout} />
+        {onSelectDineIn && <OrderTypeTile kind="dine-in" variant="phone" onPress={onSelectDineIn} />}
+        {onSelectTakeout && <OrderTypeTile kind="takeout" variant="phone" onPress={onSelectTakeout} />}
       </View>
     </View>
   );

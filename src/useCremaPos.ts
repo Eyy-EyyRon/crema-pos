@@ -79,6 +79,18 @@ interface StoreSettings {
   loyaltyPointValuePhp: number;
   appUpdateUrl: string | null;
   appUpdateVersion: string | null;
+  // Checkout customization (manager's Feature Toggles page, cafe-web-dashboard). Cash/GCash/Gift
+  // Card + Split cover every payment method this app actually offers — Maya/Card are web-dashboard
+  // (stationary terminal) only options, so this app has no toggle for them.
+  checkoutAllowCash: boolean;
+  checkoutAllowGcash: boolean;
+  checkoutAllowGiftCard: boolean;
+  checkoutAllowSplitPayment: boolean;
+  checkoutAllowDineIn: boolean;
+  checkoutAllowTakeout: boolean;
+  checkoutRequireCustomerName: boolean;
+  checkoutAllowDiscounts: boolean;
+  checkoutAllowLoyaltyRedemption: boolean;
 }
 
 const DEFAULT_STORE_SETTINGS: StoreSettings = {
@@ -98,6 +110,15 @@ const DEFAULT_STORE_SETTINGS: StoreSettings = {
   loyaltyPointValuePhp: 0.5,
   appUpdateUrl: null,
   appUpdateVersion: null,
+  checkoutAllowCash: true,
+  checkoutAllowGcash: true,
+  checkoutAllowGiftCard: true,
+  checkoutAllowSplitPayment: true,
+  checkoutAllowDineIn: true,
+  checkoutAllowTakeout: true,
+  checkoutRequireCustomerName: false,
+  checkoutAllowDiscounts: true,
+  checkoutAllowLoyaltyRedemption: true,
 };
 
 // Below this many sellable units left, the menu grid flags the item as low
@@ -707,7 +728,7 @@ export function useCremaPos() {
       supabase.from('recipe_costing').select('menu_item_id, ingredient_id, recipe_qty'),
       supabase.from('ingredients').select('id, name, unit, current_stock'),
       supabase.from('discounts').select('*').order('percentage', { ascending: false }),
-      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url, store_name, tagline, address, phone, tin, receipt_footer, loyalty_enabled, loyalty_php_per_point, loyalty_point_value_php, app_update_url, app_update_version').eq('id', 1).maybeSingle(),
+      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url, store_name, tagline, address, phone, tin, receipt_footer, loyalty_enabled, loyalty_php_per_point, loyalty_point_value_php, app_update_url, app_update_version, checkout_allow_cash, checkout_allow_gcash, checkout_allow_gift_card, checkout_allow_split_payment, checkout_allow_dine_in, checkout_allow_takeout, checkout_require_customer_name, checkout_allow_discounts, checkout_allow_loyalty_redemption').eq('id', 1).maybeSingle(),
       supabase.from('tax_rates').select('id, rate, is_default'),
     ]);
     if (itemsError) throw itemsError;
@@ -809,6 +830,15 @@ export function useCremaPos() {
           loyaltyPointValuePhp: Number(settings.loyalty_point_value_php ?? DEFAULT_STORE_SETTINGS.loyaltyPointValuePhp),
           appUpdateUrl: settings.app_update_url ?? null,
           appUpdateVersion: settings.app_update_version ?? null,
+          checkoutAllowCash: settings.checkout_allow_cash ?? DEFAULT_STORE_SETTINGS.checkoutAllowCash,
+          checkoutAllowGcash: settings.checkout_allow_gcash ?? DEFAULT_STORE_SETTINGS.checkoutAllowGcash,
+          checkoutAllowGiftCard: settings.checkout_allow_gift_card ?? DEFAULT_STORE_SETTINGS.checkoutAllowGiftCard,
+          checkoutAllowSplitPayment: settings.checkout_allow_split_payment ?? DEFAULT_STORE_SETTINGS.checkoutAllowSplitPayment,
+          checkoutAllowDineIn: settings.checkout_allow_dine_in ?? DEFAULT_STORE_SETTINGS.checkoutAllowDineIn,
+          checkoutAllowTakeout: settings.checkout_allow_takeout ?? DEFAULT_STORE_SETTINGS.checkoutAllowTakeout,
+          checkoutRequireCustomerName: settings.checkout_require_customer_name ?? DEFAULT_STORE_SETTINGS.checkoutRequireCustomerName,
+          checkoutAllowDiscounts: settings.checkout_allow_discounts ?? DEFAULT_STORE_SETTINGS.checkoutAllowDiscounts,
+          checkoutAllowLoyaltyRedemption: settings.checkout_allow_loyalty_redemption ?? DEFAULT_STORE_SETTINGS.checkoutAllowLoyaltyRedemption,
         }
       : undefined;
 
@@ -834,18 +864,43 @@ export function useCremaPos() {
       })
     ).catch(() => {});
 
-    setState((s) => ({
-      ...s,
-      menuItems,
-      categories,
-      discountsList,
-      modifierGroupsByItem,
-      recipesByItem,
-      ingredientStock,
-      ingredientsList,
-      taxRateById,
-      storeSettings: resolvedStoreSettings ?? s.storeSettings,
-    }));
+    setState((s) => {
+      const rs = resolvedStoreSettings ?? s.storeSettings;
+
+      // Keep the in-progress order valid whenever this fetch (initial load, or a Feature
+      // Toggles change coming in over the store_settings realtime listener) narrows what's
+      // offered — e.g. falls back off Cash the moment a manager disables it mid-shift.
+      let payMethod = s.payMethod;
+      const payAllowed = payMethod === 'cash' ? rs.checkoutAllowCash
+        : payMethod === 'gcash' ? rs.checkoutAllowGcash
+        : payMethod === 'gift_card' ? rs.checkoutAllowGiftCard
+        : true; // 'split' is a historical-record-only PayMethod value, never a live selection here
+      if (!payAllowed) {
+        payMethod = rs.checkoutAllowCash ? 'cash' : rs.checkoutAllowGcash ? 'gcash' : rs.checkoutAllowGiftCard ? 'gift_card' : 'cash';
+      }
+
+      let orderType = s.orderType;
+      if (orderType === 'dine-in' && !rs.checkoutAllowDineIn) orderType = 'takeout';
+      else if (orderType === 'takeout' && !rs.checkoutAllowTakeout) orderType = 'dine-in';
+
+      return {
+        ...s,
+        menuItems,
+        categories,
+        discountsList,
+        modifierGroupsByItem,
+        recipesByItem,
+        ingredientStock,
+        ingredientsList,
+        taxRateById,
+        storeSettings: rs,
+        payMethod,
+        orderType,
+        splitEnabled: rs.checkoutAllowSplitPayment ? s.splitEnabled : false,
+        discountName: rs.checkoutAllowDiscounts ? s.discountName : 'None',
+        redeemPoints: rs.checkoutAllowLoyaltyRedemption ? s.redeemPoints : '',
+      };
+    });
   }, []);
 
   const hydrateMenuDataFromCache = useCallback(async (seq: number) => {
@@ -864,7 +919,10 @@ export function useCremaPos() {
         ingredientStock: cached.ingredientStock ?? s.ingredientStock,
         ingredientsList: cached.ingredientsList ?? s.ingredientsList,
         taxRateById: cached.taxRateById ?? s.taxRateById,
-        storeSettings: cached.storeSettings ?? s.storeSettings,
+        // Spread onto DEFAULT_STORE_SETTINGS, not just `?? s.storeSettings` — a cache written
+        // by an older app version (before a new StoreSettings field existed) would otherwise
+        // resolve that field to undefined/falsy instead of its real default.
+        storeSettings: cached.storeSettings ? { ...DEFAULT_STORE_SETTINGS, ...cached.storeSettings } : s.storeSettings,
       }));
     } catch (e) {
       console.warn('Failed to read cached menu data:', e);
@@ -1670,6 +1728,14 @@ export function useCremaPos() {
     // order) — merging into a possibly-already-synced parent row safely needs a live round trip.
     if (isAppend && !(await isOnline())) {
       patch({ checkoutBusy: false, checkoutError: 'Adding items to an existing order requires an internet connection. Please reconnect and try again.' });
+      return;
+    }
+
+    // Defense-in-depth behind the canPay gate in PosApp.tsx (customerNameMissing) — an append
+    // has no Name-for-Order field of its own, so this only ever applies to a fresh order.
+    if (!isAppend && state.storeSettings.checkoutRequireCustomerName
+      && !state.customerName.trim() && !state.selectedCustomer?.fullName) {
+      patch({ checkoutBusy: false, checkoutError: 'Customer name is required to check out.' });
       return;
     }
 

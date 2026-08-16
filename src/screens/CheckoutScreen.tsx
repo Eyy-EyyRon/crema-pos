@@ -31,19 +31,21 @@ interface CheckoutScreenProps {
   onRemove: (cartId: string) => void;
   onBack: () => void;
   orderType: OrderType;
-  onSelectDineIn: () => void;
-  onSelectTakeout: () => void;
+  onSelectDineIn?: () => void;
+  onSelectTakeout?: () => void;
   customerName: string;
   onChangeCustomerName: (v: string) => void;
+  customerNameRequired: boolean;
   discounts: Discount[];
   discountName: string;
   discountPct: number;
   discountLabel?: string;
   onSelectDiscount: (name: string) => void;
+  allowDiscounts: boolean;
   payMethod: PayMethod;
-  onSelectCash: () => void;
-  onSelectGcash: () => void;
-  onSelectGiftCard: () => void;
+  onSelectCash?: () => void;
+  onSelectGcash?: () => void;
+  onSelectGiftCard?: () => void;
   onViewGcashQr: () => void;
   giftCardCode: string;
   onChangeGiftCardCode: (v: string) => void;
@@ -70,6 +72,7 @@ interface CheckoutScreenProps {
   customerCreating: boolean;
   onClearCustomer: () => void;
   loyaltyEnabled: boolean;
+  allowLoyaltyRedemption: boolean;
   loyaltyPointValuePhp: number;
   redeemPoints: string;
   onChangeRedeemPoints: (v: string) => void;
@@ -88,7 +91,7 @@ interface CheckoutScreenProps {
   gcashProofFailed: boolean;
   onOpenGcashProofCamera: () => void;
   splitEnabled: boolean;
-  onToggleSplit: () => void;
+  onToggleSplit?: () => void;
   splitCashAmount: string;
   onChangeSplitCashAmount: (v: string) => void;
   splitGcashAmount: string;
@@ -129,11 +132,13 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     onSelectTakeout,
     customerName,
     onChangeCustomerName,
+    customerNameRequired,
     discounts,
     discountName,
     discountPct,
     discountLabel,
     onSelectDiscount,
+    allowDiscounts,
     payMethod,
     onSelectCash,
     onSelectGcash,
@@ -164,6 +169,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     customerCreating,
     onClearCustomer,
     loyaltyEnabled,
+    allowLoyaltyRedemption,
     loyaltyPointValuePhp,
     redeemPoints,
     onChangeRedeemPoints,
@@ -233,7 +239,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
             <OrderTypeRow orderType={orderType} onSelectDineIn={onSelectDineIn} onSelectTakeout={onSelectTakeout} />
 
             <SectionLabel style={styles.sectionSpacing}>Name for Order</SectionLabel>
-            <CustomerNameField value={customerName} onChangeText={onChangeCustomerName} />
+            <CustomerNameField value={customerName} onChangeText={onChangeCustomerName} required={customerNameRequired} />
 
             <SectionLabel style={styles.sectionSpacing}>Customer</SectionLabel>
             <CustomerLoyaltyBlock
@@ -255,6 +261,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
               creating={customerCreating}
               onClear={onClearCustomer}
               loyaltyEnabled={loyaltyEnabled}
+              allowRedemption={allowLoyaltyRedemption}
               pointValuePhp={loyaltyPointValuePhp}
               redeemPoints={redeemPoints}
               onChangeRedeemPoints={onChangeRedeemPoints}
@@ -264,8 +271,12 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           </>
         )}
 
-        <SectionLabel style={styles.sectionSpacing}>Discount</SectionLabel>
-        <DiscountRow discounts={discounts} activeName={discountName} onSelect={onSelectDiscount} />
+        {allowDiscounts && (
+          <>
+            <SectionLabel style={styles.sectionSpacing}>Discount</SectionLabel>
+            <DiscountRow discounts={discounts} activeName={discountName} onSelect={onSelectDiscount} />
+          </>
+        )}
 
         <SectionLabel style={styles.sectionSpacing}>Payment Method</SectionLabel>
         <PaymentMethodRow
