@@ -8,8 +8,6 @@ interface PayButtonProps {
   kind: 'cash' | 'gcash' | 'gift_card';
   active: boolean;
   onPress: () => void;
-  /** Tighter icon/padding/gap so 3 buttons fit a narrow row (e.g. the tablet order dock)
-   *  without "Gift Card" wrapping to two lines. */
   compact?: boolean;
 }
 
@@ -21,7 +19,7 @@ const LABELS: Record<PayButtonProps['kind'], string> = {
 
 export function PayButton({ kind, active, onPress, compact }: PayButtonProps) {
   const iconColor = active ? colors.goldLight : colors.textMuted;
-  const iconSize = compact ? 14 : 18;
+  const iconSize = compact ? 18 : 20;
   return (
     <Pressable
       onPress={() => { tapLight(); onPress(); }}
@@ -30,7 +28,7 @@ export function PayButton({ kind, active, onPress, compact }: PayButtonProps) {
         compact && styles.baseCompact,
         {
           backgroundColor: active ? colors.chipBg : colors.cardBg,
-          borderColor: active ? 'rgba(184,147,90,0.35)' : colors.borderGold12,
+          borderColor: active ? 'rgba(184,147,90,0.45)' : colors.borderGold12,
           opacity: pressed ? 0.7 : 1,
         },
       ]}
@@ -42,65 +40,81 @@ export function PayButton({ kind, active, onPress, compact }: PayButtonProps) {
         style={[
           styles.iconWrap,
           compact && styles.iconWrapCompact,
-          { backgroundColor: active ? 'rgba(184,147,90,0.14)' : 'rgba(36,51,80,0.5)' },
+          { backgroundColor: active ? 'rgba(184,147,90,0.16)' : 'rgba(36,51,80,0.5)' },
         ]}
       >
         {kind === 'cash' && <BanknoteIcon size={iconSize} color={iconColor} />}
         {kind === 'gcash' && <SmartphoneIcon size={iconSize} color={iconColor} />}
         {kind === 'gift_card' && <GiftIcon size={iconSize} color={iconColor} />}
+        {active && (
+          <View style={styles.checkBadge}>
+            <CheckIcon size={10} color={colors.screenBg} />
+          </View>
+        )}
       </View>
       <Text
-        style={[styles.label, compact && styles.labelCompact, { color: active ? colors.goldBrightText : colors.textMuted }]}
-        numberOfLines={1}
+        style={[styles.label, compact && styles.labelCompact, { color: active ? colors.goldBrightText : colors.textSecondary }]}
+        numberOfLines={2}
       >
         {LABELS[kind]}
       </Text>
-      {active && (
-        <View style={styles.checkWrap}>
-          <CheckIcon size={compact ? 13 : 15} color={colors.goldLight} />
-        </View>
-      )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    flex: 1,
-    flexDirection: 'row',
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 88,
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
     borderRadius: 14,
     borderWidth: 1.5,
   },
   baseCompact: {
-    gap: 5,
-    paddingVertical: 11,
-    paddingHorizontal: 7,
+    minWidth: 76,
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: 12,
   },
   iconWrap: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  iconWrapCompact: {
+    width: 32,
+    height: 32,
     borderRadius: 10,
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.gold,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrapCompact: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-  },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: fonts.sansBold,
+    textAlign: 'center',
+    lineHeight: 15,
   },
   labelCompact: {
     fontSize: 11,
-  },
-  checkWrap: {
-    marginLeft: 'auto',
+    lineHeight: 14,
   },
 });
