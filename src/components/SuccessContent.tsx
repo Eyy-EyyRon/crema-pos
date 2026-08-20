@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CheckIcon } from '../icons';
+import { formatOrderNo } from '../format';
 import { notify } from '../lib/crossAlert';
 import { tapLight, tapMedium } from '../lib/haptics';
 import { printReceipt, ReceiptStoreInfo } from '../lib/receipt';
@@ -61,7 +62,7 @@ export function SuccessContent({
         <View style={styles.receiptHeader}>
           <View>
             <Text style={styles.lbl}>Order No.</Text>
-            <Text style={styles.orderNo}>{success.no}</Text>
+            <Text style={styles.orderNo}>{formatOrderNo(success.no)}</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={styles.lbl}>Total Paid</Text>
