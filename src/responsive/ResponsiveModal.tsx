@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, StyleSheet, ViewStyle } from 'react-native';
+import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { useBreakpoint } from '../breakpoints';
@@ -42,7 +42,7 @@ export function ResponsiveModal({
   style,
   zIndex,
 }: ResponsiveModalProps) {
-  const { isTablet, height: windowHeight } = useBreakpoint();
+  const { isSplit, height: windowHeight } = useBreakpoint();
   const insets = useSafeAreaInsets();
 
   // Stays mounted through the exit animation — `visible` flips to false the instant the caller
@@ -74,9 +74,27 @@ export function ResponsiveModal({
 
   if (!rendered) return null;
 
-  // Starts a full window-height below the viewport rather than a hardcoded offset — guarantees
-  // the sheet is genuinely off-screen at progress=0 regardless of how tall its content ends up.
+  const sheetMax = isSplit
+    ? Math.max(280, windowHeight - insets.top - insets.bottom - 48)
+    : Math.min(windowHeight, Math.max(280, Math.round(windowHeight * 0.92)));
+  const sheetPadBottom = isSplit ? 0 : insets.bottom + 12;
+  const bodyMax = Math.max(240, sheetMax - sheetPadBottom);
   const sheetTranslateY = progress.interpolate({ inputRange: [0, 1], outputRange: [windowHeight, 0] });
+
+  const body = (
+    <KeyboardAvoidingView style={[styles.kav, { maxHeight: bodyMax }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView
+        style={{ maxHeight: bodyMax, width: '100%' }}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+        bounces={false}
+      >
+        {children}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
 
   return (
     <Animated.View
@@ -92,7 +110,7 @@ export function ResponsiveModal({
         />
       </Animated.View>
 
-      {isTablet ? (
+      {isSplit ? (
         <Animated.View
           style={[
             styles.tabletCenterWrap,
@@ -100,10 +118,8 @@ export function ResponsiveModal({
           ]}
           pointerEvents="box-none"
         >
-          <Animated.View style={[styles.tabletDialog, { maxWidth, opacity: progress }, style]}>
-            <KeyboardAvoidingView style={styles.kav} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-              {children}
-            </KeyboardAvoidingView>
+          <Animated.View style={[styles.tabletDialog, { maxWidth, maxHeight: sheetMax, opacity: progress }, style]}>
+            {body}
           </Animated.View>
         </Animated.View>
       ) : (
@@ -112,17 +128,16 @@ export function ResponsiveModal({
             style={[
               styles.phoneSheet,
               {
-                paddingBottom: insets.bottom + 12,
+                paddingBottom: sheetPadBottom,
                 paddingLeft: insets.left,
                 paddingRight: insets.right,
+                maxHeight: sheetMax,
                 transform: [{ translateY: sheetTranslateY }],
               },
               style,
             ]}
           >
-            <KeyboardAvoidingView style={styles.kav} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-              {children}
-            </KeyboardAvoidingView>
+            {body}
           </Animated.View>
         </Animated.View>
       )}
@@ -136,7 +151,11 @@ const styles = StyleSheet.create({
     zIndex: 0,
   },
   kav: {
-    maxHeight: '100%',
+    width: '100%',
+    flexShrink: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   tabletCenterWrap: {
     position: 'absolute',
@@ -163,7 +182,6 @@ const styles = StyleSheet.create({
   },
   phoneSheet: {
     width: '100%',
-    maxHeight: '92%',
     backgroundColor: colors.screenBg,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
