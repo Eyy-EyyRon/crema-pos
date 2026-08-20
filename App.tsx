@@ -1,7 +1,7 @@
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { CrossAlertHost } from './src/components/CrossAlertHost';
@@ -33,12 +33,37 @@ export default function App() {
     if (fontsReady) SplashScreen.hideAsync();
   }, [fontsReady]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.backgroundColor;
+    const prevBody = body.style.backgroundColor;
+    const prevOverflow = body.style.overflow;
+    html.style.backgroundColor = colors.screenBg;
+    html.style.height = '100%';
+    body.style.backgroundColor = colors.screenBg;
+    body.style.height = '100%';
+    body.style.margin = '0';
+    body.style.overflow = 'hidden';
+    const root = document.getElementById('root');
+    if (root) {
+      root.style.height = '100%';
+      root.style.backgroundColor = colors.screenBg;
+    }
+    return () => {
+      html.style.backgroundColor = prevHtml;
+      body.style.backgroundColor = prevBody;
+      body.style.overflow = prevOverflow;
+    };
+  }, []);
+
   if (!fontsReady) {
     return <View style={styles.loading} />;
   }
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={{ flex: 1, backgroundColor: colors.screenBg }}>
       <View style={styles.app}>
         <ErrorBoundary>
           <PosApp />
@@ -58,5 +83,10 @@ const styles = StyleSheet.create({
   app: {
     flex: 1,
     backgroundColor: colors.screenBg,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: { height: '100%', minHeight: '100%' },
+      default: {},
+    }),
   },
 });
