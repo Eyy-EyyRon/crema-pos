@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { peso0 } from '../format';
 import { AlertCircleIcon, AlertTriangleIcon, XIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
 import { REASON_CODES, ReasonCode } from '../lib/reasonCodes';
+import { pinPadMetrics, useBreakpoint } from '../breakpoints';
 import { AppText } from '../responsive/AppText';
 import { ResponsiveModal } from '../responsive/ResponsiveModal';
 import { colors, fonts } from '../theme';
@@ -33,6 +34,8 @@ export function RefundModal({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [resetTick, setResetTick] = useState(0);
+  const { width } = useBreakpoint();
+  const { keySize, gap } = pinPadMetrics(width);
 
   useEffect(() => {
     if (visible && order) {
@@ -107,7 +110,7 @@ export function RefundModal({
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+      <View style={s.body}>
         <AppText variant="label" style={s.label}>Refund Amount (max {peso0(lastOrder.total)})</AppText>
         <View style={s.amountRow}>
           <Text style={s.peso}>₱</Text>
@@ -150,8 +153,8 @@ export function RefundModal({
           <AppText variant="body" style={s.panelDesc}>Manager enters their 4-digit PIN to process this refund.</AppText>
           <PinPad
             key={visible ? 1 : 0}
-            keySize={52}
-            gap={10}
+            keySize={keySize}
+            gap={gap}
             onComplete={handlePinComplete}
             onChangeLength={() => error && setError('')}
             disabled={busy || isOffline}
@@ -160,7 +163,7 @@ export function RefundModal({
           />
           {isOffline && <AppText variant="caption" style={s.offlineNote}>Manager PIN verification requires an internet connection</AppText>}
         </View>
-      </ScrollView>
+      </View>
     </ResponsiveModal>
   );
 }
