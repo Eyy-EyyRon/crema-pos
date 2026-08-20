@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AlertCircleIcon, TrashIcon, WifiOffIcon, XIcon } from '../icons';
-import { peso0 } from '../format';
+import { peso0, formatOrderNo } from '../format';
 import { tapLight, tapMedium } from '../lib/haptics';
 import { OutboxEntry } from '../lib/syncEngine';
 import { supabase } from '../lib/supabase';
@@ -113,7 +113,7 @@ export function OutboxModal({
             {entries.map((e) => (
               <View key={e.id} style={s.entryCard}>
                 <View style={s.entryHeader}>
-                  <Text style={s.entryReceipt}>{e.orderData.receipt_number}</Text>
+                  <Text style={s.entryReceipt}>{formatOrderNo(e.orderData.receipt_number)}</Text>
                   <Text style={s.entryTotal}>{peso0(e.orderData.total)}</Text>
                 </View>
                 <Text style={s.entrySummary}>
@@ -126,7 +126,7 @@ export function OutboxModal({
                     onPress={() => handleRetry(e.id)}
                     disabled={retryingId === e.id}
                     accessibilityRole="button"
-                    accessibilityLabel={`Retry order ${e.orderData.receipt_number}`}
+                    accessibilityLabel={`Retry order ${formatOrderNo(e.orderData.receipt_number)}`}
                   >
                     {retryingId === e.id ? <ActivityIndicator size="small" color={colors.gold} /> : <Text style={s.retryText}>Retry</Text>}
                   </Pressable>
@@ -134,7 +134,7 @@ export function OutboxModal({
                     style={s.deleteBtn}
                     onPress={() => { tapMedium(); setDeleteTargetId(e.id); }}
                     accessibilityRole="button"
-                    accessibilityLabel={`Delete order ${e.orderData.receipt_number}`}
+                    accessibilityLabel={`Delete order ${formatOrderNo(e.orderData.receipt_number)}`}
                   >
                     <TrashIcon size={13} color={colors.danger} strokeWidth={2} />
                   </Pressable>
