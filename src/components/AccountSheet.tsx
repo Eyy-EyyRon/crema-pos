@@ -3,6 +3,7 @@ import { ActivityIndicator, BackHandler, Pressable, ScrollView, StyleSheet, Text
 import { Image } from 'expo-image';
 import { CalendarIcon, ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon, WifiOffIcon, LockIcon } from '../icons';
 import { tapLight, warning } from '../lib/haptics';
+import { useBreakpoint } from '../breakpoints';
 import { colors, fonts } from '../theme';
 import { Shift, ShiftScheduleEntry, UserProfile } from '../types';
 
@@ -51,11 +52,15 @@ export function AccountSheet({
     return () => sub.remove();
   }, [visible, onClose]);
 
+  const { height } = useBreakpoint();
+  const cardMax = Math.max(240, height - 94);
+  const bodyMax = Math.max(160, cardMax - 78);
+
   if (!visible) return null;
   return (
     <View style={s.overlay}>
       <Pressable style={s.overlayPress} onPress={onClose} />
-      <View style={s.card}>
+      <View style={[s.card, { maxHeight: cardMax }]}>
         <View style={s.header}>
           <View style={s.avatar}>
             {user.avatar_url ? (
@@ -73,12 +78,12 @@ export function AccountSheet({
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ maxHeight: bodyMax }} contentContainerStyle={s.body} showsVerticalScrollIndicator={false} nestedScrollEnabled>
           {shift && (
             <View style={s.shiftRow}>
               <ClockIcon size={13} color={colors.textMuted} strokeWidth={2} />
               <Text style={s.shiftText}>
-                Shift open {elapsedSince(shift.openedAt)} · Starting cash ₱{shift.startingCash.toFixed(0)}
+                Shift open {elapsedSince(shift.openedAt)}
               </Text>
             </View>
           )}
@@ -190,7 +195,7 @@ const s = StyleSheet.create({
   },
   overlayPress: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   card: {
-    width: 300, maxWidth: '90%', maxHeight: '100%',
+    width: 300, maxWidth: '90%',
     backgroundColor: colors.cardBg,
     borderWidth: 1, borderColor: colors.borderGold20,
     borderRadius: 18, overflow: 'hidden',
