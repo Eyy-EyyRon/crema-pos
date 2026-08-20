@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AlertCircleIcon, AlertTriangleIcon, XIcon } from '../icons';
 import { tapLight, tapMedium } from '../lib/haptics';
 import { REASON_CODES, ReasonCode } from '../lib/reasonCodes';
+import { pinPadMetrics, useBreakpoint } from '../breakpoints';
 import { AppText } from '../responsive/AppText';
 import { ResponsiveModal } from '../responsive/ResponsiveModal';
 import { colors, fonts } from '../theme';
@@ -42,6 +43,8 @@ export function VoidModal({
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<'pin' | 'flag'>('pin');
   const [resetTick, setResetTick] = useState(0);
+  const { width } = useBreakpoint();
+  const { keySize, gap } = pinPadMetrics(width);
 
   useEffect(() => {
     if (visible) { setReasonCode(''); setReason(''); setError(''); setBusy(false); setTab('pin'); }
@@ -120,7 +123,7 @@ export function VoidModal({
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+      <View style={s.body}>
         <AppText variant="label" style={s.label}>Reason for Void</AppText>
         <View style={s.reasonChips}>
           {REASON_CODES.map((r) => (
@@ -166,8 +169,8 @@ export function VoidModal({
             <AppText variant="body" style={s.panelDesc}>Manager enters their 4-digit PIN to void this order immediately.</AppText>
             <PinPad
               key={visible ? 1 : 0}
-              keySize={52}
-              gap={10}
+              keySize={keySize}
+              gap={gap}
               onComplete={handlePinComplete}
               onChangeLength={() => error && setError('')}
               disabled={busy}
@@ -190,7 +193,7 @@ export function VoidModal({
             {isOffline && <AppText variant="caption" style={s.offlineNote}>Offline — this will sync once reconnected</AppText>}
           </View>
         )}
-      </ScrollView>
+      </View>
     </ResponsiveModal>
   );
 }
