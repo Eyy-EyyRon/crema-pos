@@ -5,6 +5,7 @@ import { QueueEntry, UserProfile } from '../types';
 import { BackHeader } from '../components/Header';
 import { QueueList } from '../components/QueueList';
 import { VoidModal } from '../components/VoidModal';
+import { useBreakpoint } from '../breakpoints';
 
 export function QueueScreen({
   tickets,
@@ -32,6 +33,7 @@ export function QueueScreen({
   onOpenOutbox?: () => void;
 }) {
   const [voidTarget, setVoidTarget] = useState<QueueEntry | null>(null);
+  const { gutter } = useBreakpoint();
   const selfVoidEligible = !!voidTarget && !!currentUser && (
     currentUser.role === 'manager' ||
     (!!currentUser.is_senior_barista && voidTarget.total <= (currentUser.self_void_threshold_php ?? 0))
@@ -48,7 +50,7 @@ export function QueueScreen({
           </View>
         }
       />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: gutter }]} showsVerticalScrollIndicator={false}>
         <QueueList
           tickets={tickets}
           onComplete={onComplete}
@@ -97,7 +99,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingHorizontal: 18,
     paddingBottom: 24,
   },
   badge: {
