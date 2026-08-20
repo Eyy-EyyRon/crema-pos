@@ -21,6 +21,7 @@ import {
 import { peso } from '../format';
 import { colors, fonts } from '../theme';
 import { CartItem, Discount, OrderType, PayMethod } from '../types';
+import { useBreakpoint } from '../breakpoints';
 
 interface OrderDockProps {
   cart: CartItem[];
@@ -92,6 +93,7 @@ interface OrderDockProps {
 // forwardRef so a caller can scroll this pane back to the top without navigating anywhere —
 // see useResponsiveViewCart, which is the tablet-side half of that pattern.
 export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function OrderDock(props, ref) {
+  const { isTablet, dockWidth, isCompact } = useBreakpoint();
   const {
     cart,
     cartCount,
@@ -164,25 +166,25 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
   const isEmpty = cartCount === 0;
 
   return (
-    <View style={styles.dock}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{isAppend ? 'Add to Order' : 'Current Order'}</Text>
+    <View style={[styles.dock, { width: dockWidth }]}>
+      <View style={[styles.header, isTablet && styles.headerTablet, isCompact && styles.headerCompact]}>
+        <Text style={[styles.headerTitle, isTablet && styles.headerTitleTablet]}>{isAppend ? 'Add to Order' : 'Current Order'}</Text>
         {!isEmpty && <Text style={styles.headerCount}>{cartCount + (cartCount === 1 ? ' item' : ' items')}</Text>}
       </View>
 
       {isEmpty ? (
-        <View style={styles.emptyState}>
-          <View style={styles.emptyIconCircle}>
-            <BagIcon size={32} color={colors.gold} strokeWidth={1.5} />
+        <View style={[styles.emptyState, isTablet && styles.emptyStateTablet]}>
+          <View style={[styles.emptyIconCircle, isTablet && styles.emptyIconCircleTablet]}>
+            <BagIcon size={isTablet ? 36 : 32} color={colors.gold} strokeWidth={1.5} />
           </View>
-          <Text style={styles.emptyTitle}>No items yet</Text>
-          <Text style={styles.emptySub}>Tap a product to start building{'\n'}this order.</Text>
+          <Text style={[styles.emptyTitle, isTablet && styles.emptyTitleTablet]}>No items yet</Text>
+          <Text style={[styles.emptySub, isTablet && styles.emptySubTablet]}>Tap a product to start building{'\n'}this order.</Text>
         </View>
       ) : (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView ref={ref} style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+          <ScrollView ref={ref} style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}>
             {cart.map((c) => (
-              <CartRow key={c.cartId} item={c} shotSize={42} onInc={() => onInc(c.cartId)} onDec={() => onDec(c.cartId)} onRemove={() => onRemove(c.cartId)} />
+              <CartRow key={c.cartId} item={c} shotSize={isTablet ? 48 : 42} onInc={() => onInc(c.cartId)} onDec={() => onDec(c.cartId)} onRemove={() => onRemove(c.cartId)} />
             ))}
 
             {isAppend ? (
@@ -304,7 +306,7 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
               dense
             />
           </ScrollView>
-          <View style={[styles.footer, { paddingBottom: 14 + insets.bottom }]}>
+          <View style={[styles.footer, isTablet && styles.footerTablet, { paddingBottom: 14 + insets.bottom }]}>
             {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
             <ProcessPaymentButton
               totalStr={peso(total)}
@@ -322,8 +324,8 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
 
 const styles = StyleSheet.create({
   dock: {
-    width: 384,
     flexShrink: 0,
+    alignSelf: 'stretch',
     borderLeftWidth: 1,
     borderLeftColor: colors.borderGold12,
     backgroundColor: colors.dockBg,
@@ -338,10 +340,22 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     justifyContent: 'space-between',
   },
+  headerTablet: {
+    paddingTop: 24,
+    paddingHorizontal: 26,
+    paddingBottom: 18,
+  },
+  headerCompact: {
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
   headerTitle: {
     fontSize: 18,
     fontFamily: fonts.sansExtraBold,
     color: colors.textPrimary,
+  },
+  headerTitleTablet: {
+    fontSize: 20,
   },
   headerCount: {
     fontSize: 12,
@@ -356,6 +370,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     paddingVertical: 40,
   },
+  emptyStateTablet: {
+    gap: 14,
+    paddingHorizontal: 36,
+    paddingVertical: 48,
+  },
   emptyIconCircle: {
     width: 76,
     height: 76,
@@ -366,10 +385,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  emptyIconCircleTablet: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+  },
   emptyTitle: {
     fontSize: 16,
     fontFamily: fonts.sansExtraBold,
     color: colors.textPrimary,
+  },
+  emptyTitleTablet: {
+    fontSize: 18,
   },
   emptySub: {
     fontSize: 13,
@@ -377,10 +404,18 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     textAlign: 'center',
   },
+  emptySubTablet: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
   scrollContent: {
     padding: 16,
     paddingHorizontal: 18,
     paddingBottom: 10,
+  },
+  scrollContentTablet: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   sectionSpacing: {
     marginTop: 16,
@@ -391,5 +426,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderTopWidth: 1,
     borderTopColor: 'rgba(184,147,90,0.1)',
+  },
+  footerTablet: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
   },
 });
