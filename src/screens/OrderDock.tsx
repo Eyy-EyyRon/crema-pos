@@ -29,6 +29,7 @@ interface OrderDockProps {
   onInc: (cartId: string) => void;
   onDec: (cartId: string) => void;
   onRemove: (cartId: string) => void;
+  onEdit?: (cartId: string) => void;
   orderType: OrderType;
   onSelectDineIn?: () => void;
   onSelectTakeout?: () => void;
@@ -100,6 +101,7 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
     onInc,
     onDec,
     onRemove,
+    onEdit,
     orderType,
     onSelectDineIn,
     onSelectTakeout,
@@ -184,7 +186,15 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView ref={ref} style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}>
             {cart.map((c) => (
-              <CartRow key={c.cartId} item={c} shotSize={isTablet ? 48 : 42} onInc={() => onInc(c.cartId)} onDec={() => onDec(c.cartId)} onRemove={() => onRemove(c.cartId)} />
+              <CartRow
+                key={c.cartId}
+                item={c}
+                shotSize={isTablet ? 48 : 42}
+                onInc={() => onInc(c.cartId)}
+                onDec={() => onDec(c.cartId)}
+                onRemove={() => onRemove(c.cartId)}
+                onEdit={onEdit ? () => onEdit(c.cartId) : undefined}
+              />
             ))}
 
             {isAppend ? (
