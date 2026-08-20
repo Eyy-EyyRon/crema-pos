@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AlertCircleIcon, PlusIcon, SearchIcon, TrashIcon, XIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
+import { pinPadMetrics, useBreakpoint } from '../breakpoints';
 import { AppText } from '../responsive/AppText';
 import { ResponsiveModal } from '../responsive/ResponsiveModal';
 import { colors, fonts } from '../theme';
@@ -35,6 +36,8 @@ export function StockAdjustModal({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [resetTick, setResetTick] = useState(0);
+  const { width } = useBreakpoint();
+  const { keySize, gap } = pinPadMetrics(width);
 
   // Resets on the way IN (next open), not on the way out — closing (X button, or a successful
   // submit below) leaves `selected`/`delta`/etc. exactly as they were, so whichever step was on
@@ -85,7 +88,7 @@ export function StockAdjustModal({
   };
 
   return (
-    <ResponsiveModal visible={visible} onClose={onClose} dismissOnBackdropPress={!busy}>
+    <ResponsiveModal visible={visible} onClose={onClose} dismissOnBackdropPress={!busy} zIndex={50}>
       <View style={s.content}>
         <View style={s.header}>
           <AppText variant="h2">Adjust Stock</AppText>
@@ -107,7 +110,7 @@ export function StockAdjustModal({
                 autoFocus
               />
             </View>
-            <ScrollView style={{ maxHeight: 320 }}>
+            <View>
               {filtered.map((ing) => (
                 <Pressable key={ing.id} style={s.ingRow} onPress={() => { tapLight(); setSelected(ing); }}>
                   <Text style={s.ingName}>{ing.name}</Text>
@@ -115,10 +118,10 @@ export function StockAdjustModal({
                 </Pressable>
               ))}
               {filtered.length === 0 && <AppText variant="caption" style={s.emptyText}>No matching ingredients.</AppText>}
-            </ScrollView>
+            </View>
           </>
         ) : (
-          <ScrollView contentContainerStyle={s.selectedBody} showsVerticalScrollIndicator={false}>
+          <View>
             <Pressable onPress={() => setSelected(null)} style={s.selectedRow}>
               <Text style={s.selectedName}>{selected.name}</Text>
               <Text style={s.selectedStock}>Current: {selected.current_stock} {selected.unit} · Change</Text>
@@ -173,8 +176,8 @@ export function StockAdjustModal({
             <AppText variant="body" style={s.panelDesc}>Manager enters their 4-digit PIN to confirm this correction.</AppText>
             <PinPad
               key={visible ? 1 : 0}
-              keySize={48}
-              gap={9}
+              keySize={keySize}
+              gap={gap}
               onComplete={handlePinComplete}
               onChangeLength={() => error && setError('')}
               disabled={busy || isOffline}
@@ -182,7 +185,7 @@ export function StockAdjustModal({
               resetSignal={resetTick}
             />
             {isOffline && <AppText variant="caption" style={s.offlineNote}>Adjusting stock requires an internet connection</AppText>}
-          </ScrollView>
+          </View>
         )}
       </View>
     </ResponsiveModal>
@@ -192,12 +195,6 @@ export function StockAdjustModal({
 const s = StyleSheet.create({
   content: {
     padding: 22,
-  },
-  // contentContainerStyle for the "adjust quantity" step's ScrollView — that step (sign toggle +
-  // qty input + reason chips/input + full PinPad) is tall enough to exceed a short phone's
-  // height on its own, even before a keyboard is involved, unlike the ingredient-search step.
-  selectedBody: {
-    flexGrow: 1,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   closeBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center' },
