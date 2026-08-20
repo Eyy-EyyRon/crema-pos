@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AccountSheet } from './components/AccountSheet';
 import { CloseShiftModal, OpenShiftModal } from './components/ShiftModal';
 import { CustomizeSheet } from './components/CustomizeSheet';
@@ -25,7 +26,8 @@ import { OrderDock } from './screens/OrderDock';
 import { OrderTypeScreen } from './screens/OrderTypeScreen';
 import { QueueScreen } from './screens/QueueScreen';
 import { SuccessScreen } from './screens/SuccessScreen';
-import { colors, TABLET_BREAKPOINT, TABLET_MIN_HEIGHT } from './theme';
+import { useBreakpoint } from './breakpoints';
+import { colors } from './theme';
 import { useCremaPos } from './useCremaPos';
 
 function Splash() {
@@ -37,17 +39,18 @@ function Splash() {
 }
 
 export function PosApp() {
-  const { width, height } = useWindowDimensions();
-  const isTablet = width >= TABLET_BREAKPOINT && height >= TABLET_MIN_HEIGHT;
+  const { isSplit } = useBreakpoint();
+  const insets = useSafeAreaInsets();
   const [closeShiftVisible, setCloseShiftVisible] = useState(false);
   const [stockAdjustVisible, setStockAdjustVisible] = useState(false);
+  const rootStyle = [styles.root, { paddingLeft: insets.left, paddingRight: insets.right }];
 
   const pos = useCremaPos();
   const { state } = pos;
 
   if (state.authLoading) {
     return (
-      <View style={styles.root}>
+      <View style={rootStyle}>
         <Splash />
       </View>
     );
@@ -55,7 +58,7 @@ export function PosApp() {
 
   if (!state.currentUser) {
     return (
-      <View style={styles.root}>
+      <View style={rootStyle}>
         <LoginScreen onLogin={pos.login} />
       </View>
     );
@@ -63,7 +66,7 @@ export function PosApp() {
 
   if (state.shiftLoading) {
     return (
-      <View style={styles.root}>
+      <View style={rootStyle}>
         <Splash />
       </View>
     );
@@ -71,7 +74,7 @@ export function PosApp() {
 
   if (!state.shift) {
     return (
-      <View style={styles.root}>
+      <View style={rootStyle}>
         <OpenShiftModal visible onSubmit={pos.openShiftAction} />
       </View>
     );
@@ -270,7 +273,6 @@ export function PosApp() {
       />
       <CloseShiftModal
         visible={closeShiftVisible}
-        startingCash={state.shift?.startingCash ?? 0}
         onCancel={() => setCloseShiftVisible(false)}
         onSubmit={async (cash) => {
           const err = await pos.closeShiftAction(cash);
@@ -288,7 +290,7 @@ export function PosApp() {
 
   if (state.screen === 'history') {
     return (
-      <View style={styles.root}>
+      <View style={rootStyle}>
         <OfflineBanner visible={state.isOffline} />
         <NewOrderAlertBanner alert={state.newOrderAlert} onDismiss={() => pos.patch({ newOrderAlert: null })} />
         {pos.updateAvailable && (
@@ -308,9 +310,9 @@ export function PosApp() {
     );
   }
 
-  if (isTablet) {
+  if (isSplit) {
     return (
-      <View style={styles.root}>
+      <View style={rootStyle}>
         <OfflineBanner visible={state.isOffline} />
         <NewOrderAlertBanner alert={state.newOrderAlert} onDismiss={() => pos.patch({ newOrderAlert: null })} />
         {pos.updateAvailable && (
@@ -331,7 +333,7 @@ export function PosApp() {
               stockByMenuId={pos.stockByMenuId}
               categories={pos.categories}
               selCat={state.selCat}
-              onSelectCat={(c) => pos.patch({ selCat: c })}
+              onSelectCat={(c) => pos.patch({ selCat: c, search: '' })}
               search={state.search}
               onSearch={(v) => pos.patch({ search: v })}
               onItemPress={pos.openItem}
@@ -348,10 +350,10 @@ export function PosApp() {
 
         {customizeProps && <CustomizeSidebar {...customizeProps} />}
         {state.success && <SuccessModal success={state.success} orderTypeLabel={orderTypeLabel} storeInfo={receiptStoreInfo} onDone={pos.done} />}
-        {state.showQueue && (
+        {(state.showQueue || state.screen === 'queue') && (
           <QueueModal
             tickets={state.queue}
-            onClose={() => pos.patch({ showQueue: false })}
+            onClose={() => pos.patch({ showQueue: false, screen: 'menu' })}
             onComplete={pos.completeQueueTicket}
             onFlagVoid={pos.flagVoidOrder}
             onManagerVoid={pos.managerVoidOrder}
@@ -386,9 +388,12 @@ export function PosApp() {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={rootStyle}>
       <OfflineBanner visible={state.isOffline} />
       <NewOrderAlertBanner alert={state.newOrderAlert} onDismiss={() => pos.patch({ newOrderAlert: null })} />
+      {pos.updateAvailable && (
+        <UpdateBanner version={pos.updateAvailable.version} url={pos.updateAvailable.url} onDismiss={pos.dismissUpdate} />
+      )}
       {state.screen === 'orderType' && (
         <OrderTypeScreen
           variant="phone"
@@ -404,7 +409,7 @@ export function PosApp() {
           stockByMenuId={pos.stockByMenuId}
           categories={pos.categories}
           selCat={state.selCat}
-          onSelectCat={(c) => pos.patch({ selCat: c })}
+          onSelectCat={(c) => pos.patch({ selCat: c, search: '' })}
           search={state.search}
           onSearch={(v) => pos.patch({ search: v })}
           onItemPress={pos.openItem}
@@ -467,11 +472,15 @@ export function PosApp() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    minHeight: 0,
     backgroundColor: colors.screenBg,
+    overflow: 'hidden',
   },
   tabletMain: {
     flex: 1,
     flexDirection: 'row',
+    minHeight: 0,
+    minWidth: 0,
   },
   splash: {
     flex: 1,
