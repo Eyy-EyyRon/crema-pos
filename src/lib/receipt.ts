@@ -1,5 +1,6 @@
+import { Platform } from 'react-native';
 import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
+import { formatOrderNo } from '../format';
 
 export interface ReceiptStoreInfo {
   storeName: string;
@@ -27,6 +28,17 @@ export interface ReceiptOrderInfo {
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function isPrintCancelled(err: unknown): boolean {
+  const msg = String((err as any)?.message ?? err ?? '').toLowerCase();
+  return (
+    msg.includes('cancel') ||
+    msg.includes('dismiss') ||
+    msg.includes('closed') ||
+    msg.includes('printdialog') ||
+    msg.includes('printing did not complete')
+  );
 }
 
 // Exported so lib/receiptEmail.ts can send the exact same markup by email instead of duplicating
@@ -58,6 +70,7 @@ export function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: stri
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
+      @page { margin: 12mm; }
       body { font-family: Helvetica, Arial, sans-serif; padding: 28px; color: #1a1a1a; }
       h1 { text-align: center; font-size: 22px; letter-spacing: 5px; margin: 0; text-transform: uppercase; }
       .sub { text-align: center; font-size: 11px; letter-spacing: 2px; color: #666; margin-top: 3px; }
@@ -77,7 +90,7 @@ export function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: stri
     <div class="sub">${escapeHtml(store.tagline)}</div>
     ${storeLines}
     <div class="meta">
-      <div><span>Order No.</span><span>${escapeHtml(success.no)}</span></div>
+      <div><span>Order No.</span><span>${escapeHtml(formatOrderNo(success.no))}</span></div>
       <div><span>Date</span><span>${escapeHtml(now.toLocaleDateString())} ${escapeHtml(now.toLocaleTimeString())}</span></div>
       <div><span>Order Type</span><span>${escapeHtml(orderTypeLabel)}</span></div>
       <div><span>Payment</span><span>${escapeHtml(success.method)}</span></div>
@@ -94,18 +107,23 @@ export function buildReceiptHtml(success: ReceiptOrderInfo, orderTypeLabel: stri
 </html>`;
 }
 
-/** Renders the receipt to a PDF and opens the OS print/share sheet; falls back to the direct print dialog if sharing isn't available on this device. */
+/**
+ * Opens the system print dialog for the receipt.
+ * Web: printToFileAsync opens the browser print UI for the given HTML (printAsync would
+ * print the live POS page instead). Native: printAsync shows AirPrint / Android print.
+ * Closing the dialog without printing is treated as success, not an error.
+ */
 export async function printReceipt(success: ReceiptOrderInfo, orderTypeLabel: string, store: ReceiptStoreInfo, orderDate?: Date): Promise<void> {
   const html = buildReceiptHtml(success, orderTypeLabel, store, orderDate);
-  const { uri } = await Print.printToFileAsync({ html });
-  const canShare = await Sharing.isAvailableAsync();
-  if (canShare) {
-    await Sharing.shareAsync(uri, {
-      UTI: 'com.adobe.pdf',
-      mimeType: 'application/pdf',
-      dialogTitle: 'Print or Share Receipt',
-    });
-  } else {
+  try {
+    if (Platform.OS === 'web') {
+      // Opens the browser print dialog for this HTML document.
+      await Print.printToFileAsync({ html });
+      return;
+    }
     await Print.printAsync({ html });
+  } catch (e) {
+    if (isPrintCancelled(e)) return;
+    throw e;
   }
 }
