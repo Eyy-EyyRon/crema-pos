@@ -89,7 +89,9 @@ interface OrderDockProps {
   onCancelAppend: () => void;
 }
 
-export function OrderDock(props: OrderDockProps) {
+// forwardRef so a caller can scroll this pane back to the top without navigating anywhere —
+// see useResponsiveViewCart, which is the tablet-side half of that pattern.
+export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function OrderDock(props, ref) {
   const {
     cart,
     cartCount,
@@ -178,7 +180,7 @@ export function OrderDock(props: OrderDockProps) {
         </View>
       ) : (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+          <ScrollView ref={ref} style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
             {cart.map((c) => (
               <CartRow key={c.cartId} item={c} shotSize={42} onInc={() => onInc(c.cartId)} onDec={() => onDec(c.cartId)} onRemove={() => onRemove(c.cartId)} />
             ))}
@@ -316,7 +318,7 @@ export function OrderDock(props: OrderDockProps) {
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   dock: {

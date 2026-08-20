@@ -1,3 +1,5 @@
+import { breakpoints } from './breakpoints';
+
 export const colors = {
   canvasBg: '#070d14',
   screenBg: '#0A121A',
@@ -70,10 +72,7 @@ export const fonts = {
   display: 'CreamyChicken',
 };
 
-export const TABLET_BREAKPOINT = 768;
-// A landscape phone (e.g. 844×390) can exceed TABLET_BREAKPOINT on width alone while being far
-// too short for the tablet two-pane layout — OrderTypeScreen's tablet variant in particular has
-// no scroll fallback and gets clipped top and bottom. Real tablets clear this height in any
-// orientation (Z Fold unfolded landscape is ~673px tall; iPads are 768px+); phones rotated to
-// landscape land in the 330-430px range and correctly fall back to the phone layout instead.
-export const TABLET_MIN_HEIGHT = 500;
+// Re-exported from breakpoints.ts (the canonical source — see useBreakpoint()) so existing
+// `import { TABLET_BREAKPOINT } from './theme'` call sites keep working unchanged.
+export { TABLET_MIN_HEIGHT } from './breakpoints';
+export const TABLET_BREAKPOINT = breakpoints.tablet;

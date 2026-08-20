@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AlertCircleIcon, PlusIcon, SearchIcon, TrashIcon, XIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
+import { AppText } from '../responsive/AppText';
+import { ResponsiveModal } from '../responsive/ResponsiveModal';
 import { colors, fonts } from '../theme';
 import { PinPad } from './PinPad';
 
@@ -34,23 +36,29 @@ export function StockAdjustModal({
   const [busy, setBusy] = useState(false);
   const [resetTick, setResetTick] = useState(0);
 
+  // Resets on the way IN (next open), not on the way out — closing (X button, or a successful
+  // submit below) leaves `selected`/`delta`/etc. exactly as they were, so whichever step was on
+  // screen at close time — the ingredient list, or the quantity/PIN step — is still what
+  // ResponsiveModal's exit animation renders. Resetting synchronously on close (the previous
+  // approach) nulled `selected` in the same tick the modal started closing, which flashed the
+  // component back to the ingredient-search step for the whole slide-out/fade-out.
+  useEffect(() => {
+    if (visible) {
+      setSearch('');
+      setSelected(null);
+      setDelta('');
+      setSign(-1);
+      setReason('');
+      setError('');
+      setBusy(false);
+    }
+  }, [visible]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return ingredients.slice(0, 20);
     return ingredients.filter((i) => i.name.toLowerCase().includes(q)).slice(0, 20);
   }, [search, ingredients]);
-
-  const reset = () => {
-    setSearch('');
-    setSelected(null);
-    setDelta('');
-    setSign(-1);
-    setReason('');
-    setError('');
-    setBusy(false);
-  };
-
-  if (!visible) return null;
 
   const handlePinComplete = async (pin: string) => {
     if (busy || !selected) return;
@@ -72,17 +80,16 @@ export function StockAdjustModal({
       setResetTick((t) => t + 1);
       setBusy(false);
     } else {
-      reset();
       onClose();
     }
   };
 
   return (
-    <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={s.card}>
+    <ResponsiveModal visible={visible} onClose={onClose} dismissOnBackdropPress={!busy}>
+      <View style={s.content}>
         <View style={s.header}>
-          <Text style={s.title}>Adjust Stock</Text>
-          <Pressable onPress={busy ? undefined : () => { tapLight(); reset(); onClose(); }} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
+          <AppText variant="h2">Adjust Stock</AppText>
+          <Pressable onPress={busy ? undefined : () => { tapLight(); onClose(); }} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
             <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
           </Pressable>
         </View>
@@ -107,7 +114,7 @@ export function StockAdjustModal({
                   <Text style={s.ingStock}>{ing.current_stock} {ing.unit}</Text>
                 </Pressable>
               ))}
-              {filtered.length === 0 && <Text style={s.emptyText}>No matching ingredients.</Text>}
+              {filtered.length === 0 && <AppText variant="caption" style={s.emptyText}>No matching ingredients.</AppText>}
             </ScrollView>
           </>
         ) : (
@@ -128,7 +135,7 @@ export function StockAdjustModal({
               </Pressable>
             </View>
 
-            <Text style={s.label}>Quantity ({selected.unit})</Text>
+            <AppText variant="label" style={s.label}>Quantity ({selected.unit})</AppText>
             <TextInput
               value={delta}
               onChangeText={(t) => { setDelta(t.replace(/[^0-9.]/g, '')); if (error) setError(''); }}
@@ -139,7 +146,7 @@ export function StockAdjustModal({
               editable={!busy}
             />
 
-            <Text style={s.label}>Reason</Text>
+            <AppText variant="label" style={s.label}>Reason</AppText>
             <View style={s.reasonChips}>
               {QUICK_REASONS.map((r) => (
                 <Pressable key={r} onPress={() => setReason(r)} style={[s.reasonChip, reason === r && s.reasonChipActive]}>
@@ -159,11 +166,11 @@ export function StockAdjustModal({
             {!!error && (
               <View style={s.errorRow}>
                 <AlertCircleIcon size={13} color={colors.danger} strokeWidth={2} />
-                <Text style={s.errorText}>{error}</Text>
+                <AppText variant="caption" style={s.errorText}>{error}</AppText>
               </View>
             )}
 
-            <Text style={s.panelDesc}>Manager enters their 4-digit PIN to confirm this correction.</Text>
+            <AppText variant="body" style={s.panelDesc}>Manager enters their 4-digit PIN to confirm this correction.</AppText>
             <PinPad
               key={visible ? 1 : 0}
               keySize={48}
@@ -174,25 +181,17 @@ export function StockAdjustModal({
               error={!!error}
               resetSignal={resetTick}
             />
-            {isOffline && <Text style={s.offlineNote}>Adjusting stock requires an internet connection</Text>}
+            {isOffline && <AppText variant="caption" style={s.offlineNote}>Adjusting stock requires an internet connection</AppText>}
           </ScrollView>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </ResponsiveModal>
   );
 }
 
 const s = StyleSheet.create({
-  overlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 45,
-    alignItems: 'center', justifyContent: 'center', padding: 24,
-    backgroundColor: colors.overlayStrong,
-  },
-  card: {
-    width: 420, maxWidth: '100%', maxHeight: '100%',
-    backgroundColor: colors.screenBg,
-    borderWidth: 1, borderColor: colors.borderGold18,
-    borderRadius: 22, padding: 22,
+  content: {
+    padding: 22,
   },
   // contentContainerStyle for the "adjust quantity" step's ScrollView — that step (sign toggle +
   // qty input + reason chips/input + full PinPad) is tall enough to exceed a short phone's
@@ -201,7 +200,6 @@ const s = StyleSheet.create({
     flexGrow: 1,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 16, fontFamily: fonts.sansExtraBold, color: colors.textPrimary },
   closeBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center' },
   searchRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -215,7 +213,7 @@ const s = StyleSheet.create({
   },
   ingName: { fontSize: 13.5, fontFamily: fonts.sansSemiBold, color: colors.textSecondary },
   ingStock: { fontSize: 12, color: colors.textMuted },
-  emptyText: { fontSize: 12.5, color: colors.textMuted, textAlign: 'center', paddingVertical: 20 },
+  emptyText: { textAlign: 'center', paddingVertical: 20 },
   selectedRow: {
     backgroundColor: colors.chipBg, borderRadius: 12, padding: 12, marginBottom: 14,
   },
@@ -230,7 +228,7 @@ const s = StyleSheet.create({
   signBtnActive: { backgroundColor: colors.gold, borderColor: colors.gold },
   signBtnText: { fontSize: 12.5, fontFamily: fonts.sansBold, color: colors.textMuted },
   signBtnTextActive: { color: colors.screenBg },
-  label: { fontFamily: fonts.sansExtraBold, fontSize: 10, letterSpacing: 1.8, textTransform: 'uppercase', color: colors.textLabel, marginBottom: 8 },
+  label: { marginBottom: 8 },
   input: {
     backgroundColor: colors.cardBg, borderWidth: 1.5, borderColor: colors.borderGold14,
     borderRadius: 12, padding: 13, color: colors.textPrimary, fontSize: 14, marginBottom: 14,
@@ -244,7 +242,7 @@ const s = StyleSheet.create({
   reasonChipText: { fontSize: 12, fontFamily: fonts.sansSemiBold, color: colors.textMuted },
   reasonChipTextActive: { color: colors.screenBg, fontFamily: fonts.sansBold },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  errorText: { fontSize: 12, color: colors.danger, fontFamily: fonts.sansSemiBold },
-  panelDesc: { fontSize: 12, color: colors.textMuted, textAlign: 'center', lineHeight: 18, marginBottom: 16 },
-  offlineNote: { textAlign: 'center', fontSize: 11, color: colors.danger, marginTop: 10, fontFamily: fonts.sansSemiBold },
+  errorText: { color: colors.danger },
+  panelDesc: { color: colors.textMuted, textAlign: 'center', marginBottom: 16 },
+  offlineNote: { textAlign: 'center', color: colors.danger, marginTop: 10 },
 });

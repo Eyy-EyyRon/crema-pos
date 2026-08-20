@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { peso0 } from '../format';
 import { AlertCircleIcon, BanknoteIcon } from '../icons';
 import { tapLight, tapMedium, warning } from '../lib/haptics';
+import { AppText } from '../responsive/AppText';
+import { ResponsiveModal } from '../responsive/ResponsiveModal';
 import { colors, fonts } from '../theme';
 
 // Cash-drawer shift gate — same `cash_drawer_shifts` table/flow as
@@ -22,8 +24,6 @@ export function OpenShiftModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  if (!visible) return null;
-
   const submit = async () => {
     const n = Number(value);
     if (!value || isNaN(n) || n < 0) {
@@ -40,13 +40,16 @@ export function OpenShiftModal({
   };
 
   return (
-    <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={s.card}>
+    // No onClose of its own — a barista can't ring anything up without an open shift, so this
+    // must never be dismissible. dismissOnBackdropPress is hardcoded false (not tied to `busy`,
+    // since it should never be true regardless of state) and onClose is a deliberate no-op.
+    <ResponsiveModal visible={visible} onClose={() => {}} dismissOnBackdropPress={false}>
+      <View style={s.content}>
         <View style={s.icon}>
           <BanknoteIcon size={26} color={colors.gold} strokeWidth={1.6} />
         </View>
-        <Text style={s.title}>Open Cash Drawer</Text>
-        <Text style={s.sub}>Count the starting cash in the drawer before you start taking orders.</Text>
+        <AppText variant="h2">Open Cash Drawer</AppText>
+        <AppText variant="body" style={s.sub}>Count the starting cash in the drawer before you start taking orders.</AppText>
 
         <View style={s.inputRow}>
           <Text style={s.peso}>₱</Text>
@@ -65,7 +68,7 @@ export function OpenShiftModal({
         {!!error && (
           <View style={s.errorRow}>
             <AlertCircleIcon size={13} color={colors.danger} strokeWidth={2} />
-            <Text style={s.errorText}>{error}</Text>
+            <AppText variant="caption" style={s.errorText}>{error}</AppText>
           </View>
         )}
 
@@ -73,7 +76,7 @@ export function OpenShiftModal({
           {busy ? <ActivityIndicator color={colors.screenBg} /> : <Text style={s.btnText}>Open Shift</Text>}
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </ResponsiveModal>
   );
 }
 
@@ -92,8 +95,6 @@ export function CloseShiftModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  if (!visible) return null;
-
   const submit = async () => {
     const n = Number(value);
     if (!value || isNaN(n) || n < 0) {
@@ -110,13 +111,13 @@ export function CloseShiftModal({
   };
 
   return (
-    <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={s.card}>
+    <ResponsiveModal visible={visible} onClose={onCancel} dismissOnBackdropPress={!busy}>
+      <View style={s.content}>
         <View style={s.icon}>
           <BanknoteIcon size={26} color={colors.gold} strokeWidth={1.6} />
         </View>
-        <Text style={s.title}>Close Shift</Text>
-        <Text style={s.sub}>Count the actual cash in the drawer now. This closes your shift and logs you out.</Text>
+        <AppText variant="h2">Close Shift</AppText>
+        <AppText variant="body" style={s.sub}>Count the actual cash in the drawer now. This closes your shift and logs you out.</AppText>
 
         <View style={s.startingCashRow}>
           <Text style={s.startingCashLabel}>Starting Cash</Text>
@@ -140,7 +141,7 @@ export function CloseShiftModal({
         {!!error && (
           <View style={s.errorRow}>
             <AlertCircleIcon size={13} color={colors.danger} strokeWidth={2} />
-            <Text style={s.errorText}>{error}</Text>
+            <AppText variant="caption" style={s.errorText}>{error}</AppText>
           </View>
         )}
 
@@ -151,21 +152,14 @@ export function CloseShiftModal({
           <Text style={s.cancelText}>Cancel</Text>
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </ResponsiveModal>
   );
 }
 
 const s = StyleSheet.create({
-  overlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
-    alignItems: 'center', justifyContent: 'center', padding: 30,
-    backgroundColor: colors.screenBg,
-  },
-  card: {
-    width: 380, maxWidth: '100%',
-    backgroundColor: colors.cardBg,
-    borderWidth: 1, borderColor: colors.borderGold18,
-    borderRadius: 22, padding: 26, alignItems: 'center',
+  content: {
+    padding: 26,
+    alignItems: 'center',
   },
   icon: {
     width: 56, height: 56, borderRadius: 28,
@@ -173,8 +167,7 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: colors.borderGold25,
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  title: { fontSize: 18, fontFamily: fonts.sansExtraBold, color: colors.textPrimary },
-  sub: { fontSize: 12.5, color: colors.textMuted, textAlign: 'center', marginTop: 8, lineHeight: 18, marginBottom: 20 },
+  sub: { color: colors.textMuted, textAlign: 'center', marginTop: 8, marginBottom: 20 },
   startingCashRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%',
     backgroundColor: 'rgba(184,147,90,0.08)', borderWidth: 1, borderColor: colors.borderGold14,
@@ -190,7 +183,7 @@ const s = StyleSheet.create({
   peso: { fontSize: 16, fontFamily: fonts.sansExtraBold, color: colors.textMuted },
   input: { flex: 1, color: colors.textPrimary, fontSize: 16, fontFamily: fonts.sansBold, padding: 0 },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, alignSelf: 'flex-start' },
-  errorText: { fontSize: 12, color: colors.danger, fontFamily: fonts.sansSemiBold },
+  errorText: { color: colors.danger },
   btn: {
     width: '100%', backgroundColor: colors.gold, borderRadius: 14,
     paddingVertical: 15, alignItems: 'center', marginTop: 8,

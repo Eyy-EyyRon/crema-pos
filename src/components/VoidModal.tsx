@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AlertCircleIcon, AlertTriangleIcon, XIcon } from '../icons';
 import { tapLight, tapMedium } from '../lib/haptics';
 import { REASON_CODES, ReasonCode } from '../lib/reasonCodes';
+import { AppText } from '../responsive/AppText';
+import { ResponsiveModal } from '../responsive/ResponsiveModal';
 import { colors, fonts } from '../theme';
 import { QueueEntry } from '../types';
 import { Chip } from './Chip';
@@ -45,7 +47,17 @@ export function VoidModal({
     if (visible) { setReasonCode(''); setReason(''); setError(''); setBusy(false); setTab('pin'); }
   }, [visible]);
 
-  if (!visible || !order) return null;
+  // The caller nulls `order` in the same update that flips `visible` to false (see QueueScreen/
+  // HistoryScreen/QueueModal — `onClose={() => setVoidTarget(null)}` drives both props at once).
+  // ResponsiveModal needs a beat after `visible` goes false to play its exit animation, so this
+  // holds onto the last real order through that beat instead of going blank the instant it's
+  // nulled out from above.
+  const [lastOrder, setLastOrder] = useState(order);
+  useEffect(() => {
+    if (order) setLastOrder(order);
+  }, [order]);
+
+  if (!lastOrder) return null;
 
   const validateReason = (): boolean => {
     if (!reasonCode) { setError('Select a reason'); return false; }
@@ -92,111 +104,98 @@ export function VoidModal({
   };
 
   return (
-    <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={s.card}>
-        <View style={s.header}>
-          <View style={s.headerLeft}>
-            <View style={s.warnIcon}>
-              <AlertTriangleIcon size={16} color={colors.heatMedText} strokeWidth={2} />
-            </View>
-            <View>
-              <Text style={s.title}>Void Order</Text>
-              <Text style={s.subtitle}>{order.no}</Text>
-            </View>
+    <ResponsiveModal visible={visible} onClose={onClose} dismissOnBackdropPress={!busy}>
+      <View style={s.header}>
+        <View style={s.headerLeft}>
+          <View style={s.warnIcon}>
+            <AlertTriangleIcon size={16} color={colors.heatMedText} strokeWidth={2} />
           </View>
-          <Pressable onPress={busy ? undefined : () => { tapLight(); onClose(); }} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
-            <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
-          </Pressable>
+          <View>
+            <AppText variant="h2">Void Order</AppText>
+            <AppText variant="caption" style={s.subtitle}>{lastOrder.no}</AppText>
+          </View>
         </View>
-
-        <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
-          <Text style={s.label}>Reason for Void</Text>
-          <View style={s.reasonChips}>
-            {REASON_CODES.map((r) => (
-              <Chip key={r.code} label={r.label} active={reasonCode === r.code} onPress={() => { setReasonCode(r.code); if (error) setError(''); }} />
-            ))}
-          </View>
-          <Text style={s.label}>Additional Details {reasonCode === 'other' ? '' : '(optional)'}</Text>
-          <TextInput
-            style={s.input}
-            placeholder="e.g. Duplicate entry, ticket rung up twice…"
-            placeholderTextColor={colors.textDim}
-            value={reason}
-            onChangeText={(t) => { setReason(t); if (error) setError(''); }}
-            editable={!busy}
-          />
-
-          {!selfVoidEligible && (
-            <View style={s.tabs}>
-              <Pressable style={[s.tab, tab === 'pin' && s.tabActive]} onPress={() => { tapLight(); setTab('pin'); }}>
-                <Text style={[s.tabText, tab === 'pin' && s.tabTextActive]}>Manager PIN</Text>
-              </Pressable>
-              <Pressable style={[s.tab, tab === 'flag' && s.tabActive]} onPress={() => { tapLight(); setTab('flag'); }}>
-                <Text style={[s.tabText, tab === 'flag' && s.tabTextActive]}>Flag Later</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {!!error && (
-            <View style={s.errorRow}>
-              <AlertCircleIcon size={13} color={colors.danger} strokeWidth={2} />
-              <Text style={s.errorText}>{error}</Text>
-            </View>
-          )}
-
-          {selfVoidEligible ? (
-            <View>
-              <Pressable style={[s.flagBtn, busy && { opacity: 0.5 }]} onPress={handleSelfVoid} disabled={busy}>
-                {busy ? <ActivityIndicator color={colors.screenBg} size="small" /> : <Text style={s.flagBtnText}>Void This Order</Text>}
-              </Pressable>
-            </View>
-          ) : tab === 'pin' ? (
-            <View style={{ alignItems: 'center' }}>
-              <Text style={s.panelDesc}>Manager enters their 4-digit PIN to void this order immediately.</Text>
-              <PinPad
-                key={visible ? 1 : 0}
-                keySize={52}
-                gap={10}
-                onComplete={handlePinComplete}
-                onChangeLength={() => error && setError('')}
-                disabled={busy}
-                error={!!error}
-                resetSignal={resetTick}
-              />
-              {isOffline && <Text style={s.offlineNote}>Offline — this void will be queued and confirmed once reconnected</Text>}
-            </View>
-          ) : (
-            <View>
-              <View style={s.flagInfo}>
-                <AlertTriangleIcon size={15} color={colors.heatMedText} strokeWidth={2} />
-                <Text style={s.flagInfoText}>
-                  This order leaves the queue but stays pending until a manager reviews it in cafe-web-dashboard.
-                </Text>
-              </View>
-              <Pressable style={[s.flagBtn, busy && { opacity: 0.5 }]} onPress={handleFlag} disabled={busy}>
-                {busy ? <ActivityIndicator color={colors.screenBg} size="small" /> : <Text style={s.flagBtnText}>Flag for Manager Review</Text>}
-              </Pressable>
-              {isOffline && <Text style={s.offlineNote}>Offline — this will sync once reconnected</Text>}
-            </View>
-          )}
-        </ScrollView>
+        <Pressable onPress={busy ? undefined : () => { tapLight(); onClose(); }} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
+          <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
+        </Pressable>
       </View>
-    </KeyboardAvoidingView>
+
+      <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+        <AppText variant="label" style={s.label}>Reason for Void</AppText>
+        <View style={s.reasonChips}>
+          {REASON_CODES.map((r) => (
+            <Chip key={r.code} label={r.label} active={reasonCode === r.code} onPress={() => { setReasonCode(r.code); if (error) setError(''); }} />
+          ))}
+        </View>
+        <AppText variant="label" style={s.label}>Additional Details {reasonCode === 'other' ? '' : '(optional)'}</AppText>
+        <TextInput
+          style={s.input}
+          placeholder="e.g. Duplicate entry, ticket rung up twice…"
+          placeholderTextColor={colors.textDim}
+          value={reason}
+          onChangeText={(t) => { setReason(t); if (error) setError(''); }}
+          editable={!busy}
+        />
+
+        {!selfVoidEligible && (
+          <View style={s.tabs}>
+            <Pressable style={[s.tab, tab === 'pin' && s.tabActive]} onPress={() => { tapLight(); setTab('pin'); }}>
+              <Text style={[s.tabText, tab === 'pin' && s.tabTextActive]}>Manager PIN</Text>
+            </Pressable>
+            <Pressable style={[s.tab, tab === 'flag' && s.tabActive]} onPress={() => { tapLight(); setTab('flag'); }}>
+              <Text style={[s.tabText, tab === 'flag' && s.tabTextActive]}>Flag Later</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {!!error && (
+          <View style={s.errorRow}>
+            <AlertCircleIcon size={13} color={colors.danger} strokeWidth={2} />
+            <AppText variant="caption" style={s.errorText}>{error}</AppText>
+          </View>
+        )}
+
+        {selfVoidEligible ? (
+          <View>
+            <Pressable style={[s.flagBtn, busy && { opacity: 0.5 }]} onPress={handleSelfVoid} disabled={busy}>
+              {busy ? <ActivityIndicator color={colors.screenBg} size="small" /> : <Text style={s.flagBtnText}>Void This Order</Text>}
+            </Pressable>
+          </View>
+        ) : tab === 'pin' ? (
+          <View style={{ alignItems: 'center' }}>
+            <AppText variant="body" style={s.panelDesc}>Manager enters their 4-digit PIN to void this order immediately.</AppText>
+            <PinPad
+              key={visible ? 1 : 0}
+              keySize={52}
+              gap={10}
+              onComplete={handlePinComplete}
+              onChangeLength={() => error && setError('')}
+              disabled={busy}
+              error={!!error}
+              resetSignal={resetTick}
+            />
+            {isOffline && <AppText variant="caption" style={s.offlineNote}>Offline — this void will be queued and confirmed once reconnected</AppText>}
+          </View>
+        ) : (
+          <View>
+            <View style={s.flagInfo}>
+              <AlertTriangleIcon size={15} color={colors.heatMedText} strokeWidth={2} />
+              <AppText variant="body" style={s.flagInfoText}>
+                This order leaves the queue but stays pending until a manager reviews it in cafe-web-dashboard.
+              </AppText>
+            </View>
+            <Pressable style={[s.flagBtn, busy && { opacity: 0.5 }]} onPress={handleFlag} disabled={busy}>
+              {busy ? <ActivityIndicator color={colors.screenBg} size="small" /> : <Text style={s.flagBtnText}>Flag for Manager Review</Text>}
+            </Pressable>
+            {isOffline && <AppText variant="caption" style={s.offlineNote}>Offline — this will sync once reconnected</AppText>}
+          </View>
+        )}
+      </ScrollView>
+    </ResponsiveModal>
   );
 }
 
 const s = StyleSheet.create({
-  overlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 40,
-    alignItems: 'center', justifyContent: 'center', padding: 24,
-    backgroundColor: colors.overlayStrong,
-  },
-  card: {
-    width: 420, maxWidth: '100%', maxHeight: '100%',
-    backgroundColor: colors.screenBg,
-    borderWidth: 1, borderColor: colors.borderGold18,
-    borderRadius: 22, overflow: 'hidden',
-  },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, paddingTop: 22, marginBottom: 18 },
   body: { paddingHorizontal: 22, paddingBottom: 22 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -204,11 +203,10 @@ const s = StyleSheet.create({
     width: 34, height: 34, borderRadius: 10, backgroundColor: colors.heatMedBg,
     borderWidth: 1, borderColor: 'rgba(176,122,32,0.3)', alignItems: 'center', justifyContent: 'center',
   },
-  title: { fontSize: 16, fontFamily: fonts.sansExtraBold, color: colors.textPrimary },
-  subtitle: { fontSize: 12, fontFamily: fonts.sansSemiBold, color: colors.textMuted, marginTop: 1 },
+  subtitle: { marginTop: 1 },
   closeBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.chipBg, alignItems: 'center', justifyContent: 'center' },
 
-  label: { fontFamily: fonts.sansExtraBold, fontSize: 10, letterSpacing: 1.8, textTransform: 'uppercase', color: colors.textLabel, marginBottom: 8 },
+  label: { marginBottom: 8 },
   reasonChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   input: {
     backgroundColor: colors.cardBg, borderWidth: 1.5, borderColor: colors.borderGold14,
@@ -222,17 +220,17 @@ const s = StyleSheet.create({
   tabTextActive: { color: colors.textPrimary },
 
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 },
-  errorText: { fontSize: 12, color: colors.danger, fontFamily: fonts.sansSemiBold },
+  errorText: { color: colors.danger },
 
-  panelDesc: { fontSize: 12, color: colors.textMuted, textAlign: 'center', lineHeight: 18, marginBottom: 18 },
+  panelDesc: { color: colors.textMuted, textAlign: 'center', marginBottom: 18 },
 
   flagInfo: {
     flexDirection: 'row', gap: 10, alignItems: 'flex-start',
     backgroundColor: colors.heatMedBg, borderRadius: 12, padding: 14,
     borderWidth: 1, borderColor: 'rgba(176,122,32,0.25)', marginBottom: 16,
   },
-  flagInfoText: { flex: 1, fontSize: 13, color: colors.heatMedText, lineHeight: 19 },
+  flagInfoText: { flex: 1, color: colors.heatMedText },
   flagBtn: { backgroundColor: colors.gold, paddingVertical: 15, borderRadius: 14, alignItems: 'center' },
   flagBtnText: { color: colors.screenBg, fontSize: 14, fontFamily: fonts.sansExtraBold },
-  offlineNote: { textAlign: 'center', fontSize: 11, color: colors.danger, marginTop: 10, fontFamily: fonts.sansSemiBold },
+  offlineNote: { textAlign: 'center', color: colors.danger, marginTop: 10 },
 });

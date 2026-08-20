@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { SearchIcon } from '../icons';
 import { colors, fonts } from '../theme';
 import { MenuItemStock } from '../useCremaPos';
 import { MenuItem } from '../types';
 import { MenuItemCard } from './MenuItemCard';
+import { ResponsiveGrid } from '../responsive/ResponsiveGrid';
 
 interface MenuGridProps {
   items: MenuItem[];
@@ -17,6 +18,9 @@ interface MenuGridProps {
   gap?: number;
 }
 
+// Thin wrapper: MenuGrid owns the menu-specific bits (empty state, MenuItemCard, stock/qty
+// lookups) and hands the column-count/tile-width math off to ResponsiveGrid — the same formula
+// this file used to compute inline, now shared with any other grid in the app.
 export function MenuGrid({
   items,
   cartQtyByMenuId,
@@ -27,16 +31,9 @@ export function MenuGrid({
   minTileWidth = 158,
   gap = 15,
 }: MenuGridProps) {
-  const [width, setWidth] = useState(0);
-
-  const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
-
-  const columns = fixedColumns ?? Math.max(1, Math.floor((width + gap) / (minTileWidth + gap)));
-  const itemWidth = width > 0 ? (width - gap * (columns - 1)) / columns : undefined;
-
   if (items.length === 0) {
     return (
-      <View onLayout={onLayout} style={styles.empty}>
+      <View style={styles.empty}>
         <SearchIcon size={26} color={colors.textLabel} strokeWidth={1.8} />
         <Text style={styles.emptyTitle}>No items found</Text>
         <Text style={styles.emptySub}>Try a different search or category.</Text>
@@ -45,20 +42,22 @@ export function MenuGrid({
   }
 
   return (
-    <View onLayout={onLayout} style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
-      {itemWidth &&
-        items.map((it) => (
-          <View key={it.id} style={{ width: itemWidth }}>
-            <MenuItemCard
-              item={it}
-              qty={cartQtyByMenuId[it.id] || 0}
-              variant={variant}
-              onPress={() => onItemPress(it.id)}
-              stock={stockByMenuId?.[it.id]}
-            />
-          </View>
-        ))}
-    </View>
+    <ResponsiveGrid
+      items={items}
+      keyExtractor={(it) => it.id}
+      minTileWidth={minTileWidth}
+      gap={gap}
+      columns={fixedColumns}
+      renderItem={(it) => (
+        <MenuItemCard
+          item={it}
+          qty={cartQtyByMenuId[it.id] || 0}
+          variant={variant}
+          onPress={() => onItemPress(it.id)}
+          stock={stockByMenuId?.[it.id]}
+        />
+      )}
+    />
   );
 }
 
