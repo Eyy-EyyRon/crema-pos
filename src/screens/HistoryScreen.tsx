@@ -13,6 +13,7 @@ import { printReceipt, ReceiptStoreInfo } from '../lib/receipt';
 import { supabase } from '../lib/supabase';
 import { colors, fonts } from '../theme';
 import { QueueItemLine } from '../types';
+import { useBreakpoint } from '../breakpoints';
 
 type HistoryOrder = {
   id: string;
@@ -93,6 +94,8 @@ export function HistoryScreen({
   isOffline: boolean;
   storeInfo: ReceiptStoreInfo;
 }) {
+  const { isTablet, gutter, width } = useBreakpoint();
+  const twoCol = width >= 768;
   const [orders, setOrders] = useState<HistoryOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -210,7 +213,7 @@ export function HistoryScreen({
     <View style={s.screen}>
       <BackHeader title="Order History" onBack={onBack} />
       <SearchBar value={search} onChangeText={setSearch} placeholder="Search by receipt # or item…" />
-      <View style={s.rangeRow}>
+      <View style={[s.rangeRow, { paddingHorizontal: gutter }, isTablet && s.rangeRowTablet]}>
         {DATE_RANGE_OPTIONS.map((opt) => (
           <Pressable
             key={opt.key}
@@ -228,7 +231,7 @@ export function HistoryScreen({
         <View style={s.center}><ActivityIndicator color={colors.gold} size="large" /></View>
       ) : (
         <ScrollView
-          contentContainerStyle={s.content}
+          contentContainerStyle={[s.content, { paddingHorizontal: gutter }, twoCol && s.contentTablet]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
         >
           {loadError ? (
@@ -241,13 +244,13 @@ export function HistoryScreen({
             const canRefund = o.status === 'completed';
             const itemsStr = o.items.map((it) => `${it.qty}× ${it.name}`).join(', ');
             return (
-              <View key={o.id} style={s.card}>
+              <View key={o.id} style={[s.card, isTablet && s.cardTablet, twoCol && { width: '48%' }]}>
                 <View style={s.cardTop}>
-                  <Text style={s.no}>{o.no}</Text>
-                  <Text style={s.total}>{peso0(o.total)}</Text>
+                  <Text style={[s.no, isTablet && s.noTablet]}>{o.no}</Text>
+                  <Text style={[s.total, isTablet && s.totalTablet]}>{peso0(o.total)}</Text>
                 </View>
                 {!!o.customerName && <Text style={s.customerName}>For: {o.customerName}</Text>}
-                <Text style={s.items} numberOfLines={2}>{itemsStr}</Text>
+                <Text style={[s.items, isTablet && s.itemsTablet]} numberOfLines={2}>{itemsStr}</Text>
                 {!!o.refundAmount && (
                   <Text style={s.refundLine}>Refunded − {peso0(o.refundAmount)}</Text>
                 )}
@@ -331,9 +334,11 @@ export function HistoryScreen({
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.screenBg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingHorizontal: 18, paddingBottom: 24 },
-  empty: { color: colors.textMuted, fontSize: 13, textAlign: 'center', paddingVertical: 40 },
-  rangeRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 18, paddingBottom: 10, flexWrap: 'wrap' },
+  content: { padding: 16, paddingBottom: 24 },
+  contentTablet: { paddingBottom: 28, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  empty: { color: colors.textMuted, fontSize: 13, textAlign: 'center', paddingVertical: 40, width: '100%' },
+  rangeRow: { flexDirection: 'row', gap: 8, paddingBottom: 10, flexWrap: 'wrap' },
+  rangeRowTablet: { paddingBottom: 12, gap: 10 },
   rangeChip: {
     paddingVertical: 6, paddingHorizontal: 13, borderRadius: 20, borderWidth: 1,
     backgroundColor: 'rgba(26,42,62,0.4)', borderColor: colors.borderGold12,
@@ -345,11 +350,18 @@ const s = StyleSheet.create({
     backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.borderGold12,
     borderRadius: 15, padding: 15, marginBottom: 11,
   },
+  cardTablet: {
+    padding: 17,
+    marginBottom: 13,
+  },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   no: { fontSize: 14.5, fontFamily: fonts.sansExtraBold, color: colors.textPrimary },
+  noTablet: { fontSize: 16 },
   total: { fontSize: 14, fontFamily: fonts.sansExtraBold, color: colors.goldLight },
+  totalTablet: { fontSize: 15 },
   customerName: { fontSize: 12, fontFamily: fonts.sansBold, color: colors.goldLight, marginBottom: 6 },
   items: { fontSize: 12.5, color: colors.textSecondary, lineHeight: 18, marginBottom: 10 },
+  itemsTablet: { fontSize: 13, lineHeight: 19 },
   refundLine: { fontSize: 11.5, fontFamily: fonts.sansSemiBold, color: colors.heatMedText, marginBottom: 10, marginTop: -4 },
   cardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   status: { fontSize: 11.5, fontFamily: fonts.sansBold, textTransform: 'uppercase', letterSpacing: 0.4 },
