@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
   fill: {
     flexGrow: 1,
     flexBasis: 0,
-    minWidth: 120,
+    minWidth: 96,
     alignItems: 'center',
   },
   label: {
