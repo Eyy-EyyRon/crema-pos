@@ -1,5 +1,5 @@
 import React from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BagIcon } from '../icons';
 import { CartRow } from '../components/CartRow';
@@ -22,6 +22,7 @@ import { peso } from '../format';
 import { colors, fonts } from '../theme';
 import { CartItem, Discount, OrderType, PayMethod } from '../types';
 import { useBreakpoint } from '../breakpoints';
+import { useKeyboardOverlap } from '../responsive/useKeyboardOverlap';
 
 interface OrderDockProps {
   cart: CartItem[];
@@ -163,6 +164,7 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
     onCancelAppend,
   } = props;
   const insets = useSafeAreaInsets();
+  const kb = useKeyboardOverlap();
   const isAppend = !!appendTargetOrderNo;
 
   const isEmpty = cartCount === 0;
@@ -183,8 +185,15 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
           <Text style={[styles.emptySub, isTablet && styles.emptySubTablet]}>Tap a product to start building{'\n'}this order.</Text>
         </View>
       ) : (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView ref={ref} style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}>
+        <View style={[styles.body, { paddingBottom: kb }]}>
+          <ScrollView
+            ref={ref}
+            style={{ flex: 1 }}
+            contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+          >
             {cart.map((c) => (
               <CartRow
                 key={c.cartId}
@@ -316,7 +325,7 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
               dense
             />
           </ScrollView>
-          <View style={[styles.footer, isTablet && styles.footerTablet, { paddingBottom: 14 + insets.bottom }]}>
+          <View style={[styles.footer, isTablet && styles.footerTablet, { paddingBottom: kb > 0 ? 10 : 14 + insets.bottom }]}>
             {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
             <ProcessPaymentButton
               totalStr={peso(total)}
@@ -326,7 +335,7 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
               label={isAppend ? 'Add to Order' : 'Process Payment'}
             />
           </View>
-        </KeyboardAvoidingView>
+        </View>
       )}
     </View>
   );
@@ -336,9 +345,14 @@ const styles = StyleSheet.create({
   dock: {
     flexShrink: 0,
     alignSelf: 'stretch',
+    minHeight: 0,
     borderLeftWidth: 1,
     borderLeftColor: colors.borderGold12,
     backgroundColor: colors.dockBg,
+  },
+  body: {
+    flex: 1,
+    minHeight: 0,
   },
   header: {
     paddingTop: 20,

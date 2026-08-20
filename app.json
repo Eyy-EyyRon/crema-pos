@@ -12,6 +12,7 @@
     "android": {
       "package": "com.crema.pos",
       "versionCode": 4,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.REQUEST_INSTALL_PACKAGES"
       ],

@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, ViewStyle } from 'react-native';
+import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { useBreakpoint } from '../breakpoints';
+import { useKeyboardOverlap } from './useKeyboardOverlap';
 
 const ANIM_DURATION = 220;
 const TABLET_DIALOG_MAX_WIDTH = 500;
@@ -44,6 +45,7 @@ export function ResponsiveModal({
 }: ResponsiveModalProps) {
   const { isSplit, height: windowHeight } = useBreakpoint();
   const insets = useSafeAreaInsets();
+  const kb = useKeyboardOverlap();
 
   // Stays mounted through the exit animation — `visible` flips to false the instant the caller
   // decides to close, but the sheet/dialog needs one more animated frame before it can unmount.
@@ -75,25 +77,25 @@ export function ResponsiveModal({
   if (!rendered) return null;
 
   const sheetMax = isSplit
-    ? Math.max(280, windowHeight - insets.top - insets.bottom - 48)
-    : Math.min(windowHeight, Math.max(280, Math.round(windowHeight * 0.92)));
-  const sheetPadBottom = isSplit ? 0 : insets.bottom + 12;
+    ? Math.max(280, windowHeight - insets.top - insets.bottom - 48 - kb)
+    : Math.min(windowHeight - kb, Math.max(280, Math.round(windowHeight * 0.92) - kb));
+  const sheetPadBottom = isSplit ? 0 : (kb > 0 ? 8 : insets.bottom + 12);
   const bodyMax = Math.max(240, sheetMax - sheetPadBottom);
   const sheetTranslateY = progress.interpolate({ inputRange: [0, 1], outputRange: [windowHeight, 0] });
 
   const body = (
-    <KeyboardAvoidingView style={[styles.kav, { maxHeight: bodyMax }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        style={{ maxHeight: bodyMax, width: '100%' }}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-        bounces={false}
-      >
-        {children}
-      </ScrollView>
-    </KeyboardAvoidingView>
+    <ScrollView
+      style={{ maxHeight: bodyMax, width: '100%' }}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+      showsVerticalScrollIndicator={false}
+      nestedScrollEnabled
+      bounces={false}
+    >
+      {children}
+    </ScrollView>
   );
 
   return (
@@ -114,7 +116,7 @@ export function ResponsiveModal({
         <Animated.View
           style={[
             styles.tabletCenterWrap,
-            { paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right },
+            { paddingTop: insets.top, paddingBottom: insets.bottom + kb, paddingLeft: insets.left, paddingRight: insets.right },
           ]}
           pointerEvents="box-none"
         >
@@ -123,7 +125,7 @@ export function ResponsiveModal({
           </Animated.View>
         </Animated.View>
       ) : (
-        <Animated.View style={styles.phoneSheetWrap} pointerEvents="box-none">
+        <Animated.View style={[styles.phoneSheetWrap, kb > 0 && { bottom: kb }]} pointerEvents="box-none">
           <Animated.View
             style={[
               styles.phoneSheet,
@@ -149,10 +151,6 @@ const styles = StyleSheet.create({
   backdrop: {
     backgroundColor: colors.overlayStrong,
     zIndex: 0,
-  },
-  kav: {
-    width: '100%',
-    flexShrink: 1,
   },
   scrollContent: {
     flexGrow: 1,

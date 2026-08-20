@@ -1,5 +1,5 @@
-import React from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { peso0 } from '../format';
 import { AlertTriangleIcon, BagIcon, MinusIcon, PlusIcon, XIcon } from '../icons';
 import { tapLight, tapMedium, warning } from '../lib/haptics';
@@ -8,6 +8,7 @@ import { ModGroupDef, SelectedMod, SelectedMods } from '../types';
 import { OptionChip } from './OptionChip';
 import { Shot } from './Shot';
 import { useBreakpoint } from '../breakpoints';
+import { useKeyboardOverlap } from '../responsive/useKeyboardOverlap';
 
 interface CustomizeContentProps {
   category: string;
@@ -27,6 +28,8 @@ interface CustomizeContentProps {
   onClose: () => void;
   /** When true, the primary CTA updates the existing cart line instead of appending. */
   isEditing?: boolean;
+  /** Tablet sidebar fills its pane. Phone sheet should hug content instead of stretching full-screen. */
+  fillHeight?: boolean;
 }
 
 export function CustomizeContent({
@@ -46,15 +49,20 @@ export function CustomizeContent({
   onAdd,
   onClose,
   isEditing = false,
+  fillHeight = true,
 }: CustomizeContentProps) {
-  const { isTablet } = useBreakpoint();
+  const { isTablet, isCompact, width, height } = useBreakpoint();
+  const kb = useKeyboardOverlap();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollMax = Math.max(120, Math.round((height - kb) * 0.42));
   const addLabel = isEditing
     ? (qty > 1 ? `Update ${qty}×` : 'Update Item')
     : (qty > 1 ? `Add ${qty}× to Order` : 'Add to Order');
   const addTotalStr = peso0(addUnitTotal * qty);
+  const tightAdd = width < 360;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, fillHeight && styles.containerFill]}>
       {isTablet && <View style={styles.topAccent} />}
       <View style={[styles.header, isTablet && styles.headerTablet]}>
         <Shot label="·" style={{ width: isTablet ? 56 : 52, height: isTablet ? 56 : 52, borderRadius: isTablet ? 14 : 13, flexShrink: 0 }} />
@@ -68,8 +76,16 @@ export function CustomizeContent({
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}>
+      <ScrollView
+        ref={scrollRef}
+        style={fillHeight ? styles.scrollFill : { maxHeight: scrollMax }}
+        contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet, isCompact && { paddingBottom: 8 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
         {groups.map((g) => (
           <View key={g.id} style={styles.group}>
             <View style={styles.groupHeader}>
@@ -108,11 +124,12 @@ export function CustomizeContent({
           placeholder="e.g. Extra hot, no foam, less ice…"
           placeholderTextColor={colors.textMuted}
           multiline
+          onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80)}
           style={[styles.noteInput, isTablet && { height: 64 }]}
         />
       </ScrollView>
 
-      <View style={[styles.footer, isTablet && styles.footerTablet]}>
+      <View style={[styles.footer, isTablet && styles.footerTablet, isCompact && styles.footerCompact]}>
         <View style={[styles.footerRow, !isTablet && styles.footerRowPhone]}>
           <View style={[styles.stepper, !isTablet && styles.stepperPhone]}>
             <Pressable onPress={() => { tapLight(); onDecQty(); }} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Decrease quantity">
@@ -127,10 +144,10 @@ export function CustomizeContent({
             onPress={() => { if (addValid) { tapMedium(); onAdd(); } else { warning(); } }}
             style={[styles.addBtn, !isTablet && styles.addBtnPhone, { opacity: addValid ? 1 : 0.4 }]}
           >
-            <BagIcon size={17} color={colors.screenBg} strokeWidth={2} />
-            <Text style={styles.addLabel} numberOfLines={1}>{addLabel}</Text>
+            <BagIcon size={tightAdd ? 15 : 17} color={colors.screenBg} strokeWidth={2} />
+            <Text style={[styles.addLabel, tightAdd && { fontSize: 13 }]} numberOfLines={1}>{addLabel}</Text>
             <View style={styles.addTotalWrap}>
-              <Text style={styles.addTotal}>{addTotalStr}</Text>
+              <Text style={[styles.addTotal, tightAdd && { fontSize: 13 }]}>{addTotalStr}</Text>
             </View>
           </Pressable>
         </View>
@@ -141,17 +158,15 @@ export function CustomizeContent({
           </View>
         )}
       </View>
-      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     backgroundColor: colors.screenBg,
   },
-  keyboardArea: {
+  containerFill: {
     flex: 1,
   },
   topAccent: {
@@ -200,7 +215,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scroll: {
+  scrollFill: {
     flex: 1,
   },
   scrollContent: {
@@ -288,6 +303,10 @@ const styles = StyleSheet.create({
   footerTablet: {
     paddingHorizontal: 22,
   },
+  footerCompact: {
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -333,6 +352,7 @@ const styles = StyleSheet.create({
   },
   addBtn: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -351,6 +371,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   addLabel: {
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 14.5,
     fontFamily: fonts.sansExtraBold,
     color: colors.screenBg,

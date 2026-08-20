@@ -1,5 +1,5 @@
 import React from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CartRow } from '../components/CartRow';
 import {
@@ -24,6 +24,7 @@ import { peso } from '../format';
 import { colors } from '../theme';
 import { CartItem, Discount, OrderType, PayMethod } from '../types';
 import { useBreakpoint } from '../breakpoints';
+import { useKeyboardOverlap } from '../responsive/useKeyboardOverlap';
 
 interface CheckoutScreenProps {
   cart: CartItem[];
@@ -223,13 +224,20 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     onCancelAppend,
   } = props;
   const insets = useSafeAreaInsets();
+  const kb = useKeyboardOverlap();
   const isAppend = !!appendTargetOrderNo;
 
   return (
     <View style={styles.screen}>
       <BackHeader title={isAppend ? 'Add to Order' : 'Your Order'} onBack={onBack} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: padH, paddingVertical: narrow ? 12 : 16 }]}>
+      <View style={[styles.body, { paddingBottom: kb }]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingHorizontal: padH, paddingVertical: narrow ? 12 : 16 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+      >
         <SectionLabel style={{ marginBottom: 10 }}>Items</SectionLabel>
         {cart.map((c) => (
           <CartRow
@@ -395,7 +403,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           taxRatePct={taxRatePct} isTaxInclusive={isTaxInclusive} serviceChargePct={serviceChargePct}
         />
       </ScrollView>
-      <View style={[styles.footer, { paddingHorizontal: padH, paddingBottom: (isCompact ? 12 : 20) + insets.bottom }]}>
+      <View style={[styles.footer, { paddingHorizontal: padH, paddingBottom: kb > 0 ? 10 : (isCompact ? 12 : 20) + insets.bottom }]}>
         {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
         <ProcessPaymentButton
           totalStr={peso(isAppend ? total : amountDue)}
@@ -405,7 +413,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           label={isAppend ? 'Add to Order' : 'Process Payment'}
         />
       </View>
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }
@@ -414,6 +422,13 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.screenBg,
+  },
+  body: {
+    flex: 1,
+    minHeight: 0,
+  },
+  scroll: {
+    flex: 1,
   },
   content: {
     paddingBottom: 20,

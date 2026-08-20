@@ -1,6 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBreakpoint } from '../breakpoints';
+import { useKeyboardOverlap } from '../responsive/useKeyboardOverlap';
 import { colors } from '../theme';
 import { CustomizeContent } from './CustomizeContent';
 
@@ -8,15 +10,26 @@ interface CustomizeSheetProps extends React.ComponentProps<typeof CustomizeConte
 
 export function CustomizeSheet(props: CustomizeSheetProps) {
   const { isCompact, height } = useBreakpoint();
-  const topOffset = isCompact ? 8 : Math.max(48, Math.round(height * 0.08));
+  const insets = useSafeAreaInsets();
+  const kb = useKeyboardOverlap();
+  const topGap = isCompact ? 8 : Math.max(48, Math.round(height * 0.08));
+  const sheetMax = Math.max(280, height - topGap - kb);
   return (
-    <View style={styles.overlayContainer}>
+    <View style={[styles.overlayContainer, { paddingBottom: kb }]} pointerEvents="box-none">
       <Pressable style={styles.overlay} onPress={props.onClose} />
-      <View style={[styles.sheet, { top: topOffset }]}>
+      <View
+        style={[
+          styles.sheet,
+          {
+            maxHeight: sheetMax,
+            paddingBottom: kb > 0 ? 8 : insets.bottom,
+          },
+        ]}
+      >
         <View style={styles.handleWrap}>
           <View style={styles.handle} />
         </View>
-        <CustomizeContent {...props} />
+        <CustomizeContent {...props} fillHeight={false} />
       </View>
     </View>
   );
@@ -29,6 +42,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    justifyContent: 'flex-end',
     zIndex: 20,
   },
   overlay: {
@@ -40,10 +54,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlay,
   },
   sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    width: '100%',
+    flexGrow: 0,
+    flexShrink: 1,
     backgroundColor: colors.screenBg,
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
