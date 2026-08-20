@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AlertCircleIcon, PlusIcon, SearchIcon, TrashIcon, XIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
@@ -78,7 +78,7 @@ export function StockAdjustModal({
   };
 
   return (
-    <View style={s.overlay}>
+    <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={s.card}>
         <View style={s.header}>
           <Text style={s.title}>Adjust Stock</Text>
@@ -111,7 +111,7 @@ export function StockAdjustModal({
             </ScrollView>
           </>
         ) : (
-          <>
+          <ScrollView contentContainerStyle={s.selectedBody} showsVerticalScrollIndicator={false}>
             <Pressable onPress={() => setSelected(null)} style={s.selectedRow}>
               <Text style={s.selectedName}>{selected.name}</Text>
               <Text style={s.selectedStock}>Current: {selected.current_stock} {selected.unit} · Change</Text>
@@ -175,10 +175,10 @@ export function StockAdjustModal({
               resetSignal={resetTick}
             />
             {isOffline && <Text style={s.offlineNote}>Adjusting stock requires an internet connection</Text>}
-          </>
+          </ScrollView>
         )}
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -189,10 +189,16 @@ const s = StyleSheet.create({
     backgroundColor: colors.overlayStrong,
   },
   card: {
-    width: 420, maxWidth: '100%',
+    width: 420, maxWidth: '100%', maxHeight: '100%',
     backgroundColor: colors.screenBg,
     borderWidth: 1, borderColor: colors.borderGold18,
     borderRadius: 22, padding: 22,
+  },
+  // contentContainerStyle for the "adjust quantity" step's ScrollView — that step (sign toggle +
+  // qty input + reason chips/input + full PinPad) is tall enough to exceed a short phone's
+  // height on its own, even before a keyboard is involved, unlike the ingredient-search step.
+  selectedBody: {
+    flexGrow: 1,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontSize: 16, fontFamily: fonts.sansExtraBold, color: colors.textPrimary },

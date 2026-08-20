@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { peso0 } from '../format';
 import { AlertCircleIcon, BanknoteIcon } from '../icons';
 import { tapLight, tapMedium, warning } from '../lib/haptics';
@@ -40,7 +40,7 @@ export function OpenShiftModal({
   };
 
   return (
-    <View style={s.overlay}>
+    <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={s.card}>
         <View style={s.icon}>
           <BanknoteIcon size={26} color={colors.gold} strokeWidth={1.6} />
@@ -73,7 +73,7 @@ export function OpenShiftModal({
           {busy ? <ActivityIndicator color={colors.screenBg} /> : <Text style={s.btnText}>Open Shift</Text>}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -110,7 +110,7 @@ export function CloseShiftModal({
   };
 
   return (
-    <View style={s.overlay}>
+    <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={s.card}>
         <View style={s.icon}>
           <BanknoteIcon size={26} color={colors.gold} strokeWidth={1.6} />
@@ -151,7 +151,7 @@ export function CloseShiftModal({
           <Text style={s.cancelText}>Cancel</Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

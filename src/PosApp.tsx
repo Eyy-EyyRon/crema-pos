@@ -25,7 +25,7 @@ import { OrderDock } from './screens/OrderDock';
 import { OrderTypeScreen } from './screens/OrderTypeScreen';
 import { QueueScreen } from './screens/QueueScreen';
 import { SuccessScreen } from './screens/SuccessScreen';
-import { colors, TABLET_BREAKPOINT } from './theme';
+import { colors, TABLET_BREAKPOINT, TABLET_MIN_HEIGHT } from './theme';
 import { useCremaPos } from './useCremaPos';
 
 function Splash() {
@@ -37,8 +37,8 @@ function Splash() {
 }
 
 export function PosApp() {
-  const { width } = useWindowDimensions();
-  const isTablet = width >= TABLET_BREAKPOINT;
+  const { width, height } = useWindowDimensions();
+  const isTablet = width >= TABLET_BREAKPOINT && height >= TABLET_MIN_HEIGHT;
   const [closeShiftVisible, setCloseShiftVisible] = useState(false);
   const [stockAdjustVisible, setStockAdjustVisible] = useState(false);
 

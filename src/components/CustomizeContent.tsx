@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { peso0 } from '../format';
 import { AlertTriangleIcon, BagIcon, MinusIcon, PlusIcon, XIcon } from '../icons';
 import { tapLight, tapMedium, warning } from '../lib/haptics';
@@ -64,6 +64,7 @@ export function CustomizeContent({
         </Pressable>
       </View>
 
+      <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, tablet && styles.scrollContentTablet]}>
         {groups.map((g) => (
           <View key={g.id} style={styles.group}>
@@ -136,6 +137,7 @@ export function CustomizeContent({
           </View>
         )}
       </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -144,6 +146,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.screenBg,
+  },
+  keyboardArea: {
+    flex: 1,
   },
   topAccent: {
     height: 4,

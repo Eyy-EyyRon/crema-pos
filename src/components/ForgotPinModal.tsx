@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CheckCircleIcon, LockIcon, XIcon } from '../icons';
 import { tapLight, tapMedium } from '../lib/haptics';
 import { colors, fonts } from '../theme';
@@ -39,7 +39,7 @@ export function ForgotPinModal({
   };
 
   return (
-    <View style={s.overlay}>
+    <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={s.card}>
         <View style={s.header}>
           <View style={s.headerLeft}>
@@ -83,7 +83,7 @@ export function ForgotPinModal({
           </>
         )}
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

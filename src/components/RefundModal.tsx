@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { peso0 } from '../format';
 import { AlertCircleIcon, AlertTriangleIcon, XIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
@@ -79,7 +79,7 @@ export function RefundModal({
   };
 
   return (
-    <View style={s.overlay}>
+    <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={s.card}>
         <View style={s.header}>
           <View style={s.headerLeft}>
@@ -151,7 +151,7 @@ export function RefundModal({
           </View>
         </ScrollView>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
