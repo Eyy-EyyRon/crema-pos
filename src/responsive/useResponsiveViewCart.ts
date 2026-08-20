@@ -20,16 +20,16 @@ export interface ResponsiveViewCart {
  * this hook only decides what an onPress handler should DO, not where the cart data lives.
  */
 export function useResponsiveViewCart(onNavigateToCart: () => void): ResponsiveViewCart {
-  const { isTablet } = useBreakpoint();
+  const { isSplit } = useBreakpoint();
   const dockScrollRef = useRef<ScrollView>(null);
 
   const onViewCart = useCallback(() => {
-    if (isTablet) {
+    if (isSplit) {
       dockScrollRef.current?.scrollTo({ y: 0, animated: true });
     } else {
       onNavigateToCart();
     }
-  }, [isTablet, onNavigateToCart]);
+  }, [isSplit, onNavigateToCart]);
 
-  return { showViewCartButton: !isTablet, onViewCart, dockScrollRef };
+  return { showViewCartButton: !isSplit, onViewCart, dockScrollRef };
 }
