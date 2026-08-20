@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { QUICK_CASH } from './data';
-import { peso, peso0 } from './format';
+import { peso, peso0, nextDailyOrderNo, formatOrderNo } from './format';
 import { supabase } from './lib/supabase';
 import { logActivity } from './lib/activityLog';
 import { closeShift as closeShiftApi, getOpenShift, openShift as openShiftApi, shiftRlsMessage } from './lib/cashDrawer';
@@ -174,6 +174,8 @@ interface PosState {
   selCat: string;
   search: string;
   selItemId: string | null;
+  /** When set, the customize sheet is editing this cart line instead of adding a new one. */
+  editingCartId: string | null;
   selMods: SelectedMods;
   qty: number;
   note: string;
@@ -273,6 +275,7 @@ const initialState: PosState = {
   selCat: 'All',
   search: '',
   selItemId: null,
+  editingCartId: null,
   selMods: {},
   qty: 1,
   note: '',
@@ -341,6 +344,23 @@ function modTotal(sel: SelectedMods): number {
   return Object.values(sel)
     .flat()
     .reduce((s, o) => s + o.p, 0);
+}
+
+/** Rebuild group-keyed selMods from a cart line's flat modifiers list so the customize sheet can re-open with the same picks. */
+function selModsFromCartModifiers(
+  modifiers: { name: string; price: number }[],
+  groups: ModGroupDef[]
+): SelectedMods {
+  const sel: SelectedMods = {};
+  for (const g of groups) {
+    const picked: SelectedMod[] = [];
+    for (const [optName, optPrice] of g.options) {
+      const match = modifiers.find((m) => m.name === optName);
+      if (match) picked.push({ name: optName, p: match.price ?? optPrice });
+    }
+    if (picked.length) sel[g.id] = picked;
+  }
+  return sel;
 }
 
 function elapsedMinutes(iso: string): number {
@@ -969,7 +989,7 @@ export function useCremaPos() {
   const buildQueueFromOrders = (rows: any[]): QueueEntry[] =>
     rows.map((o) => ({
       id: o.id,
-      no: o.receipt_number ?? o.id.slice(0, 8).toUpperCase(),
+      no: formatOrderNo(o.receipt_number ?? o.id.slice(0, 8).toUpperCase()),
       type: o.order_type === 'takeout' ? 'Takeout' : 'Dine-In',
       mins: elapsedMinutes(o.created_at),
       items: (o.order_items ?? []).map((oi: any) => ({
@@ -988,7 +1008,7 @@ export function useCremaPos() {
   const buildQueueFromOutbox = (entries: OutboxEntry[]): QueueEntry[] =>
     entries.map((e) => ({
       id: e.id,
-      no: e.orderData.receipt_number,
+      no: formatOrderNo(e.orderData.receipt_number),
       type: e.orderData.order_type === 'takeout' ? 'Takeout' : 'Dine-In',
       mins: elapsedMinutes(e.timestamp),
       items: e.displayItems.map((d) => ({ name: d.name, qty: d.qty, mods: d.mods })),
@@ -1079,7 +1099,7 @@ export function useCremaPos() {
       .from('orders')
       .select('id', { count: 'exact', head: true })
       .gte('created_at', startOfDay.toISOString());
-    if (count !== null) setState((s) => ({ ...s, todayOrderCount: count }));
+    if (count !== null) setState((s) => ({ ...s, todayOrderCount: Math.max(s.todayOrderCount, count) }));
   }, []);
 
   // Read-only visibility into shifts a manager assigned via the web dashboard's Staff page —
@@ -1419,13 +1439,15 @@ export function useCremaPos() {
       giftCardError: null,
       receiptEmail: '',
       showQueue: false,
+      selItemId: null,
+      editingCartId: null,
       screen: 'menu',
     }));
   }, [clearPendingUndo]);
 
   const cancelAddToOrder = useCallback(() => {
     clearPendingUndo();
-    setState((s) => ({ ...s, appendTargetOrderId: null, appendTargetOrderNo: null, cart: [], screen: 'menu' }));
+    setState((s) => ({ ...s, appendTargetOrderId: null, appendTargetOrderNo: null, cart: [], editingCartId: null, selItemId: null, screen: 'menu' }));
   }, [clearPendingUndo]);
 
   // ─────────────────────────────────────────────
@@ -1454,10 +1476,26 @@ export function useCremaPos() {
   }, []);
 
   const openItem = useCallback((menuId: string) => {
-    patch({ selItemId: menuId, selMods: {}, qty: 1, note: '' });
+    patch({ selItemId: menuId, editingCartId: null, selMods: {}, qty: 1, note: '' });
   }, [patch]);
 
-  const closeItem = useCallback(() => patch({ selItemId: null }), [patch]);
+  const editCartItem = useCallback((cartId: string) => {
+    setState((s) => {
+      const item = s.cart.find((c) => c.cartId === cartId);
+      if (!item) return s;
+      const groups = s.modifierGroupsByItem[item.menuId] ?? [];
+      return {
+        ...s,
+        selItemId: item.menuId,
+        editingCartId: cartId,
+        selMods: selModsFromCartModifiers(item.modifiers, groups),
+        qty: item.qty,
+        note: item.note || '',
+      };
+    });
+  }, []);
+
+  const closeItem = useCallback(() => patch({ selItemId: null, editingCartId: null }), [patch]);
 
   const toggleMod = useCallback((g: ModGroupDef, opt: SelectedMod) => {
     setState((s) => {
@@ -1484,14 +1522,34 @@ export function useCremaPos() {
       const modNames = mods.map((m) => (m.p ? `${m.name} +₱${m.p}` : m.name));
       const modifiers = mods.map((m) => ({ name: m.name, price: m.p }));
       const unit = si.price + modTotal(s.selMods);
+      const nextLine = {
+        menuId: si.id,
+        name: si.name,
+        unit,
+        qty: s.qty,
+        mods: modNames,
+        modifiers,
+        note: s.note,
+      };
+
+      if (s.editingCartId) {
+        return {
+          ...s,
+          cart: s.cart.map((c) => (c.cartId === s.editingCartId ? { ...c, ...nextLine } : c)),
+          selItemId: null,
+          editingCartId: null,
+        };
+      }
+
       return {
         ...s,
         cart: [
           ...s.cart,
-          { cartId: 'c' + s.nextId, menuId: si.id, name: si.name, unit, qty: s.qty, mods: modNames, modifiers, note: s.note },
+          { cartId: 'c' + s.nextId, ...nextLine },
         ],
         nextId: s.nextId + 1,
         selItemId: null,
+        editingCartId: null,
       };
     });
   }, []);
@@ -1808,7 +1866,10 @@ export function useCremaPos() {
       return;
     }
 
-    const receiptNumber = 'REC-' + Date.now().toString().slice(-6) + Math.random().toString(36).slice(2, 5).toUpperCase();
+    // Same daily ticket the Order Type screen already previewed ("New Order · #0004") —
+    // not a REC-… hash. Bumped locally so the next preview stays in sync even offline.
+    const receiptNumber = nextDailyOrderNo(state.todayOrderCount);
+    const nextTodayCount = state.todayOrderCount + 1;
     const tenderNum = state.tendered !== '' && !isNaN(Number(state.tendered)) ? Number(state.tendered) : null;
     const isCash = !isSplit && state.payMethod === 'cash';
     // Loyalty-point redemption isn't offered on an append or a split order (see redeemPoints'
@@ -1942,9 +2003,9 @@ export function useCremaPos() {
       }).catch((e) => console.error('Failed to send receipt email:', e));
     }
 
-    patch({ success, screen: 'success', checkoutBusy: false, checkoutError: null });
+    patch({ success, screen: 'success', checkoutBusy: false, checkoutError: null, todayOrderCount: isAppend ? state.todayOrderCount : nextTodayCount });
     fetchQueue();
-  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.splitEnabled, state.splitCashAmount, state.splitGcashAmount, state.gcashReference, state.gcashConfirmed, state.gcashProofUrl, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, state.selectedCustomer, state.giftCardCode, state.receiptEmail, state.discountName, state.discountsList, redeemPointsNum, maxRedeemablePoints, phpPerPoint, amountDue, totals, patch, fetchQueue]);
+  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.splitEnabled, state.splitCashAmount, state.splitGcashAmount, state.gcashReference, state.gcashConfirmed, state.gcashProofUrl, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, state.selectedCustomer, state.giftCardCode, state.receiptEmail, state.discountName, state.discountsList, state.todayOrderCount, redeemPointsNum, maxRedeemablePoints, phpPerPoint, amountDue, totals, patch, fetchQueue]);
 
   const done = useCallback(() => {
     clearPendingUndo();
@@ -1965,6 +2026,8 @@ export function useCremaPos() {
       success: null,
       selCat: 'All',
       search: '',
+      selItemId: null,
+      editingCartId: null,
       showGcashQr: false,
       showQrScanner: false,
       qrScanTarget: null,
@@ -2051,14 +2114,18 @@ export function useCremaPos() {
 
   const maxAddableForSelected = useMemo(() => {
     if (!selectedItem) return Infinity;
+    // When editing an existing line, don't double-count its own qty against stock.
+    const cartForStock = state.editingCartId
+      ? state.cart.filter((c) => c.cartId !== state.editingCartId)
+      : state.cart;
     return getMaxAddableQty(
       selectedItem.id,
-      state.cart.map((c) => ({ menuId: c.menuId, qty: c.qty })),
+      cartForStock.map((c) => ({ menuId: c.menuId, qty: c.qty })),
       state.recipesByItem,
       state.ingredientStock,
       state.storeSettings.rushModeEnabled
     );
-  }, [selectedItem, state.cart, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled]);
+  }, [selectedItem, state.cart, state.editingCartId, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled]);
 
   const tenderNum = useMemo(
     () => (state.tendered !== '' && !isNaN(Number(state.tendered)) ? Number(state.tendered) : null),
@@ -2088,6 +2155,7 @@ export function useCremaPos() {
     patch,
     selectType,
     openItem,
+    editCartItem,
     closeItem,
     toggleMod,
     addToCart,
