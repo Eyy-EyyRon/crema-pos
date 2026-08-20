@@ -7,6 +7,7 @@ import { colors, fonts } from '../theme';
 import { ModGroupDef, SelectedMod, SelectedMods } from '../types';
 import { OptionChip } from './OptionChip';
 import { Shot } from './Shot';
+import { useBreakpoint } from '../breakpoints';
 
 interface CustomizeContentProps {
   category: string;
@@ -24,7 +25,6 @@ interface CustomizeContentProps {
   addValid: boolean;
   onAdd: () => void;
   onClose: () => void;
-  variant?: 'phone' | 'tablet';
 }
 
 export function CustomizeContent({
@@ -43,33 +43,32 @@ export function CustomizeContent({
   addValid,
   onAdd,
   onClose,
-  variant = 'phone',
 }: CustomizeContentProps) {
-  const tablet = variant === 'tablet';
+  const { isTablet } = useBreakpoint();
   const addLabel = qty > 1 ? `Add ${qty}× to Order` : 'Add to Order';
   const addTotalStr = peso0(addUnitTotal * qty);
 
   return (
     <View style={styles.container}>
-      {tablet && <View style={styles.topAccent} />}
-      <View style={[styles.header, tablet && styles.headerTablet]}>
-        <Shot label="·" style={{ width: tablet ? 56 : 52, height: tablet ? 56 : 52, borderRadius: tablet ? 14 : 13, flexShrink: 0 }} />
+      {isTablet && <View style={styles.topAccent} />}
+      <View style={[styles.header, isTablet && styles.headerTablet]}>
+        <Shot label="·" style={{ width: isTablet ? 56 : 52, height: isTablet ? 56 : 52, borderRadius: isTablet ? 14 : 13, flexShrink: 0 }} />
         <View style={{ flex: 1 }}>
           <Text style={styles.category}>{category}</Text>
-          <Text style={[styles.name, tablet && { fontSize: 18 }]}>{name}</Text>
+          <Text style={[styles.name, isTablet && { fontSize: 18 }]}>{name}</Text>
           <Text style={styles.base}>Base {peso0(basePrice)}</Text>
         </View>
-        <Pressable onPress={() => { tapLight(); onClose(); }} style={[styles.closeBtn, tablet && { width: 34, height: 34 }]} accessibilityRole="button" accessibilityLabel="Close">
+        <Pressable onPress={() => { tapLight(); onClose(); }} style={[styles.closeBtn, isTablet && { width: 34, height: 34 }]} accessibilityRole="button" accessibilityLabel="Close">
           <XIcon size={15} color={colors.textMuted} strokeWidth={2.2} />
         </Pressable>
       </View>
 
       <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, tablet && styles.scrollContentTablet]}>
+      <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}>
         {groups.map((g) => (
           <View key={g.id} style={styles.group}>
             <View style={styles.groupHeader}>
-              <Text style={[styles.groupName, tablet && { fontSize: 14 }]}>{g.name}</Text>
+              <Text style={[styles.groupName, isTablet && { fontSize: 14 }]}>{g.name}</Text>
               {g.required && (
                 <View style={styles.requiredBadge}>
                   <Text style={styles.requiredText}>Required</Text>
@@ -104,13 +103,13 @@ export function CustomizeContent({
           placeholder="e.g. Extra hot, no foam, less ice…"
           placeholderTextColor={colors.textMuted}
           multiline
-          style={[styles.noteInput, tablet && { height: 64 }]}
+          style={[styles.noteInput, isTablet && { height: 64 }]}
         />
       </ScrollView>
 
-      <View style={[styles.footer, tablet && styles.footerTablet]}>
-        <View style={[styles.footerRow, !tablet && styles.footerRowPhone]}>
-          <View style={[styles.stepper, !tablet && styles.stepperPhone]}>
+      <View style={[styles.footer, isTablet && styles.footerTablet]}>
+        <View style={[styles.footerRow, !isTablet && styles.footerRowPhone]}>
+          <View style={[styles.stepper, !isTablet && styles.stepperPhone]}>
             <Pressable onPress={() => { tapLight(); onDecQty(); }} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Decrease quantity">
               <MinusIcon size={14} color={colors.textSecondary} />
             </Pressable>
@@ -121,7 +120,7 @@ export function CustomizeContent({
           </View>
           <Pressable
             onPress={() => { if (addValid) { tapMedium(); onAdd(); } else { warning(); } }}
-            style={[styles.addBtn, !tablet && styles.addBtnPhone, { opacity: addValid ? 1 : 0.4 }]}
+            style={[styles.addBtn, !isTablet && styles.addBtnPhone, { opacity: addValid ? 1 : 0.4 }]}
           >
             <BagIcon size={17} color={colors.screenBg} strokeWidth={2} />
             <Text style={styles.addLabel} numberOfLines={1}>{addLabel}</Text>
