@@ -43,7 +43,7 @@ export function OrderTypeRow({
   gap?: number;
 }) {
   return (
-    <View style={{ flexDirection: 'row', gap }}>
+    <View style={[styles.choiceRow, { gap }]}>
       {onSelectDineIn && <TypeButton kind="dine-in" active={orderType === 'dine-in'} onPress={onSelectDineIn} />}
       {onSelectTakeout && <TypeButton kind="takeout" active={orderType === 'takeout'} onPress={onSelectTakeout} />}
     </View>
@@ -97,6 +97,7 @@ export function DiscountRow({
           label={discountChipLabel(d)}
           active={activeName === d.n}
           onPress={() => onSelect(d.n)}
+          fill
         />
       ))}
     </View>
@@ -127,7 +128,7 @@ export function PaymentMethodRow({
 }) {
   return (
     <View>
-      <View style={{ flexDirection: 'row', gap, opacity: splitEnabled ? 0.4 : 1 }}>
+      <View style={[styles.payMethodRow, { gap, opacity: splitEnabled ? 0.4 : 1 }]}>
         {onSelectCash && (
           <PayButton kind="cash" active={payMethod === 'cash' && !splitEnabled} onPress={onSelectCash} compact={compact} />
         )}
@@ -681,11 +682,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
+    width: '100%',
+  },
+  payMethodRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: '100%',
+    alignItems: 'stretch',
   },
   lookupModeRow: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 9,
+    width: '100%',
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: '100%',
   },
   nameInputRow: {
     backgroundColor: colors.cardBg,
@@ -876,11 +890,15 @@ const styles = StyleSheet.create({
   },
   quickCashRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 7,
     marginTop: 9,
+    width: '100%',
   },
   quickCashBtn: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 64,
+    minWidth: 64,
     alignItems: 'center',
     backgroundColor: colors.chipBg,
     borderWidth: 1,
