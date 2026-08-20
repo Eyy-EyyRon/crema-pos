@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AlertCircleIcon, TrashIcon, WifiOffIcon, XIcon } from '../icons';
 import { peso0 } from '../format';
 import { tapLight, tapMedium } from '../lib/haptics';
 import { OutboxEntry } from '../lib/syncEngine';
 import { supabase } from '../lib/supabase';
+import { pinPadMetrics, useBreakpoint } from '../breakpoints';
+import { ResponsiveModal } from '../responsive/ResponsiveModal';
 import { colors, fonts } from '../theme';
 import { PinPad } from './PinPad';
 
@@ -29,8 +31,8 @@ export function OutboxModal({
   const [pinError, setPinError] = useState('');
   const [pinBusy, setPinBusy] = useState(false);
   const [resetTick, setResetTick] = useState(0);
-
-  if (!visible) return null;
+  const { width } = useBreakpoint();
+  const { keySize, gap } = pinPadMetrics(width);
 
   const handleRetry = async (id: string) => {
     tapLight();
@@ -67,7 +69,7 @@ export function OutboxModal({
   };
 
   return (
-    <View style={s.overlay}>
+    <ResponsiveModal visible={visible} onClose={onClose} dismissOnBackdropPress={!pinBusy} maxWidth={400} zIndex={50}>
       <View style={s.card}>
         <View style={s.header}>
           <View style={s.headerLeft}>
@@ -86,8 +88,8 @@ export function OutboxModal({
             <Text style={s.panelDesc}>Manager PIN required to discard this unsynced order.</Text>
             <PinPad
               key={deleteTargetId}
-              keySize={48}
-              gap={9}
+              keySize={keySize}
+              gap={gap}
               onComplete={handlePinComplete}
               onChangeLength={() => pinError && setPinError('')}
               disabled={pinBusy}
@@ -107,7 +109,7 @@ export function OutboxModal({
         ) : entries.length === 0 ? (
           <Text style={s.emptyText}>All orders are synced. Nothing pending.</Text>
         ) : (
-          <ScrollView style={{ maxHeight: 380 }}>
+          <View>
             {entries.map((e) => (
               <View key={e.id} style={s.entryCard}>
                 <View style={s.entryHeader}>
@@ -139,24 +141,16 @@ export function OutboxModal({
                 </View>
               </View>
             ))}
-          </ScrollView>
+          </View>
         )}
       </View>
-    </View>
+    </ResponsiveModal>
   );
 }
 
 const s = StyleSheet.create({
-  overlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 45,
-    alignItems: 'center', justifyContent: 'center', padding: 24,
-    backgroundColor: colors.overlayStrong,
-  },
   card: {
-    width: 400, maxWidth: '100%',
-    backgroundColor: colors.screenBg,
-    borderWidth: 1, borderColor: colors.borderGold18,
-    borderRadius: 22, padding: 20,
+    padding: 20,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
