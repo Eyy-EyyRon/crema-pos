@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { peso0 } from '../format';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
+import { useBreakpoint } from '../breakpoints';
 import { AlertCircleIcon, BanknoteIcon } from '../icons';
 import { tapLight, tapMedium, warning } from '../lib/haptics';
 import { AppText } from '../responsive/AppText';
@@ -13,6 +13,40 @@ import { colors, fonts } from '../theme';
 // clock out. Full-screen (not a dismissible modal) since a barista can't
 // ring anything up without an open shift.
 
+function useShiftSheetLayout() {
+  const { isTablet, isCompact, width, gutter } = useBreakpoint();
+  const narrow = width < 360;
+  const padH = isCompact ? Math.max(14, gutter) : isTablet ? 32 : narrow ? 16 : 22;
+  const padV = isCompact ? 12 : isTablet ? 28 : 22;
+  const iconBox = isCompact ? 44 : isTablet ? 64 : 56;
+  const iconGlyph = isCompact ? 20 : isTablet ? 30 : 26;
+  const fieldPadV = isCompact ? 10 : isTablet ? 14 : 12;
+  const fieldFont = isTablet ? 17 : narrow ? 15 : 16;
+  const btnFont = isTablet ? 15 : narrow ? 12.5 : 14;
+  const btnPadV = isCompact ? 12 : isTablet ? 16 : 14;
+  return {
+    isTablet,
+    isCompact,
+    narrow,
+    padH,
+    padV,
+    iconBox,
+    iconGlyph,
+    fieldPadV,
+    fieldFont,
+    btnFont,
+    btnPadV,
+    maxWidth: isTablet ? 460 : 420,
+  };
+}
+
+// RN Web draws the browser's default focus ring around the native <input>. With autoFocus
+// that ring is a tight blue square around the placeholder ("Starting cash" / "Ending cash")
+// instead of following our gold field chrome. Kill the outline; the row border is the cue.
+const webInputReset: TextStyle = Platform.OS === 'web'
+  ? { outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' }
+  : {};
+
 export function OpenShiftModal({
   visible,
   onSubmit,
@@ -23,6 +57,15 @@ export function OpenShiftModal({
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const layout = useShiftSheetLayout();
+
+  useEffect(() => {
+    if (visible) {
+      setValue('');
+      setBusy(false);
+      setError('');
+    }
+  }, [visible]);
 
   const submit = async () => {
     const n = Number(value);
@@ -43,25 +86,21 @@ export function OpenShiftModal({
     // No onClose of its own — a barista can't ring anything up without an open shift, so this
     // must never be dismissible. dismissOnBackdropPress is hardcoded false (not tied to `busy`,
     // since it should never be true regardless of state) and onClose is a deliberate no-op.
-    <ResponsiveModal visible={visible} onClose={() => {}} dismissOnBackdropPress={false}>
-      <View style={s.content}>
-        <View style={s.icon}>
-          <BanknoteIcon size={26} color={colors.gold} strokeWidth={1.6} />
-        </View>
-        <AppText variant="h2">Open Cash Drawer</AppText>
-        <AppText variant="body" style={s.sub}>Count the starting cash in the drawer before you start taking orders.</AppText>
-
-        <View style={s.inputRow}>
-          <Text style={s.peso}>₱</Text>
+    <ResponsiveModal visible={visible} onClose={() => {}} dismissOnBackdropPress={false} maxWidth={layout.maxWidth}>
+      <ShiftSheetChrome layout={layout} title="Open Cash Drawer" subtitle="Count the starting cash in the drawer before you start taking orders.">
+        <View style={[s.inputRow, { paddingVertical: layout.fieldPadV }]}>
+          <Text style={[s.peso, { fontSize: layout.fieldFont }]}>₱</Text>
           <TextInput
             value={value}
             onChangeText={(t) => { setValue(t.replace(/[^0-9.]/g, '')); if (error) setError(''); }}
             placeholder="Starting cash"
             placeholderTextColor={colors.textMuted}
             keyboardType="decimal-pad"
-            style={s.input}
+            style={[s.input, webInputReset, { fontSize: layout.fieldFont }]}
             editable={!busy}
             autoFocus
+            underlineColorAndroid="transparent"
+            selectionColor={colors.gold}
           />
         </View>
 
@@ -72,28 +111,45 @@ export function OpenShiftModal({
           </View>
         )}
 
-        <Pressable style={[s.btn, busy && { opacity: 0.7 }]} onPress={submit} disabled={busy}>
-          {busy ? <ActivityIndicator color={colors.screenBg} /> : <Text style={s.btnText}>Open Shift</Text>}
+        <Pressable
+          style={[s.btn, { paddingVertical: layout.btnPadV }, busy && { opacity: 0.7 }]}
+          onPress={submit}
+          disabled={busy}
+        >
+          {busy ? (
+            <ActivityIndicator color={colors.screenBg} />
+          ) : (
+            <Text style={[s.btnText, { fontSize: layout.btnFont }]} numberOfLines={2}>
+              Open Shift
+            </Text>
+          )}
         </Pressable>
-      </View>
+      </ShiftSheetChrome>
     </ResponsiveModal>
   );
 }
 
 export function CloseShiftModal({
   visible,
-  startingCash,
   onSubmit,
   onCancel,
 }: {
   visible: boolean;
-  startingCash: number;
   onSubmit: (endingCash: number) => Promise<string | void>;
   onCancel: () => void;
 }) {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const layout = useShiftSheetLayout();
+
+  useEffect(() => {
+    if (visible) {
+      setValue('');
+      setBusy(false);
+      setError('');
+    }
+  }, [visible]);
 
   const submit = async () => {
     const n = Number(value);
@@ -111,30 +167,25 @@ export function CloseShiftModal({
   };
 
   return (
-    <ResponsiveModal visible={visible} onClose={onCancel} dismissOnBackdropPress={!busy}>
-      <View style={s.content}>
-        <View style={s.icon}>
-          <BanknoteIcon size={26} color={colors.gold} strokeWidth={1.6} />
-        </View>
-        <AppText variant="h2">Close Shift</AppText>
-        <AppText variant="body" style={s.sub}>Count the actual cash in the drawer now. This closes your shift and logs you out.</AppText>
-
-        <View style={s.startingCashRow}>
-          <Text style={s.startingCashLabel}>Starting Cash</Text>
-          <Text style={s.startingCashValue}>{peso0(startingCash)}</Text>
-        </View>
-
-        <View style={s.inputRow}>
-          <Text style={s.peso}>₱</Text>
+    <ResponsiveModal visible={visible} onClose={onCancel} dismissOnBackdropPress={!busy} maxWidth={layout.maxWidth}>
+      <ShiftSheetChrome
+        layout={layout}
+        title="Close Shift"
+        subtitle="Count the cash in the drawer now — don't look up the float. This closes your shift and logs you out."
+      >
+        <View style={[s.inputRow, { paddingVertical: layout.fieldPadV }]}>
+          <Text style={[s.peso, { fontSize: layout.fieldFont }]}>₱</Text>
           <TextInput
             value={value}
             onChangeText={(t) => { setValue(t.replace(/[^0-9.]/g, '')); if (error) setError(''); }}
             placeholder="Ending cash"
             placeholderTextColor={colors.textMuted}
             keyboardType="decimal-pad"
-            style={s.input}
+            style={[s.input, webInputReset, { fontSize: layout.fieldFont }]}
             editable={!busy}
             autoFocus
+            underlineColorAndroid="transparent"
+            selectionColor={colors.gold}
           />
         </View>
 
@@ -145,50 +196,125 @@ export function CloseShiftModal({
           </View>
         )}
 
-        <Pressable style={[s.btn, busy && { opacity: 0.7 }]} onPress={submit} disabled={busy}>
-          {busy ? <ActivityIndicator color={colors.screenBg} /> : <Text style={s.btnText}>Close Shift &amp; Log Out</Text>}
+        <Pressable
+          style={[s.btn, { paddingVertical: layout.btnPadV }, busy && { opacity: 0.7 }]}
+          onPress={submit}
+          disabled={busy}
+        >
+          {busy ? (
+            <ActivityIndicator color={colors.screenBg} />
+          ) : (
+            <Text style={[s.btnText, { fontSize: layout.btnFont }]} numberOfLines={2}>
+              {layout.narrow ? 'Close Shift &\nLog Out' : 'Close Shift & Log Out'}
+            </Text>
+          )}
         </Pressable>
-        <Pressable style={s.cancelBtn} onPress={() => { tapLight(); onCancel(); }} disabled={busy}>
-          <Text style={s.cancelText}>Cancel</Text>
+        <Pressable style={[s.cancelBtn, layout.isCompact && { paddingVertical: 8 }]} onPress={() => { tapLight(); onCancel(); }} disabled={busy}>
+          <Text style={[s.cancelText, layout.isTablet && { fontSize: 14 }]}>Cancel</Text>
         </Pressable>
-      </View>
+      </ShiftSheetChrome>
     </ResponsiveModal>
+  );
+}
+
+function ShiftSheetChrome({
+  layout,
+  title,
+  subtitle,
+  children,
+}: {
+  layout: ReturnType<typeof useShiftSheetLayout>;
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={[s.content, { paddingHorizontal: layout.padH, paddingTop: layout.padV, paddingBottom: layout.isCompact ? 8 : layout.padV }]}>
+      <View style={[s.icon, { width: layout.iconBox, height: layout.iconBox, borderRadius: layout.iconBox / 2, marginBottom: layout.isCompact ? 10 : 16 }]}>
+        <BanknoteIcon size={layout.iconGlyph} color={colors.gold} strokeWidth={1.6} />
+      </View>
+      <AppText variant="h2" style={s.title}>{title}</AppText>
+      <AppText
+        variant="body"
+        style={[s.sub, layout.isCompact && { marginTop: 4, marginBottom: 12 }, layout.isTablet && { fontSize: 15, lineHeight: 22 }]}
+      >
+        {subtitle}
+      </AppText>
+      {children}
+    </View>
   );
 }
 
 const s = StyleSheet.create({
   content: {
-    padding: 26,
     alignItems: 'center',
+    width: '100%',
   },
   icon: {
-    width: 56, height: 56, borderRadius: 28,
     backgroundColor: 'rgba(184,147,90,0.12)',
-    borderWidth: 1, borderColor: colors.borderGold25,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.borderGold25,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sub: { color: colors.textMuted, textAlign: 'center', marginTop: 8, marginBottom: 20 },
-  startingCashRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-    backgroundColor: 'rgba(184,147,90,0.08)', borderWidth: 1, borderColor: colors.borderGold14,
-    borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 14,
+  title: {
+    textAlign: 'center',
   },
-  startingCashLabel: { fontSize: 12, fontFamily: fonts.sansSemiBold, color: colors.textMuted },
-  startingCashValue: { fontSize: 14, fontFamily: fonts.sansExtraBold, color: colors.goldLight },
+  sub: {
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+    alignSelf: 'stretch',
+  },
   inputRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%',
-    backgroundColor: colors.chipBg, borderWidth: 1, borderColor: colors.borderGold14,
-    borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    backgroundColor: colors.chipBg,
+    borderWidth: 1,
+    borderColor: colors.borderGold14,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    marginBottom: 8,
   },
-  peso: { fontSize: 16, fontFamily: fonts.sansExtraBold, color: colors.textMuted },
-  input: { flex: 1, color: colors.textPrimary, fontSize: 16, fontFamily: fonts.sansBold, padding: 0 },
-  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, alignSelf: 'flex-start' },
-  errorText: { color: colors.danger },
+  peso: {
+    fontFamily: fonts.sansExtraBold,
+    color: colors.textMuted,
+  },
+  input: {
+    flex: 1,
+    width: '100%',
+    minWidth: 0,
+    color: colors.textPrimary,
+    fontFamily: fonts.sansBold,
+    padding: 0,
+    backgroundColor: 'transparent',
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+    alignSelf: 'stretch',
+  },
+  errorText: { color: colors.danger, flex: 1 },
   btn: {
-    width: '100%', backgroundColor: colors.gold, borderRadius: 14,
-    paddingVertical: 15, alignItems: 'center', marginTop: 8,
+    width: '100%',
+    backgroundColor: colors.gold,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    minHeight: 48,
   },
-  btnText: { fontSize: 14, fontFamily: fonts.sansExtraBold, color: colors.screenBg },
+  btnText: {
+    fontFamily: fonts.sansExtraBold,
+    color: colors.screenBg,
+    textAlign: 'center',
+  },
   cancelBtn: { paddingVertical: 12, marginTop: 4 },
   cancelText: { fontSize: 13, fontFamily: fonts.sansSemiBold, color: colors.textMuted },
 });
