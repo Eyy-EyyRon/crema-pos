@@ -1,19 +1,22 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { useBreakpoint } from '../breakpoints';
 import { colors } from '../theme';
 import { CustomizeContent } from './CustomizeContent';
 
-interface CustomizeSheetProps extends Omit<React.ComponentProps<typeof CustomizeContent>, 'variant'> {}
+interface CustomizeSheetProps extends React.ComponentProps<typeof CustomizeContent> {}
 
 export function CustomizeSheet(props: CustomizeSheetProps) {
+  const { isCompact, height } = useBreakpoint();
+  const topOffset = isCompact ? 8 : Math.max(48, Math.round(height * 0.08));
   return (
     <View style={styles.overlayContainer}>
       <Pressable style={styles.overlay} onPress={props.onClose} />
-      <View style={styles.sheet}>
+      <View style={[styles.sheet, { top: topOffset }]}>
         <View style={styles.handleWrap}>
           <View style={styles.handle} />
         </View>
-        <CustomizeContent {...props} variant="phone" />
+        <CustomizeContent {...props} />
       </View>
     </View>
   );
@@ -41,7 +44,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    top: 52,
     backgroundColor: colors.screenBg,
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
