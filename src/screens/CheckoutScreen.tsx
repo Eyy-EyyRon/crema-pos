@@ -30,6 +30,7 @@ interface CheckoutScreenProps {
   onInc: (cartId: string) => void;
   onDec: (cartId: string) => void;
   onRemove: (cartId: string) => void;
+  onEdit?: (cartId: string) => void;
   onBack: () => void;
   orderType: OrderType;
   onSelectDineIn?: () => void;
@@ -122,12 +123,15 @@ interface CheckoutScreenProps {
 }
 
 export function CheckoutScreen(props: CheckoutScreenProps) {
-  const { isTablet, gutter } = useBreakpoint();
+  const { isTablet, gutter, isCompact, width } = useBreakpoint();
+  const narrow = width < 360;
+  const padH = narrow ? Math.max(12, gutter - 4) : gutter;
   const {
     cart,
     onInc,
     onDec,
     onRemove,
+    onEdit,
     onBack,
     orderType,
     onSelectDineIn,
@@ -225,10 +229,18 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     <View style={styles.screen}>
       <BackHeader title={isAppend ? 'Add to Order' : 'Your Order'} onBack={onBack} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: gutter }]}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: padH, paddingVertical: narrow ? 12 : 16 }]}>
         <SectionLabel style={{ marginBottom: 10 }}>Items</SectionLabel>
         {cart.map((c) => (
-          <CartRow key={c.cartId} item={c} shotSize={isTablet ? 48 : 42} onInc={() => onInc(c.cartId)} onDec={() => onDec(c.cartId)} onRemove={() => onRemove(c.cartId)} />
+          <CartRow
+            key={c.cartId}
+            item={c}
+            shotSize={isTablet ? 48 : narrow ? 36 : 42}
+            onInc={() => onInc(c.cartId)}
+            onDec={() => onDec(c.cartId)}
+            onRemove={() => onRemove(c.cartId)}
+            onEdit={onEdit ? () => onEdit(c.cartId) : undefined}
+          />
         ))}
 
         {isAppend ? (
@@ -383,7 +395,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           taxRatePct={taxRatePct} isTaxInclusive={isTaxInclusive} serviceChargePct={serviceChargePct}
         />
       </ScrollView>
-      <View style={[styles.footer, { paddingHorizontal: gutter, paddingBottom: 20 + insets.bottom }]}>
+      <View style={[styles.footer, { paddingHorizontal: padH, paddingBottom: (isCompact ? 12 : 20) + insets.bottom }]}>
         {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
         <ProcessPaymentButton
           totalStr={peso(isAppend ? total : amountDue)}
@@ -404,7 +416,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.screenBg,
   },
   content: {
-    padding: 16,
     paddingBottom: 20,
     width: '100%',
     maxWidth: 560,
