@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeftIcon, CoffeeIcon, SettingsIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
+import { useBreakpoint } from '../breakpoints';
 import { colors, fonts } from '../theme';
 
 const logo = require('../../assets/images/crema.jpg');
@@ -33,8 +34,9 @@ export function MenuHeader({
 }) {
   const tablet = variant === 'tablet';
   const insets = useSafeAreaInsets();
+  const { gutter, isCompact } = useBreakpoint();
   return (
-    <View style={[styles.wrap, { paddingTop: insets.top + 14 }, tablet && [styles.wrapTablet, { paddingTop: insets.top + 14 }]]}>
+    <View style={[styles.wrap, { paddingTop: insets.top + (isCompact ? 8 : 14), paddingHorizontal: gutter }, tablet && styles.wrapTablet]}>
       <View style={styles.topRow}>
         <Pressable
           style={({ pressed }) => [styles.brandRow, pressed && { opacity: 0.7 }]}
@@ -43,9 +45,9 @@ export function MenuHeader({
           accessibilityLabel="Account and settings"
         >
           <Image source={logo} style={[styles.logo, tablet && { width: 42, height: 42 }]} />
-          <View>
+          <View style={styles.brandText}>
             <Text style={styles.brandLabel}>Crema POS</Text>
-            <Text style={[styles.greeting, tablet && { fontSize: 16 }]}>{greetingFor(userName)}</Text>
+            <Text style={[styles.greeting, tablet && { fontSize: 16 }]} numberOfLines={1}>{greetingFor(userName)}</Text>
           </View>
         </Pressable>
         <View style={styles.actionsRow}>
@@ -112,8 +114,9 @@ export function BackHeader({
   right?: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const { gutter, isCompact } = useBreakpoint();
   return (
-    <View style={[styles.backHeaderWrap, { paddingTop: insets.top + 14 }]}>
+    <View style={[styles.backHeaderWrap, { paddingTop: insets.top + (isCompact ? 8 : 14), paddingHorizontal: gutter }]}>
       <Pressable onPress={() => { tapLight(); onBack(); }} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Go back">
         <ChevronLeftIcon size={17} color={colors.textPrimary} strokeWidth={2.2} />
       </Pressable>
@@ -128,11 +131,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.screenBg,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(184,147,90,0.1)',
-    paddingHorizontal: 20,
     paddingBottom: 12,
   },
   wrapTablet: {
-    paddingHorizontal: 26,
     paddingBottom: 12,
     borderBottomWidth: 0,
   },
@@ -140,11 +141,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 11,
+    flex: 1,
+    minWidth: 0,
+  },
+  brandText: {
+    flex: 1,
+    minWidth: 0,
   },
   logo: {
     width: 40,
@@ -170,6 +178,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flexShrink: 0,
   },
   queueBtn: {
     position: 'relative',
@@ -249,7 +258,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 14,
-    paddingHorizontal: 18,
     backgroundColor: colors.screenBg,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(184,147,90,0.1)',
