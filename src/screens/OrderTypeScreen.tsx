@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { OrderTypeTile } from '../components/OrderTypeTile';
+import { useBreakpoint } from '../breakpoints';
 import { colors, fonts } from '../theme';
 
 export function OrderTypeScreen({
@@ -15,56 +17,82 @@ export function OrderTypeScreen({
   onSelectTakeout?: () => void;
 }) {
   const orderLabel = `New Order · #${String(orderNumber).padStart(4, '0')}`;
-
-  if (variant === 'tablet') {
-    return (
-      <View style={styles.tabletWrap}>
-        <Text style={styles.brandTablet}>CREMA</Text>
-        <Text style={styles.brandSubTablet}>COFFEE &amp; ICE CREAM</Text>
-        <Text style={[styles.lbl, { marginTop: 34, marginBottom: 6 }]}>{orderLabel}</Text>
-        <Text style={styles.titleTablet}>How are we serving this order?</Text>
-        <View style={styles.tilesRowTablet}>
-          {onSelectDineIn && <OrderTypeTile kind="dine-in" variant="tablet" onPress={onSelectDineIn} />}
-          {onSelectTakeout && <OrderTypeTile kind="takeout" variant="tablet" onPress={onSelectTakeout} />}
-        </View>
-      </View>
-    );
-  }
+  const { isLandscape, gutter, isCompact, isTablet, width } = useBreakpoint();
+  const insets = useSafeAreaInsets();
+  const sideBySide = variant === 'tablet' || isLandscape;
+  const tileVariant = variant === 'tablet' || isTablet ? 'tablet' : 'phone';
+  const contentWidth = Math.min(width - gutter * 2, sideBySide ? 720 : 420);
 
   return (
-    <View style={styles.phoneWrap}>
-      <View style={styles.brandBlock}>
-        <Text style={styles.brand}>CREMA</Text>
-        <Text style={styles.brandSub}>COFFEE &amp; ICE CREAM</Text>
-      </View>
-      <View style={styles.titleBlock}>
-        <Text style={[styles.lbl, { textAlign: 'center', marginBottom: 4 }]}>{orderLabel}</Text>
-        <Text style={styles.title}>How are we serving{'\n'}this order?</Text>
-      </View>
-      <View style={styles.tilesCol}>
-        {onSelectDineIn && <OrderTypeTile kind="dine-in" variant="phone" onPress={onSelectDineIn} />}
-        {onSelectTakeout && <OrderTypeTile kind="takeout" variant="phone" onPress={onSelectTakeout} />}
+    <View
+      style={[
+        styles.wrap,
+        {
+          paddingHorizontal: gutter,
+          paddingTop: insets.top + (isCompact ? 8 : 16),
+          paddingBottom: insets.bottom + 16,
+        },
+      ]}
+    >
+      <View style={styles.centerBlock}>
+        <Text style={[styles.brand, (variant === 'tablet' || isTablet) && styles.brandTablet, isCompact && styles.brandCompact]}>
+          CREMA
+        </Text>
+        <Text style={[styles.brandSub, (variant === 'tablet' || isTablet) && styles.brandSubTablet]}>
+          COFFEE &amp; ICE CREAM
+        </Text>
+        <Text style={styles.lbl}>{orderLabel}</Text>
+        <Text style={[styles.title, (variant === 'tablet' || isTablet) && styles.titleTablet, isCompact && styles.titleCompact]}>
+          How are we serving this order?
+        </Text>
+
+        <View
+          style={[
+            styles.tiles,
+            sideBySide ? styles.tilesRow : styles.tilesCol,
+            { width: contentWidth, maxWidth: '100%' },
+          ]}
+        >
+          {onSelectDineIn && (
+            <View style={sideBySide ? styles.tileSlotRow : styles.tileSlot}>
+              <OrderTypeTile kind="dine-in" variant={tileVariant} onPress={onSelectDineIn} />
+            </View>
+          )}
+          {onSelectTakeout && (
+            <View style={sideBySide ? styles.tileSlotRow : styles.tileSlot}>
+              <OrderTypeTile kind="takeout" variant={tileVariant} onPress={onSelectTakeout} />
+            </View>
+          )}
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  phoneWrap: {
+  wrap: {
     flex: 1,
     backgroundColor: colors.screenBg,
   },
-  brandBlock: {
-    paddingTop: 28,
-    paddingHorizontal: 26,
-    paddingBottom: 6,
+  centerBlock: {
+    flex: 1,
+    width: '100%',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   brand: {
     fontFamily: fonts.display,
     fontSize: 40,
     letterSpacing: 2,
     color: colors.goldBrightText,
+    textAlign: 'center',
+  },
+  brandTablet: {
+    fontSize: 52,
+    letterSpacing: 3,
+  },
+  brandCompact: {
+    fontSize: 32,
   },
   brandSub: {
     fontSize: 10,
@@ -72,10 +100,12 @@ const styles = StyleSheet.create({
     color: colors.gold,
     fontFamily: fonts.sansBold,
     marginTop: 2,
+    textAlign: 'center',
   },
-  titleBlock: {
-    paddingHorizontal: 24,
-    paddingTop: 26,
+  brandSubTablet: {
+    fontSize: 11,
+    letterSpacing: 4.5,
+    marginTop: 4,
   },
   lbl: {
     fontFamily: fonts.sansExtraBold,
@@ -83,53 +113,47 @@ const styles = StyleSheet.create({
     letterSpacing: 1.8,
     textTransform: 'uppercase',
     color: colors.textLabel,
+    textAlign: 'center',
+    marginTop: 28,
+    marginBottom: 6,
   },
   title: {
     fontFamily: fonts.serifBold,
-    fontSize: 26,
+    fontSize: 24,
     color: colors.textPrimary,
     textAlign: 'center',
     lineHeight: 30,
-  },
-  tilesCol: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 26,
-    paddingBottom: 30,
-  },
-  tabletWrap: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  brandTablet: {
-    fontFamily: fonts.display,
-    fontSize: 52,
-    letterSpacing: 3,
-    color: colors.goldBrightText,
-  },
-  brandSubTablet: {
-    fontSize: 11,
-    letterSpacing: 4.5,
-    color: colors.gold,
-    fontFamily: fonts.sansBold,
-    marginTop: 4,
+    paddingHorizontal: 8,
+    marginBottom: 28,
   },
   titleTablet: {
-    fontFamily: fonts.serifBold,
     fontSize: 32,
-    color: colors.textPrimary,
-    marginBottom: 34,
+    lineHeight: 38,
   },
-  tilesRowTablet: {
+  titleCompact: {
+    fontSize: 18,
+    lineHeight: 22,
+    marginBottom: 16,
+    marginTop: 0,
+  },
+  tiles: {
+    gap: 14,
+    alignItems: 'center',
+  },
+  tilesCol: {
+    flexDirection: 'column',
+  },
+  tilesRow: {
     flexDirection: 'row',
-    gap: 22,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  tileSlot: {
+    width: '100%',
+  },
+  tileSlotRow: {
+    flex: 1,
+    minWidth: 0,
   },
 });
