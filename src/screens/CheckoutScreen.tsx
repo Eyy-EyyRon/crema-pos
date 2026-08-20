@@ -23,6 +23,7 @@ import { BackHeader } from '../components/Header';
 import { peso } from '../format';
 import { colors } from '../theme';
 import { CartItem, Discount, OrderType, PayMethod } from '../types';
+import { useBreakpoint } from '../breakpoints';
 
 interface CheckoutScreenProps {
   cart: CartItem[];
@@ -121,6 +122,7 @@ interface CheckoutScreenProps {
 }
 
 export function CheckoutScreen(props: CheckoutScreenProps) {
+  const { isTablet, gutter } = useBreakpoint();
   const {
     cart,
     onInc,
@@ -223,10 +225,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     <View style={styles.screen}>
       <BackHeader title={isAppend ? 'Add to Order' : 'Your Order'} onBack={onBack} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: gutter }]}>
         <SectionLabel style={{ marginBottom: 10 }}>Items</SectionLabel>
         {cart.map((c) => (
-          <CartRow key={c.cartId} item={c} onInc={() => onInc(c.cartId)} onDec={() => onDec(c.cartId)} onRemove={() => onRemove(c.cartId)} />
+          <CartRow key={c.cartId} item={c} shotSize={isTablet ? 48 : 42} onInc={() => onInc(c.cartId)} onDec={() => onDec(c.cartId)} onRemove={() => onRemove(c.cartId)} />
         ))}
 
         {isAppend ? (
@@ -381,7 +383,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           taxRatePct={taxRatePct} isTaxInclusive={isTaxInclusive} serviceChargePct={serviceChargePct}
         />
       </ScrollView>
-      <View style={[styles.footer, { paddingBottom: 20 + insets.bottom }]}>
+      <View style={[styles.footer, { paddingHorizontal: gutter, paddingBottom: 20 + insets.bottom }]}>
         {!!checkoutError && <CheckoutErrorBanner message={checkoutError} />}
         <ProcessPaymentButton
           totalStr={peso(isAppend ? total : amountDue)}
@@ -403,8 +405,10 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingHorizontal: 18,
     paddingBottom: 20,
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
   },
   sectionSpacing: {
     marginTop: 20,
@@ -412,7 +416,9 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingTop: 12,
-    paddingHorizontal: 18,
     backgroundColor: colors.screenBg,
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
   },
 });
