@@ -7,7 +7,9 @@ import { QUICK_CASH } from './data';
 import { peso, peso0 } from './format';
 import { supabase } from './lib/supabase';
 import { logActivity } from './lib/activityLog';
-import { closeShift as closeShiftApi, getOpenShift, openShift as openShiftApi } from './lib/cashDrawer';
+import { closeShift as closeShiftApi, getOpenShift, openShift as openShiftApi, shiftRlsMessage } from './lib/cashDrawer';
+import { clearPinHash, readMenuCache, readValidPinHash, writeMenuCache, writePinHash } from './lib/deviceCache';
+import { requirePosSession, SESSION_MISSING_MESSAGE } from './lib/posSession';
 import { success as successHaptic, error as errorHaptic } from './lib/haptics';
 import { notify } from './lib/crossAlert';
 import { APP_VERSION, isNewerVersion } from './lib/appUpdate';
@@ -125,10 +127,22 @@ const DEFAULT_STORE_SETTINGS: StoreSettings = {
 // stock instead of waiting for it to hit zero.
 const LOW_STOCK_THRESHOLD = 5;
 
-// Last-known-good menu/ingredient/settings snapshot — read-through cache so
-// the register can still take orders (menu, prices, stock badges, mods,
-// discounts) if the tablet loses connectivity after the first successful load.
-const MENU_DATA_CACHE_KEY = 'crema_menu_data_cache';
+// `menu_categories` is the manager-ordered tab list; items also carry a denormalized
+// `category` string. If the table is empty or missing a name that's still on products
+// (Hot Coffee / Cold Drinks), union them so the chip row isn't just "All".
+function mergeMenuCategories(tableNames: string[], itemCategories: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const push = (raw: string | null | undefined) => {
+    const name = (raw ?? '').trim();
+    if (!name || name.toLowerCase() === 'all' || seen.has(name)) return;
+    seen.add(name);
+    out.push(name);
+  };
+  tableNames.forEach(push);
+  itemCategories.forEach(push);
+  return ['All', ...out];
+}
 
 // Deliberately NOT the get_cash_drawer_reconciliation() reconciliation (cash_sales/
 // expected_ending_cash/variance/gcash_sales) — this is just a receipt of what the barista
@@ -402,12 +416,11 @@ export function useCremaPos() {
   // AUTH — PIN / biometric login via the shared pin-login Edge Function
   // ─────────────────────────────────────────────
   const login = useCallback(async (profileId: string, opts: { pin?: string; biometric?: boolean }, cachedProfile?: UserProfile): Promise<{ error?: string }> => {
-    const pinHashKey = `crema_pin_hash_${profileId}`;
-
     // 1. FAST PATH: optimistic local validation against a SHA-256 hash of the PIN cached after
     // a previous successful online login — never the raw PIN itself, so there's nothing to leak
     // from this cache. Only available once this device has logged this profile in online at
-    // least once; otherwise falls through to the slow/online path below.
+    // least once, and only within PIN_HASH_TTL (see deviceCache.ts); otherwise falls through
+    // to the slow/online path below.
     if (cachedProfile) {
       let fastPathOk = opts.biometric === true;
       if (!fastPathOk && opts.pin) {
@@ -423,7 +436,7 @@ export function useCremaPos() {
           return { error: `Too many wrong PIN attempts. Try again in ${mins} minute${mins === 1 ? '' : 's'}.` };
         }
 
-        const cachedHash = await AsyncStorage.getItem(pinHashKey);
+        const cachedHash = await readValidPinHash(profileId);
         if (cachedHash) {
           const candidateHash = await Crypto.digestStringAsync(
             Crypto.CryptoDigestAlgorithm.SHA256,
@@ -468,13 +481,15 @@ export function useCremaPos() {
             if (!error && data?.access_token) {
               await supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
               await clockIn(profileId);
+              if (opts.pin) {
+                const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${profileId}:${opts.pin}`);
+                await writePinHash(profileId, hash);
+              }
             } else {
               // Online but the real session/clock-in never happened (e.g. PIN changed or
-              // profile deactivated since this device last cached it). There's no retry for
-              // this — silently continuing would let checkout run under a stale/anon session,
-              // which submitOrder now refuses to queue into the outbox (it would just fail
-              // forever). Forcing a re-login here is disruptive but bounded — much safer than
-              // an entire shift's sales silently piling up unsynced with no explanation.
+              // profile deactivated since this device last cached it). Drop the local hash
+              // so the next attempt must re-auth online instead of unlocking on a stale PIN.
+              await clearPinHash(profileId);
               console.warn('Background auth did not return a session:', error);
               notify(
                 'Session Expired',
@@ -501,10 +516,10 @@ export function useCremaPos() {
       }
     }
 
-    // 2. SLOW PATH: no usable local cache (first login on this device, or no cached PIN hash
-    // yet) — requires connectivity, goes through pin-login directly.
+    // 2. SLOW PATH: no usable local cache (first login on this device, expired PIN hash, or
+    // no cached PIN hash yet) — requires connectivity, goes through pin-login directly.
     const online = await isOnline();
-    if (!online) return { error: 'Offline and no cached profile available' };
+    if (!online) return { error: cachedProfile ? 'PIN cache expired. Connect to the internet to log in.' : 'Offline and no cached profile available' };
 
     const body = opts.biometric ? { profile_id: profileId, biometric: true } : { profile_id: profileId, pin: opts.pin };
     const { data, error } = await supabase.functions.invoke('pin-login', { body });
@@ -536,7 +551,7 @@ export function useCremaPos() {
 
     if (opts.pin) {
       const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${profileId}:${opts.pin}`);
-      await AsyncStorage.setItem(pinHashKey, hash);
+      await writePinHash(profileId, hash);
     }
 
     await clockIn(profile.id);
@@ -659,18 +674,19 @@ export function useCremaPos() {
       patch({ shift: s });
       logActivity(state.currentUser.id, 'shift_opened', `Opened shift with ₱${startingCash.toFixed(2)} starting cash`);
     } catch (e: any) {
-      return e.message || 'Could not open shift. Check your connection and try again.';
+      return shiftRlsMessage(e);
     }
   }, [state.currentUser, patch]);
 
   const closeShiftAction = useCallback(async (endingCash: number): Promise<string | void> => {
     if (!state.shift) return 'No open shift';
     if (!(await isOnline())) return 'Closing the cash drawer requires an internet connection. Please reconnect and try again.';
+    if (authSyncRef.current) await authSyncRef.current;
     try {
       await closeShiftApi(state.shift.id, endingCash);
       patch({ shiftCloseSummary: { startingCash: state.shift.startingCash, actualEndingCash: endingCash } });
     } catch (e: any) {
-      return e.message || 'Could not close shift. Check your connection and try again.';
+      return shiftRlsMessage(e);
     }
   }, [state.shift, patch]);
 
@@ -778,7 +794,10 @@ export function useCremaPos() {
     const taxRateById: Record<string, number> = {};
     (taxRatesData ?? []).forEach((r: any) => { taxRateById[r.id] = Number(r.rate); });
 
-    const categories = ['All', ...(cats ?? []).map((c: any) => c.name)];
+    const categories = mergeMenuCategories(
+      (cats ?? []).map((c: any) => c.name),
+      menuItems.map((m) => m.category),
+    );
 
     // Always keep a synthetic 0% "None" entry first regardless of what's in
     // the real table, so the discount row always has a "No Discount" chip.
@@ -849,20 +868,17 @@ export function useCremaPos() {
 
     // Refresh the offline cache on every successful fetch (fire-and-forget —
     // a cache write failing shouldn't block the live UI update below).
-    AsyncStorage.setItem(
-      MENU_DATA_CACHE_KEY,
-      JSON.stringify({
-        menuItems,
-        categories,
-        discountsList,
-        modifierGroupsByItem,
-        recipesByItem,
-        ingredientStock,
-        ingredientsList,
-        taxRateById,
-        storeSettings: resolvedStoreSettings ?? DEFAULT_STORE_SETTINGS,
-      })
-    ).catch(() => {});
+    writeMenuCache({
+      menuItems,
+      categories,
+      discountsList,
+      modifierGroupsByItem,
+      recipesByItem,
+      ingredientStock,
+      ingredientsList,
+      taxRateById,
+      storeSettings: resolvedStoreSettings ?? DEFAULT_STORE_SETTINGS,
+    }).catch(() => {});
 
     setState((s) => {
       const rs = resolvedStoreSettings ?? s.storeSettings;
@@ -905,14 +921,16 @@ export function useCremaPos() {
 
   const hydrateMenuDataFromCache = useCallback(async (seq: number) => {
     try {
-      const cachedStr = await AsyncStorage.getItem(MENU_DATA_CACHE_KEY);
-      if (!cachedStr) return;
+      const cached = await readMenuCache();
+      if (!cached) return;
       if (seq !== menuFetchSeq.current) return;
-      const cached = JSON.parse(cachedStr);
       setState((s) => ({
         ...s,
         menuItems: cached.menuItems ?? s.menuItems,
-        categories: cached.categories ?? s.categories,
+        categories: mergeMenuCategories(
+          cached.categories ?? s.categories,
+          (cached.menuItems ?? s.menuItems).map((m: { category: string }) => m.category),
+        ),
         discountsList: cached.discountsList ?? s.discountsList,
         modifierGroupsByItem: cached.modifierGroupsByItem ?? s.modifierGroupsByItem,
         recipesByItem: cached.recipesByItem ?? s.recipesByItem,
@@ -1198,6 +1216,9 @@ export function useCremaPos() {
       return {};
     }
 
+    if (authSyncRef.current) await authSyncRef.current;
+    try { await requirePosSession(); } catch { return { error: SESSION_MISSING_MESSAGE }; }
+
     // verify_manager_pin runs server-side (never exposes pin_code to the client) and applies
     // the same 5-attempt/15-minute lockout as login, keyed off this barista's own session.
     const { data: managers, error: pinErr } = await supabase.rpc('verify_manager_pin', { p_pin: pin });
@@ -1235,6 +1256,8 @@ export function useCremaPos() {
   const selfVoidOrder = useCallback(async (orderId: string, reasonCode: string, detail: string): Promise<{ error?: string }> => {
     if (!state.currentUser) return { error: 'Not logged in' };
     if (!(await isOnline())) return { error: 'Voiding an order requires an internet connection' };
+    if (authSyncRef.current) await authSyncRef.current;
+    try { await requirePosSession(); } catch { return { error: SESSION_MISSING_MESSAGE }; }
 
     const finalReason = detail.trim() || REASON_CODE_LABELS[reasonCode as ReasonCode] || reasonCode;
     const { error: voidErr } = await supabase.rpc('self_void_order', {
@@ -1265,6 +1288,8 @@ export function useCremaPos() {
   const managerRefundOrder = useCallback(async (orderId: string, amount: number, reasonCode: string, detail: string, pin: string): Promise<{ error?: string }> => {
     const online = await isOnline();
     if (!online) return { error: 'Manager PIN verification requires an internet connection' };
+    if (authSyncRef.current) await authSyncRef.current;
+    try { await requirePosSession(); } catch { return { error: SESSION_MISSING_MESSAGE }; }
     if (!reasonCode) return { error: 'Select a refund reason' };
     if (reasonCode === 'other' && !detail.trim()) return { error: 'Add a detail for "Other"' };
 
@@ -1330,6 +1355,8 @@ export function useCremaPos() {
   ): Promise<{ error?: string }> => {
     if (!reason.trim()) return { error: 'A reason is required' };
     if (!(await isOnline())) return { error: 'Adjusting stock requires an internet connection' };
+    if (authSyncRef.current) await authSyncRef.current;
+    try { await requirePosSession(); } catch { return { error: SESSION_MISSING_MESSAGE }; }
 
     const { data: managers, error: pinErr } = await supabase.rpc('verify_manager_pin', { p_pin: pin });
     if (pinErr) return { error: pinErr.message || 'Could not verify manager PIN. Check your connection and try again.' };
@@ -1723,10 +1750,22 @@ export function useCremaPos() {
     patch({ checkoutBusy: true, checkoutError: null });
     if (authSyncRef.current) await authSyncRef.current;
 
+    const online = await isOnline();
+    // Online checkout/append/gift-card must run under a real pin-login JWT. Offline new
+    // orders still go to the outbox without a session — that's the till-must-keep-selling path.
+    if (online) {
+      try {
+        await requirePosSession();
+      } catch (e: any) {
+        patch({ checkoutBusy: false, checkoutError: e?.message || SESSION_MISSING_MESSAGE });
+        return;
+      }
+    }
+
     const isAppend = !!state.appendTargetOrderId;
     // Appending to an existing order has no offline outbox path of its own (unlike a brand-new
     // order) — merging into a possibly-already-synced parent row safely needs a live round trip.
-    if (isAppend && !(await isOnline())) {
+    if (isAppend && !online) {
       patch({ checkoutBusy: false, checkoutError: 'Adding items to an existing order requires an internet connection. Please reconnect and try again.' });
       return;
     }
@@ -1764,7 +1803,7 @@ export function useCremaPos() {
     // comment) — not offered on a split or an append/top-up. The debit is an online-only RPC
     // (no offline outbox path for it), so it's required up front, same as append above.
     const isGiftCard = !isAppend && !isSplit && state.payMethod === 'gift_card';
-    if (isGiftCard && !(await isOnline())) {
+    if (isGiftCard && !online) {
       patch({ checkoutBusy: false, checkoutError: 'Paying with a gift card requires an internet connection. Please reconnect and try again.' });
       return;
     }
@@ -1982,14 +2021,12 @@ export function useCremaPos() {
     return map;
   }, [state.menuItems, state.cart, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled]);
 
-  // Deliberate: once the barista is actively typing a search, it matches across every
-  // category, not just the currently-selected tab. Scoping to the active tab would silently
-  // return zero results for an item that exists but sits under a different tab than whatever
-  // was last selected — worse than the reverse for a fast-moving register.
+  // Category chip always scopes the grid. Search is an extra name filter on top of that —
+  // tap All to search the whole menu, or tap Hot Coffee / Cold Drinks to see only that group.
   const filteredItems = useMemo(() => {
     const q = state.search.toLowerCase();
     return state.menuItems.filter(
-      (m) => (state.search.trim() || state.selCat === 'All' || m.category === state.selCat) && m.name.toLowerCase().includes(q)
+      (m) => (state.selCat === 'All' || m.category === state.selCat) && m.name.toLowerCase().includes(q)
     );
   }, [state.search, state.selCat, state.menuItems]);
 
