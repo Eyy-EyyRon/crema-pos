@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { peso0 } from '../format';
+import { peso0, formatOrderNo } from '../format';
 import { AlertTriangleIcon, BanIcon, CheckIcon, PlusIcon, WifiOffIcon } from '../icons';
 import { tapMedium, warning } from '../lib/haptics';
 import { confirmAsync } from '../lib/crossAlert';
@@ -42,10 +42,11 @@ export function QueueCard({ ticket, onComplete, onVoid, onAddItems, onAdvanceIte
   const timeAgo = ticket.mins < 1 ? 'Just now' : `${ticket.mins} min ago`;
   const timeLabel = h.urgent ? `Urgent · ${timeAgo}` : timeAgo;
   const locked = !!ticket.pendingSync;
+  const orderNo = formatOrderNo(ticket.no);
 
   const confirmComplete = async () => {
     tapMedium();
-    const confirmed = await confirmAsync(`Complete order ${ticket.no}?`, 'This removes the ticket from the queue.', 'Complete');
+    const confirmed = await confirmAsync(`Complete order ${orderNo}?`, 'This removes the ticket from the queue.', 'Complete');
     if (confirmed) onComplete();
   };
 
@@ -53,7 +54,7 @@ export function QueueCard({ ticket, onComplete, onVoid, onAddItems, onAdvanceIte
     <View style={[styles.card, { borderColor: h.border, borderWidth: h.bw }]}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Text style={styles.no}>{ticket.no}</Text>
+          <Text style={styles.no}>{orderNo}</Text>
           <View style={styles.typeBadge}>
             <Text style={styles.typeBadgeText}>{ticket.type}</Text>
           </View>
@@ -116,17 +117,17 @@ export function QueueCard({ ticket, onComplete, onVoid, onAddItems, onAdvanceIte
             style={[styles.addBtn, locked && styles.disabledBtn]}
             disabled={locked}
             accessibilityRole="button"
-            accessibilityLabel={`Add items to order ${ticket.no}`}
+            accessibilityLabel={`Add more items to order ${orderNo}`}
           >
             <PlusIcon size={13} color={colors.gold} strokeWidth={2.4} />
-            <Text style={styles.addText}>Add</Text>
+            <Text style={styles.addText}>Add items</Text>
           </Pressable>
           <Pressable
             onPress={() => { warning(); onVoid(); }}
             style={[styles.voidBtn, locked && styles.disabledBtn]}
             disabled={locked}
             accessibilityRole="button"
-            accessibilityLabel={`Void order ${ticket.no}`}
+            accessibilityLabel={`Void order ${orderNo}`}
           >
             <BanIcon size={13} color={colors.danger} strokeWidth={2} />
             <Text style={styles.voidText}>Void</Text>
@@ -136,7 +137,7 @@ export function QueueCard({ ticket, onComplete, onVoid, onAddItems, onAdvanceIte
             style={[styles.completeBtn, locked && styles.disabledBtn]}
             disabled={locked}
             accessibilityRole="button"
-            accessibilityLabel={`Mark order ${ticket.no} complete`}
+            accessibilityLabel={`Mark order ${orderNo} complete`}
           >
             <CheckIcon size={14} color={colors.success} strokeWidth={2.4} />
             <Text style={styles.completeText}>Complete</Text>
