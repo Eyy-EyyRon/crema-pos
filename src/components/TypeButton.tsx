@@ -28,7 +28,7 @@ export function TypeButton({ kind, active, onPress }: TypeButtonProps) {
       accessibilityLabel={`${kind === 'dine-in' ? 'Dine-In' : 'Takeout'} order type`}
     >
       {kind === 'dine-in' ? <CoffeeIcon size={17} color={iconColor} /> : <BagIcon size={17} color={iconColor} />}
-      <Text style={[styles.label, { color: active ? colors.goldBrightText : colors.textMuted }]}>
+      <Text style={[styles.label, { color: active ? colors.goldBrightText : colors.textMuted }]} numberOfLines={1}>
         {kind === 'dine-in' ? 'Dine-In' : 'Takeout'}
       </Text>
     </Pressable>
@@ -37,17 +37,22 @@ export function TypeButton({ kind, active, onPress }: TypeButtonProps) {
 
 const styles = StyleSheet.create({
   base: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 132,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 9,
     paddingVertical: 13,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     borderRadius: 13,
     borderWidth: 1.5,
   },
   label: {
     fontSize: 13.5,
     fontFamily: fonts.sansExtraBold,
+    flexShrink: 1,
   },
 });
