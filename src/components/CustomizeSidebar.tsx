@@ -1,16 +1,19 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { useBreakpoint } from '../breakpoints';
 import { colors } from '../theme';
 import { CustomizeContent } from './CustomizeContent';
 
-interface CustomizeSidebarProps extends Omit<React.ComponentProps<typeof CustomizeContent>, 'variant'> {}
+interface CustomizeSidebarProps extends React.ComponentProps<typeof CustomizeContent> {}
 
 export function CustomizeSidebar(props: CustomizeSidebarProps) {
+  const { width } = useBreakpoint();
+  const sidebarWidth = Math.min(452, Math.max(300, Math.round(width * 0.42)));
   return (
     <View style={styles.overlayContainer}>
       <Pressable style={styles.overlay} onPress={props.onClose} />
-      <View style={styles.sidebar}>
-        <CustomizeContent {...props} variant="tablet" />
+      <View style={[styles.sidebar, { width: sidebarWidth }]}>
+        <CustomizeContent {...props} />
       </View>
     </View>
   );
@@ -38,7 +41,6 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    width: 452,
     backgroundColor: colors.screenBg,
     borderLeftWidth: 1,
     borderLeftColor: colors.borderGold20,
