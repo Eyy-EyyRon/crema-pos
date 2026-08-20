@@ -13,19 +13,31 @@ interface CartRowProps {
   onInc: () => void;
   onDec: () => void;
   onRemove: () => void;
+  /** Opens customize so modifiers / note can be changed on this line. */
+  onEdit?: () => void;
 }
 
-export function CartRow({ item, shotSize = 44, onInc, onDec, onRemove }: CartRowProps) {
+export function CartRow({ item, shotSize = 44, onInc, onDec, onRemove, onEdit }: CartRowProps) {
   const hasMods = item.mods.length > 0;
   const modsStr = item.mods.join(' · ') + (item.note ? '  ✎ ' + item.note : '');
   return (
     <View style={styles.row}>
-      <Shot label="·" style={{ width: shotSize, height: shotSize, borderRadius: 10, flexShrink: 0 }} />
-      <View style={styles.mid}>
-        <Text style={styles.name}>{item.name}</Text>
-        {hasMods && <Text style={styles.mods}>{modsStr}</Text>}
-        <Text style={styles.line}>{peso0(item.unit * item.qty)}</Text>
-      </View>
+      <Pressable
+        style={styles.midPress}
+        onPress={onEdit ? () => { tapLight(); onEdit(); } : undefined}
+        disabled={!onEdit}
+        accessibilityRole={onEdit ? 'button' : undefined}
+        accessibilityLabel={onEdit ? `Edit ${item.name} modifiers` : undefined}
+      >
+        <Shot label="·" style={{ width: shotSize, height: shotSize, borderRadius: 10, flexShrink: 0 }} />
+        <View style={styles.mid}>
+          <Text style={styles.name}>{item.name}</Text>
+          {hasMods && <Text style={styles.mods}>{modsStr}</Text>}
+          {!hasMods && !!item.note && <Text style={styles.mods}>✎ {item.note}</Text>}
+          {onEdit && <Text style={styles.editHint}>Tap to edit</Text>}
+          <Text style={styles.line}>{peso0(item.unit * item.qty)}</Text>
+        </View>
+      </Pressable>
       <View style={styles.right}>
         <Pressable
           onPress={() => { tapMedium(); onRemove(); }}
@@ -71,6 +83,12 @@ const styles = StyleSheet.create({
     padding: 11,
     marginBottom: 9,
   },
+  midPress: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    gap: 11,
+  },
   mid: {
     flex: 1,
     minWidth: 0,
@@ -85,6 +103,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
     lineHeight: 15,
+  },
+  editHint: {
+    fontSize: 10.5,
+    fontFamily: fonts.sansSemiBold,
+    color: colors.gold,
+    marginTop: 3,
   },
   line: {
     fontSize: 12.5,
