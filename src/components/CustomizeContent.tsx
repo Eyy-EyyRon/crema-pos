@@ -25,6 +25,8 @@ interface CustomizeContentProps {
   addValid: boolean;
   onAdd: () => void;
   onClose: () => void;
+  /** When true, the primary CTA updates the existing cart line instead of appending. */
+  isEditing?: boolean;
 }
 
 export function CustomizeContent({
@@ -43,9 +45,12 @@ export function CustomizeContent({
   addValid,
   onAdd,
   onClose,
+  isEditing = false,
 }: CustomizeContentProps) {
   const { isTablet } = useBreakpoint();
-  const addLabel = qty > 1 ? `Add ${qty}× to Order` : 'Add to Order';
+  const addLabel = isEditing
+    ? (qty > 1 ? `Update ${qty}×` : 'Update Item')
+    : (qty > 1 ? `Add ${qty}× to Order` : 'Add to Order');
   const addTotalStr = peso0(addUnitTotal * qty);
 
   return (
