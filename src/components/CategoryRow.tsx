@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
+import { useBreakpoint } from '../breakpoints';
 import { Chip } from './Chip';
 
 export function CategoryRow({
@@ -14,11 +15,13 @@ export function CategoryRow({
   variant?: 'phone' | 'tablet';
 }) {
   const tablet = variant === 'tablet';
+  const { gutter } = useBreakpoint();
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={[styles.row, { paddingHorizontal: tablet ? 26 : 20, gap: tablet ? 9 : 8 }]}
+      contentContainerStyle={[styles.row, { paddingHorizontal: gutter, gap: tablet ? 9 : 8 }]}
+      keyboardShouldPersistTaps="handled"
       style={styles.scroll}
     >
       {categories.map((c) => (
@@ -34,6 +37,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   row: {
+    flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'nowrap',
   },
 });
