@@ -1,5 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBreakpoint } from '../breakpoints';
 import { colors } from '../theme';
 import { ReceiptStoreInfo } from '../lib/receipt';
 import { SuccessInfo } from '../types';
@@ -16,8 +18,16 @@ export function SuccessScreen({
   storeInfo: ReceiptStoreInfo;
   onDone: () => void;
 }) {
+  const insets = useSafeAreaInsets();
+  const { gutter, isCompact } = useBreakpoint();
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        { paddingHorizontal: gutter, paddingTop: isCompact ? 16 : 40, paddingBottom: insets.bottom + 20 },
+      ]}
+    >
       <SuccessContent success={success} orderTypeLabel={orderTypeLabel} storeInfo={storeInfo} onDone={onDone} />
     </ScrollView>
   );
@@ -29,10 +39,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.screenBg,
   },
   content: {
-    paddingTop: 40,
-    paddingHorizontal: 26,
-    paddingBottom: 20,
     alignItems: 'center',
     flexGrow: 1,
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
   },
 });
