@@ -516,7 +516,7 @@ export function CustomerLoyaltyBlock({
                 keyboardType="number-pad"
                 style={styles.tenderInput}
               />
-              <Pressable onPress={() => { tapLight(); onChangeRedeemPoints(String(maxRedeemablePoints)); }} style={styles.quickCashBtn}>
+              <Pressable onPress={() => { tapLight(); onChangeRedeemPoints(String(maxRedeemablePoints)); }} style={styles.tenderActionBtn}>
                 <Text style={styles.quickCashText}>Use Max ({maxRedeemablePoints})</Text>
               </Pressable>
             </View>
@@ -550,7 +550,7 @@ export function CustomerLoyaltyBlock({
           autoCapitalize={mode === 'card' ? 'characters' : 'none'}
           style={styles.tenderInput}
         />
-        <Pressable onPress={() => { tapMedium(); onLookup(); }} style={styles.quickCashBtn}>
+        <Pressable onPress={() => { tapMedium(); onLookup(); }} style={styles.tenderActionBtn}>
           {lookupStatus === 'searching' ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Find</Text>}
         </Pressable>
       </View>
@@ -570,7 +570,7 @@ export function CustomerLoyaltyBlock({
               placeholderTextColor={colors.textMuted}
               style={styles.tenderInput}
             />
-            <Pressable onPress={() => { tapMedium(); onCreateCustomer(); }} style={styles.quickCashBtn}>
+            <Pressable onPress={() => { tapMedium(); onCreateCustomer(); }} style={styles.tenderActionBtn}>
               {creating ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Save New</Text>}
             </Pressable>
           </View>
@@ -617,7 +617,7 @@ export function GiftCardPaymentBlock({
           autoCapitalize="characters"
           style={styles.tenderInput}
         />
-        <Pressable onPress={() => { tapMedium(); onCheckBalance(); }} style={styles.quickCashBtn}>
+        <Pressable onPress={() => { tapMedium(); onCheckBalance(); }} style={styles.tenderActionBtn}>
           {checking ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Check</Text>}
         </Pressable>
       </View>
@@ -887,6 +887,21 @@ const styles = StyleSheet.create({
     borderColor: colors.borderGold14,
     borderRadius: 10,
     paddingVertical: 8,
+  },
+  // Same look as quickCashBtn, but content-width instead of flex:1 — for a button that sits
+  // beside a flex:1 TextInput inside tenderInputRow (Find/Check/Save New/Use Max). Two flex:1
+  // siblings there would split the row 50/50, squeezing long placeholder text against the
+  // button on narrow phones instead of letting the input take the leftover space.
+  tenderActionBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    backgroundColor: colors.chipBg,
+    borderWidth: 1,
+    borderColor: colors.borderGold14,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
   },
   quickCashText: {
     fontSize: 12.5,

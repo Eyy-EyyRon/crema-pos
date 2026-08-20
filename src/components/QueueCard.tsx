@@ -239,8 +239,10 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
+    rowGap: 10,
   },
   total: {
     fontSize: 13,
@@ -249,7 +251,8 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   disabledBtn: {
     opacity: 0.4,
@@ -263,7 +266,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(184,147,90,0.3)',
     borderRadius: 11,
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
   },
   addText: {
     fontSize: 12.5,
@@ -279,7 +282,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,107,122,0.3)',
     borderRadius: 11,
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
   },
   voidText: {
     fontSize: 12.5,
@@ -295,7 +298,7 @@ const styles = StyleSheet.create({
     borderColor: colors.successBorder35,
     borderRadius: 11,
     paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
   },
   completeText: {
     fontSize: 12.5,

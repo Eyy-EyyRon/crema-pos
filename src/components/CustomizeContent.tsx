@@ -108,8 +108,8 @@ export function CustomizeContent({
       </ScrollView>
 
       <View style={[styles.footer, tablet && styles.footerTablet]}>
-        <View style={styles.footerRow}>
-          <View style={styles.stepper}>
+        <View style={[styles.footerRow, !tablet && styles.footerRowPhone]}>
+          <View style={[styles.stepper, !tablet && styles.stepperPhone]}>
             <Pressable onPress={() => { tapLight(); onDecQty(); }} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Decrease quantity">
               <MinusIcon size={14} color={colors.textSecondary} />
             </Pressable>
@@ -120,10 +120,10 @@ export function CustomizeContent({
           </View>
           <Pressable
             onPress={() => { if (addValid) { tapMedium(); onAdd(); } else { warning(); } }}
-            style={[styles.addBtn, { opacity: addValid ? 1 : 0.4 }]}
+            style={[styles.addBtn, !tablet && styles.addBtnPhone, { opacity: addValid ? 1 : 0.4 }]}
           >
             <BagIcon size={17} color={colors.screenBg} strokeWidth={2} />
-            <Text style={styles.addLabel}>{addLabel}</Text>
+            <Text style={styles.addLabel} numberOfLines={1}>{addLabel}</Text>
             <View style={styles.addTotalWrap}>
               <Text style={styles.addTotal}>{addTotalStr}</Text>
             </View>
@@ -284,6 +284,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
   },
+  // On phone, stack the qty stepper above a full-width Add button instead of squeezing both
+  // into one row — "Add to Order ₱175" plus the stepper never fits alongside it on a real
+  // barista phone (360-390px), so it either wrapped mid-word or got ellipsized. A full-width
+  // primary CTA is also just a better touch target than a squeezed inline button.
+  footerRowPhone: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -294,6 +303,9 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     paddingVertical: 7,
     paddingHorizontal: 10,
+  },
+  stepperPhone: {
+    alignSelf: 'flex-start',
   },
   stepBtn: {
     width: 30,
@@ -320,6 +332,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 14,
     backgroundColor: colors.gold,
+  },
+  addBtnPhone: {
+    // In footerRowPhone's column layout, flex:1 above would grow along the column's main axis
+    // (height), not width — this makes it a full-width block instead.
+    flexGrow: 0,
+    flexBasis: 'auto',
+    alignSelf: 'stretch',
+    width: '100%',
   },
   addLabel: {
     fontSize: 14.5,
