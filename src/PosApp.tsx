@@ -132,6 +132,7 @@ export function PosApp() {
         addValid: pos.addValid,
         onAdd: pos.addToCart,
         onClose: pos.closeItem,
+        isEditing: !!state.editingCartId,
       }
     : null;
 
@@ -140,6 +141,7 @@ export function PosApp() {
     onInc: (cartId: string) => pos.changeQty(cartId, 1),
     onDec: (cartId: string) => pos.changeQty(cartId, -1),
     onRemove: pos.removeFromCart,
+    onEdit: pos.editCartItem,
     orderType: state.orderType,
     onSelectDineIn: allowDineIn ? () => pos.selectType('dine-in') : undefined,
     onSelectTakeout: allowTakeout ? () => pos.selectType('takeout') : undefined,
