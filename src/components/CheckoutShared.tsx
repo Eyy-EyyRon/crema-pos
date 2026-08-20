@@ -1,8 +1,9 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
 import { Image } from 'expo-image';
+import { useBreakpoint } from '../breakpoints';
 import { AlertCircleIcon, CameraIcon } from '../icons';
-import { peso, peso0 } from '../format';
+import { peso, peso0, formatOrderNo } from '../format';
 import { tapLight, tapMedium, warning } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 import { Discount, OrderType, PayMethod } from '../types';
@@ -10,8 +11,55 @@ import { Chip } from './Chip';
 import { PayButton } from './PayButton';
 import { TypeButton } from './TypeButton';
 
+// Same treatment as Close Shift: RN Web <input> has an intrinsic min-width (~20ch), so a
+// flex:1 field beside Find/Check will shove the button off a 320px screen unless the input
+// is allowed to shrink.
+const webInputReset: TextStyle = Platform.OS === 'web'
+  ? { outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' }
+  : {};
+
+function useCheckoutLayout() {
+  const { isTablet, isCompact, width } = useBreakpoint();
+  const narrow = width < 360;
+  // Side-by-side Find/Check only when there is room for the field AND a content-width button.
+  const stackActions = width < 400;
+  return {
+    isTablet,
+    isCompact,
+    narrow,
+    stackActions,
+    fieldPadV: isCompact ? 10 : isTablet ? 14 : 12,
+    fieldPadH: narrow ? 10 : 14,
+    fieldFont: isTablet ? 16 : narrow ? 14 : 15,
+    actionPadH: narrow ? 10 : 14,
+    compactPay: width < 480,
+  };
+}
+
 export function SectionLabel({ children, style }: { children: React.ReactNode; style?: any }) {
   return <Text style={[styles.label, style]}>{children}</Text>;
+}
+
+function TenderActionRow({
+  children,
+  action,
+}: {
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  const { stackActions, fieldPadV, fieldPadH } = useCheckoutLayout();
+  return (
+    <View
+      style={[
+        styles.tenderInputRow,
+        { paddingVertical: fieldPadV, paddingHorizontal: fieldPadH },
+        stackActions && action ? styles.tenderInputRowStack : null,
+      ]}
+    >
+      <View style={styles.tenderInputWrap}>{children}</View>
+      {action}
+    </View>
+  );
 }
 
 // Shown instead of the Order Type / Name for Order sections when the current cart is topping
@@ -21,7 +69,7 @@ export function AppendOrderBanner({ orderNo, onCancel }: { orderNo: string; onCa
   return (
     <View style={styles.appendBanner}>
       <View style={{ flex: 1 }}>
-        <Text style={styles.appendBannerTitle}>Adding to Order {orderNo}</Text>
+        <Text style={styles.appendBannerTitle}>Adding to Order {formatOrderNo(orderNo)}</Text>
         <Text style={styles.appendBannerSub}>These items go on the existing ticket and are paid for separately.</Text>
       </View>
       <Pressable onPress={() => { tapMedium(); onCancel(); }} style={styles.appendBannerCancel}>
@@ -59,6 +107,7 @@ export function CustomerNameField({
   onChangeText: (v: string) => void;
   required?: boolean;
 }) {
+  const { fieldFont } = useCheckoutLayout();
   return (
     <View style={styles.nameInputRow}>
       <TextInput
@@ -66,8 +115,9 @@ export function CustomerNameField({
         onChangeText={onChangeText}
         placeholder={required ? 'Name for the order (required)' : 'Name for the order (optional)'}
         placeholderTextColor={colors.textMuted}
-        style={styles.nameInput}
+        style={[styles.nameInput, webInputReset, { fontSize: fieldFont }]}
         maxLength={60}
+        underlineColorAndroid="transparent"
       />
     </View>
   );
@@ -126,17 +176,19 @@ export function PaymentMethodRow({
   /** Tighter button sizing for a narrow 3-up row (see PayButton's own compact prop). */
   compact?: boolean;
 }) {
+  const { compactPay } = useCheckoutLayout();
+  const tight = compact ?? compactPay;
   return (
     <View>
       <View style={[styles.payMethodRow, { gap, opacity: splitEnabled ? 0.4 : 1 }]}>
         {onSelectCash && (
-          <PayButton kind="cash" active={payMethod === 'cash' && !splitEnabled} onPress={onSelectCash} compact={compact} />
+          <PayButton kind="cash" active={payMethod === 'cash' && !splitEnabled} onPress={onSelectCash} compact={tight} />
         )}
         {onSelectGcash && (
-          <PayButton kind="gcash" active={payMethod === 'gcash' && !splitEnabled} onPress={onSelectGcash} compact={compact} />
+          <PayButton kind="gcash" active={payMethod === 'gcash' && !splitEnabled} onPress={onSelectGcash} compact={tight} />
         )}
         {onSelectGiftCard && (
-          <PayButton kind="gift_card" active={payMethod === 'gift_card' && !splitEnabled} onPress={onSelectGiftCard} compact={compact} />
+          <PayButton kind="gift_card" active={payMethod === 'gift_card' && !splitEnabled} onPress={onSelectGiftCard} compact={tight} />
         )}
       </View>
       {payMethod === 'gcash' && !splitEnabled && onViewGcashQr && (
@@ -172,32 +224,35 @@ export function SplitPaymentBlock({
   mismatch: boolean;
 }) {
   const remaining = total - (Number(cashAmount) || 0) - (Number(gcashAmount) || 0);
+  const { fieldFont } = useCheckoutLayout();
   return (
     <View>
       <Text style={styles.splitAmountLabel}>Cash Amount</Text>
-      <View style={styles.tenderInputRow}>
-        <Text style={styles.pesoSign}>₱</Text>
+      <TenderActionRow>
+        <Text style={[styles.pesoSign, { fontSize: fieldFont }]}>₱</Text>
         <TextInput
           value={cashAmount}
           onChangeText={(v) => onChangeCashAmount(v.replace(/[^0-9.]/g, ''))}
           placeholder="0.00"
           placeholderTextColor={colors.textMuted}
           keyboardType="decimal-pad"
-          style={styles.tenderInput}
+          style={[styles.tenderInput, webInputReset, { fontSize: fieldFont }]}
+          underlineColorAndroid="transparent"
         />
-      </View>
+      </TenderActionRow>
       <Text style={[styles.splitAmountLabel, { marginTop: 12 }]}>GCash Amount</Text>
-      <View style={styles.tenderInputRow}>
-        <Text style={styles.pesoSign}>₱</Text>
+      <TenderActionRow>
+        <Text style={[styles.pesoSign, { fontSize: fieldFont }]}>₱</Text>
         <TextInput
           value={gcashAmount}
           onChangeText={(v) => onChangeGcashAmount(v.replace(/[^0-9.]/g, ''))}
           placeholder="0.00"
           placeholderTextColor={colors.textMuted}
           keyboardType="decimal-pad"
-          style={styles.tenderInput}
+          style={[styles.tenderInput, webInputReset, { fontSize: fieldFont }]}
+          underlineColorAndroid="transparent"
         />
-      </View>
+      </TenderActionRow>
       {mismatch && (
         <Text style={styles.splitMismatchText}>
           {remaining > 0 ? `${peso(remaining)} remaining` : `${peso(Math.abs(remaining))} over the total`}
@@ -250,8 +305,9 @@ export function GcashConfirmBlock({
           onChangeText={onChangeReference}
           placeholder="GCash Reference / Transaction No. (optional)"
           placeholderTextColor={colors.textMuted}
-          style={styles.gcashRefInput}
+          style={[styles.gcashRefInput, webInputReset]}
           autoCapitalize="characters"
+          underlineColorAndroid="transparent"
         />
       </View>
       <Pressable
@@ -296,19 +352,21 @@ export function CashTenderBlock({
   change: number | null;
   shortfall: boolean;
 }) {
+  const { fieldFont } = useCheckoutLayout();
   return (
     <>
-      <View style={styles.tenderInputRow}>
-        <Text style={styles.pesoSign}>₱</Text>
+      <TenderActionRow>
+        <Text style={[styles.pesoSign, { fontSize: fieldFont }]}>₱</Text>
         <TextInput
           value={tendered}
           onChangeText={(v) => onChangeTendered(v.replace(/[^0-9.]/g, ''))}
           placeholder="Amount received"
           placeholderTextColor={colors.textMuted}
           keyboardType="decimal-pad"
-          style={styles.tenderInput}
+          style={[styles.tenderInput, webInputReset, { fontSize: fieldFont }]}
+          underlineColorAndroid="transparent"
         />
-      </View>
+      </TenderActionRow>
       <View style={styles.quickCashRow}>
         {quickCash.map((v) => (
           <Pressable key={v} onPress={() => onQuickCash(v)} style={styles.quickCashBtn}>
@@ -411,26 +469,27 @@ export function ProcessPaymentButton({
   label?: string;
 }) {
   const blocked = disabled || !!busy;
+  const { narrow, isCompact } = useCheckoutLayout();
   return (
     <Pressable
       onPress={blocked ? () => warning() : () => { tapMedium(); onPress(); }}
-      style={[styles.payBtn, { opacity: blocked ? 0.4 : 1 }]}
+      style={[styles.payBtn, { opacity: blocked ? 0.4 : 1 }, narrow && styles.payBtnNarrow, isCompact && { paddingVertical: 12 }]}
     >
       {busy ? (
         <>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, minWidth: 0 }}>
             <ActivityIndicator size="small" color={colors.goldBrightText} />
-            <Text style={styles.payBtnLabel}>Processing…</Text>
+            <Text style={[styles.payBtnLabel, narrow && { fontSize: 13 }]} numberOfLines={2}>Processing…</Text>
           </View>
           <View style={styles.payBtnAmountWrap}>
-            <Text style={styles.payBtnAmount}>{totalStr}</Text>
+            <Text style={[styles.payBtnAmount, narrow && { fontSize: 13 }]}>{totalStr}</Text>
           </View>
         </>
       ) : (
         <>
-          <Text style={styles.payBtnLabel}>{label}</Text>
+          <Text style={[styles.payBtnLabel, { flexShrink: 1 }, narrow && { fontSize: 13 }]} numberOfLines={2}>{label}</Text>
           <View style={styles.payBtnAmountWrap}>
-            <Text style={styles.payBtnAmount}>{totalStr}</Text>
+            <Text style={[styles.payBtnAmount, narrow && { fontSize: 13 }]}>{totalStr}</Text>
           </View>
         </>
       )}
@@ -494,11 +553,14 @@ export function CustomerLoyaltyBlock({
   lookupMessage: string | null;
   onOpenScanner?: () => void;
 }) {
+  const { fieldFont, actionPadH, stackActions } = useCheckoutLayout();
+  const actionBtnStyle = [styles.tenderActionBtn, { paddingHorizontal: actionPadH }, stackActions && styles.tenderActionBtnStacked];
+
   if (lookupStatus === 'found') {
     return (
       <View>
         <View style={styles.customerFoundRow}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.customerFoundName}>{foundName || phone}</Text>
             {loyaltyEnabled && <Text style={styles.customerFoundPoints}>{foundPoints} loyalty pts</Text>}
           </View>
@@ -508,19 +570,23 @@ export function CustomerLoyaltyBlock({
         </View>
         {loyaltyEnabled && allowRedemption && foundPoints > 0 && (
           <View style={{ marginTop: 9 }}>
-            <View style={styles.tenderInputRow}>
+            <TenderActionRow
+              action={
+                <Pressable onPress={() => { tapLight(); onChangeRedeemPoints(String(maxRedeemablePoints)); }} style={actionBtnStyle}>
+                  <Text style={styles.quickCashText} numberOfLines={1}>Use Max ({maxRedeemablePoints})</Text>
+                </Pressable>
+              }
+            >
               <TextInput
                 value={redeemPoints}
                 onChangeText={(v) => onChangeRedeemPoints(v.replace(/[^0-9]/g, ''))}
                 placeholder="Points to redeem (0)"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="number-pad"
-                style={styles.tenderInput}
+                style={[styles.tenderInput, webInputReset, { fontSize: fieldFont }]}
+                underlineColorAndroid="transparent"
               />
-              <Pressable onPress={() => { tapLight(); onChangeRedeemPoints(String(maxRedeemablePoints)); }} style={styles.tenderActionBtn}>
-                <Text style={styles.quickCashText}>Use Max ({maxRedeemablePoints})</Text>
-              </Pressable>
-            </View>
+            </TenderActionRow>
             {Number(redeemPoints) > 0 && (
               <Text style={styles.customerFoundPoints}>
                 − {peso(Number(redeemPoints) * pointValuePhp)} off this order
@@ -541,7 +607,13 @@ export function CustomerLoyaltyBlock({
         <Chip label="Phone" active={mode === 'phone'} onPress={() => onChangeMode('phone')} />
         <Chip label="Card Code" active={mode === 'card'} onPress={() => onChangeMode('card')} />
       </View>
-      <View style={styles.tenderInputRow}>
+      <TenderActionRow
+        action={
+          <Pressable onPress={() => { tapMedium(); onLookup(); }} style={actionBtnStyle} accessibilityRole="button" accessibilityLabel="Find customer">
+            {lookupStatus === 'searching' ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Find</Text>}
+          </Pressable>
+        }
+      >
         <TextInput
           value={mode === 'phone' ? phone : cardCode}
           onChangeText={mode === 'phone' ? onChangePhone : onChangeCardCode}
@@ -549,12 +621,10 @@ export function CustomerLoyaltyBlock({
           placeholderTextColor={colors.textMuted}
           keyboardType={mode === 'phone' ? 'phone-pad' : 'default'}
           autoCapitalize={mode === 'card' ? 'characters' : 'none'}
-          style={styles.tenderInput}
+          style={[styles.tenderInput, webInputReset, { fontSize: fieldFont }]}
+          underlineColorAndroid="transparent"
         />
-        <Pressable onPress={() => { tapMedium(); onLookup(); }} style={styles.tenderActionBtn}>
-          {lookupStatus === 'searching' ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Find</Text>}
-        </Pressable>
-      </View>
+      </TenderActionRow>
       {mode === 'card' && !!onOpenScanner && (
         <Pressable onPress={() => { tapLight(); onOpenScanner(); }} style={styles.viewQrLink}>
           <Text style={styles.viewQrLinkText}>Scan QR code instead</Text>
@@ -563,17 +633,23 @@ export function CustomerLoyaltyBlock({
       {lookupStatus === 'not_found' && mode === 'phone' && (
         <View style={{ marginTop: 9 }}>
           <Text style={styles.customerFoundPoints}>No customer found for this number.</Text>
-          <View style={[styles.tenderInputRow, { marginTop: 8 }]}>
-            <TextInput
-              value={newCustomerName}
-              onChangeText={onChangeNewCustomerName}
-              placeholder="Name (for new customer)"
-              placeholderTextColor={colors.textMuted}
-              style={styles.tenderInput}
-            />
-            <Pressable onPress={() => { tapMedium(); onCreateCustomer(); }} style={styles.tenderActionBtn}>
-              {creating ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Save New</Text>}
-            </Pressable>
+          <View style={{ marginTop: 8 }}>
+            <TenderActionRow
+              action={
+                <Pressable onPress={() => { tapMedium(); onCreateCustomer(); }} style={actionBtnStyle}>
+                  {creating ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Save New</Text>}
+                </Pressable>
+              }
+            >
+              <TextInput
+                value={newCustomerName}
+                onChangeText={onChangeNewCustomerName}
+                placeholder="Name (for new customer)"
+                placeholderTextColor={colors.textMuted}
+                style={[styles.tenderInput, webInputReset, { fontSize: fieldFont }]}
+                underlineColorAndroid="transparent"
+              />
+            </TenderActionRow>
           </View>
         </View>
       )}
@@ -607,21 +683,29 @@ export function GiftCardPaymentBlock({
   onOpenScanner?: () => void;
 }) {
   const insufficient = balance !== null && balance < amountDue;
+  const { fieldFont, actionPadH, stackActions } = useCheckoutLayout();
   return (
     <View>
-      <View style={styles.tenderInputRow}>
+      <TenderActionRow
+        action={
+          <Pressable
+            onPress={() => { tapMedium(); onCheckBalance(); }}
+            style={[styles.tenderActionBtn, { paddingHorizontal: actionPadH }, stackActions && styles.tenderActionBtnStacked]}
+          >
+            {checking ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Check</Text>}
+          </Pressable>
+        }
+      >
         <TextInput
           value={code}
           onChangeText={(v) => onChangeCode(v.toUpperCase())}
           placeholder="Gift Card Code"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="characters"
-          style={styles.tenderInput}
+          style={[styles.tenderInput, webInputReset, { fontSize: fieldFont }]}
+          underlineColorAndroid="transparent"
         />
-        <Pressable onPress={() => { tapMedium(); onCheckBalance(); }} style={styles.tenderActionBtn}>
-          {checking ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Check</Text>}
-        </Pressable>
-      </View>
+      </TenderActionRow>
       {!!onOpenScanner && (
         <Pressable onPress={() => { tapLight(); onOpenScanner(); }} style={styles.viewQrLink}>
           <Text style={styles.viewQrLinkText}>Scan gift card QR instead</Text>
@@ -646,6 +730,7 @@ export function ReceiptEmailField({
   value: string;
   onChangeText: (v: string) => void;
 }) {
+  const { fieldFont } = useCheckoutLayout();
   return (
     <View style={styles.nameInputRow}>
       <TextInput
@@ -655,7 +740,8 @@ export function ReceiptEmailField({
         placeholderTextColor={colors.textMuted}
         keyboardType="email-address"
         autoCapitalize="none"
-        style={styles.nameInput}
+        style={[styles.nameInput, webInputReset, { fontSize: fieldFont }]}
+        underlineColorAndroid="transparent"
       />
     </View>
   );
@@ -692,6 +778,7 @@ const styles = StyleSheet.create({
   },
   lookupModeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 9,
     width: '100%',
@@ -714,9 +801,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: fonts.sansSemiBold,
     padding: 0,
+    minWidth: 0,
+    width: '100%',
   },
   appendBanner: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 12,
     backgroundColor: 'rgba(184,147,90,0.1)',
@@ -811,6 +901,7 @@ const styles = StyleSheet.create({
   },
   gcashConfirmText: {
     flex: 1,
+    minWidth: 0,
     fontSize: 13,
     fontFamily: fonts.sansSemiBold,
     color: colors.textSecondary,
@@ -828,6 +919,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: fonts.sansSemiBold,
     padding: 0,
+    minWidth: 0,
+    width: '100%',
   },
   gcashProofRow: {
     flexDirection: 'row',
@@ -869,12 +962,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    width: '100%',
     backgroundColor: colors.cardBg,
     borderWidth: 1,
     borderColor: colors.borderGold14,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 14,
+  },
+  tenderInputRowStack: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  tenderInputWrap: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   pesoSign: {
     fontSize: 16,
@@ -883,10 +990,13 @@ const styles = StyleSheet.create({
   },
   tenderInput: {
     flex: 1,
+    width: '100%',
+    minWidth: 0,
     color: colors.textPrimary,
     fontSize: 15,
     fontFamily: fonts.sansBold,
     padding: 0,
+    backgroundColor: 'transparent',
   },
   quickCashRow: {
     flexDirection: 'row',
@@ -920,6 +1030,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 14,
+    minWidth: 64,
+  },
+  tenderActionBtnStacked: {
+    alignSelf: 'stretch',
+    minWidth: 0,
   },
   quickCashText: {
     fontSize: 12.5,
@@ -972,14 +1087,20 @@ const styles = StyleSheet.create({
   },
   payBtn: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 16,
     backgroundColor: colors.chipBg,
     borderWidth: 1,
     borderColor: 'rgba(184,147,90,0.28)',
+  },
+  payBtnNarrow: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
   payBtnLabel: {
     fontSize: 15,
@@ -1013,6 +1134,7 @@ const styles = StyleSheet.create({
   },
   customerFoundRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 10,
     backgroundColor: colors.cardBg,
