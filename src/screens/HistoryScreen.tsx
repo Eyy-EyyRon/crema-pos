@@ -5,7 +5,7 @@ import { ReceiptIcon } from '../icons';
 import { RefundModal } from '../components/RefundModal';
 import { SearchBar } from '../components/SearchBar';
 import { VoidModal } from '../components/VoidModal';
-import { peso0 } from '../format';
+import { peso0, formatOrderNo } from '../format';
 import { notify } from '../lib/crossAlert';
 import { tapLight } from '../lib/haptics';
 import { modsDisplayString } from '../lib/posOrder';
@@ -130,7 +130,7 @@ export function HistoryScreen({
 
     const mapped: HistoryOrder[] = (data ?? []).map((o: any) => ({
       id: o.id,
-      no: o.receipt_number ?? o.id.slice(0, 8).toUpperCase(),
+      no: formatOrderNo(o.receipt_number ?? o.id.slice(0, 8).toUpperCase()),
       status: o.status,
       orderType: o.order_type,
       createdAt: o.created_at,
@@ -246,7 +246,7 @@ export function HistoryScreen({
             return (
               <View key={o.id} style={[s.card, isTablet && s.cardTablet, twoCol && { width: '48%' }]}>
                 <View style={s.cardTop}>
-                  <Text style={[s.no, isTablet && s.noTablet]}>{o.no}</Text>
+                  <Text style={[s.no, isTablet && s.noTablet]}>{formatOrderNo(o.no)}</Text>
                   <Text style={[s.total, isTablet && s.totalTablet]}>{peso0(o.total)}</Text>
                 </View>
                 {!!o.customerName && <Text style={s.customerName}>For: {o.customerName}</Text>}
