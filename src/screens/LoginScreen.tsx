@@ -3,15 +3,17 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ForgotPinModal } from '../components/ForgotPinModal';
 import { PinPad, PinPadKey } from '../components/PinPad';
-import { Shot } from '../components/Shot';
 import { AlertCircleIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
+import { readProfilesCache, writeProfilesCache } from '../lib/deviceCache';
 import { requestPinReset } from '../lib/pinReset';
 import { supabase } from '../lib/supabase';
 import { colors, fonts } from '../theme';
 import { UserProfile } from '../types';
+import { useBreakpoint } from '../breakpoints';
 
 const LAST_USER_KEY = 'crema_last_user';
 
@@ -21,6 +23,7 @@ function initials(name: string) {
 
 function LiveClock() {
   const [now, setNow] = useState(new Date());
+  const { isTablet, isCompact } = useBreakpoint();
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -32,15 +35,46 @@ function LiveClock() {
 
   return (
     <View style={s.clockWrap}>
-      <Text style={s.clockTime}>{timeString}</Text>
-      <Text style={s.clockDate}>{dateString}</Text>
+      <Text style={[s.clockTime, isTablet && s.clockTimeTablet, isCompact && s.clockTimeCompact]}>{timeString}</Text>
+      <Text style={[s.clockDate, isTablet && s.clockDateTablet, isCompact && { fontSize: 10 }]}>{dateString}</Text>
+    </View>
+  );
+}
+
+function ProfileAvatar({
+  name,
+  uri,
+  size,
+  highlighted,
+}: {
+  name: string;
+  uri?: string | null;
+  size: number;
+  highlighted: boolean;
+}) {
+  const ring = {
+    width: size,
+    height: size,
+    borderRadius: size / 2,
+    borderWidth: highlighted ? 2.5 : 1,
+    borderColor: highlighted ? colors.goldLight : colors.borderGold25,
+    backgroundColor: colors.cardBg,
+  };
+
+  if (uri) {
+    return <Image source={{ uri }} cachePolicy="disk" style={ring} />;
+  }
+
+  return (
+    <View style={[ring, s.initialsCircle]}>
+      <Text style={[s.initials, { fontSize: Math.round(size * 0.34) }]}>{initials(name)}</Text>
     </View>
   );
 }
 
 function AbstractBackground() {
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]} pointerEvents="none">
       <View style={[s.circle, { top: -150, left: -150, backgroundColor: 'rgba(184,147,90,0.02)', width: 600, height: 600 }]} />
       <View style={[s.circle, { bottom: -200, right: -100, backgroundColor: 'rgba(58,107,138,0.02)', width: 800, height: 800 }]} />
       <View style={[s.circle, { bottom: 100, left: -250, backgroundColor: 'rgba(107,58,92,0.02)', width: 500, height: 500 }]} />
@@ -53,6 +87,8 @@ export function LoginScreen({
 }: {
   onLogin: (profileId: string, opts: { pin?: string; biometric?: boolean }, profile: UserProfile) => Promise<{ error?: string }>;
 }) {
+  const { isTablet, width, height, isLandscape, gutter, isCompact } = useBreakpoint();
+  const insets = useSafeAreaInsets();
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUserId, setLastUserId] = useState<string | null>(null);
@@ -80,17 +116,14 @@ export function LoginScreen({
         
         if (!error && data) {
           fetchedProfiles = data as UserProfile[];
-          await AsyncStorage.setItem('crema_profiles_cache', JSON.stringify(data));
+          await writeProfilesCache(fetchedProfiles);
         }
       } catch (e) {
         // network error
       }
 
       if (!fetchedProfiles) {
-        try {
-          const cached = await AsyncStorage.getItem('crema_profiles_cache');
-          if (cached) fetchedProfiles = JSON.parse(cached);
-        } catch {}
+        fetchedProfiles = await readProfilesCache();
       }
 
       const [lastId, hw, enrolled] = await Promise.all([lastIdPromise, hwPromise, enrolledPromise]);
@@ -144,58 +177,52 @@ export function LoginScreen({
     }
   };
 
+  const landscapeAuth = isLandscape && height < 560;
+  const pinGap = isCompact ? 10 : 16;
+  const pinByWidth = Math.floor((Math.min(width, 440) - gutter * 2 - 40 - pinGap * 2) / 3);
+  const chromeH = insets.top + insets.bottom + (landscapeAuth ? 72 : 220);
+  const pinByHeight = Math.floor((height - chromeH - 36) / 4.6);
+  const pinKeySize = Math.min(isTablet ? 76 : 64, Math.max(36, pinByWidth), Math.max(36, pinByHeight));
+  const avatarSize = isTablet ? 96 : 80;
+  const tileWidth = isTablet ? 140 : 124;
+
   return (
-    <View style={s.screen}>
+    <View style={[s.screen, { paddingTop: insets.top + 8, paddingBottom: insets.bottom, minHeight: height }]}>
       <AbstractBackground />
-      <LiveClock />
-      
-      <View style={s.brandBlock}>
-        <Text style={s.brand}>CREMA</Text>
-        <Text style={s.brandSub}>COFFEE &amp; ICE CREAM</Text>
-      </View>
+
+      <View style={[s.body, landscapeAuth && s.bodyLandscape]}>
+        <View style={[s.intro, landscapeAuth && s.introLandscape]}>
+          <LiveClock />
+          <View style={[s.brandBlock, landscapeAuth && { marginTop: 16, marginBottom: 0 }]}>
+            <Text style={[s.brand, isTablet && s.brandTablet, isCompact && s.brandCompact]}>CREMA</Text>
+            <Text style={s.brandSub}>COFFEE &amp; ICE CREAM</Text>
+          </View>
+        </View>
 
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator color={colors.gold} size="large" />
         </View>
       ) : !selected ? (
-        <>
-          <Text style={s.prompt}>Who's ringing up orders?</Text>
-          <ScrollView contentContainerStyle={s.grid}>
+        <View style={s.picker}>
+          <Text style={[s.prompt, isTablet && s.promptTablet]}>Who's ringing up orders?</Text>
+          <ScrollView
+            contentContainerStyle={[s.grid, { paddingHorizontal: gutter, gap: isTablet ? 28 : 22 }]}
+            showsVerticalScrollIndicator={false}
+          >
             {sorted.map((p) => (
               <Pressable
                 key={p.id}
-                style={({ pressed }) => [s.tile, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [s.tile, { width: tileWidth }, pressed && { opacity: 0.7 }]}
                 onPress={() => selectProfile(p)}
                 accessibilityRole="button"
                 accessibilityLabel={p.id === lastUserId ? `${p.full_name}, last used` : p.full_name}
               >
-                {p.avatar_url ? (
-                  <Image
-                    source={{ uri: p.avatar_url }}
-                    cachePolicy="disk"
-                    style={{
-                      width: 76,
-                      height: 76,
-                      borderRadius: 38,
-                      borderWidth: p.id === lastUserId ? 2 : 1,
-                      borderColor: p.id === lastUserId ? colors.goldLight : colors.borderGold25,
-                      backgroundColor: colors.cardBg,
-                    }}
-                  />
-                ) : (
-                  <Shot 
-                    label={initials(p.full_name)} 
-                    style={{ 
-                      width: 76, 
-                      height: 76, 
-                      borderRadius: 38,
-                      borderWidth: p.id === lastUserId ? 2 : 1,
-                      borderColor: p.id === lastUserId ? colors.goldLight : colors.borderGold25,
-                    }} 
-                  />
-                )}
-                <Text style={[s.tileName, p.id === lastUserId && { color: colors.goldBrightText }]} numberOfLines={1}>
+                <ProfileAvatar name={p.full_name} uri={p.avatar_url} size={avatarSize} highlighted={p.id === lastUserId} />
+                <Text
+                  style={[s.tileName, isTablet && s.tileNameTablet, p.id === lastUserId && { color: colors.goldBrightText }]}
+                  numberOfLines={2}
+                >
                   {p.full_name}
                 </Text>
                 {p.id === lastUserId && (
@@ -207,9 +234,9 @@ export function LoginScreen({
             ))}
             {sorted.length === 0 && <Text style={s.empty}>No active barista profiles found.</Text>}
           </ScrollView>
-        </>
+        </View>
       ) : (
-        <View style={s.pinWrap}>
+        <View style={[s.pinWrap, landscapeAuth && s.pinWrapLandscape]}>
           <Pressable
             onPress={() => { tapLight(); setSelected(null); setError(''); }}
             style={({ pressed }) => [s.changeUser, pressed && { opacity: 0.6 }]}
@@ -226,10 +253,12 @@ export function LoginScreen({
             error={!!error}
             resetSignal={resetTick}
             disabled={bioBusy || pinBusy}
+            keySize={pinKeySize}
+            gap={pinGap}
             statusSlot={pinBusy ? <ActivityIndicator color={colors.gold} style={{ marginBottom: 12 }} /> : undefined}
             renderSlot10={
               biometricAvailable && selected.id === lastUserId
-                ? () => <PinPadKey label="bio" size={64} variant="bio" onPress={handleBiometric} disabled={bioBusy || pinBusy} />
+                ? () => <PinPadKey label="bio" size={pinKeySize} variant="bio" onPress={handleBiometric} disabled={bioBusy || pinBusy} />
                 : undefined
             }
           />
@@ -249,6 +278,7 @@ export function LoginScreen({
           </Pressable>
         </View>
       )}
+      </View>
 
       <ForgotPinModal
         visible={forgotPinVisible}
@@ -261,41 +291,92 @@ export function LoginScreen({
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.screenBg, paddingTop: 50 },
-  brandBlock: { alignItems: 'center', marginTop: 34, marginBottom: 20 },
+  screen: { flex: 1, backgroundColor: colors.screenBg, overflow: 'hidden' },
+  body: { flex: 1, minHeight: 0 },
+  bodyLandscape: { flexDirection: 'row', alignItems: 'center' },
+  intro: { alignItems: 'center', paddingTop: 12 },
+  introLandscape: { flex: 1, paddingTop: 0, paddingHorizontal: 16 },
+  brandBlock: { alignItems: 'center', marginTop: 18, marginBottom: 8 },
   brand: { fontFamily: fonts.display, fontSize: 40, letterSpacing: 2, color: colors.goldBrightText },
+  brandTablet: { fontSize: 52, letterSpacing: 3 },
+  brandCompact: { fontSize: 32 },
   brandSub: { fontSize: 10, letterSpacing: 4, color: colors.gold, fontFamily: fonts.sansBold, marginTop: 2 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  picker: { flex: 1, minHeight: 0 },
   prompt: {
-    textAlign: 'center', fontSize: 18, fontFamily: fonts.serifMedium, color: colors.textSecondary, marginBottom: 28, letterSpacing: 0.5,
+    textAlign: 'center', fontSize: 16, fontFamily: fonts.serifMedium, color: colors.textSecondary, marginTop: 18, marginBottom: 20, letterSpacing: 0.5, paddingHorizontal: 24,
+  },
+  promptTablet: {
+    fontSize: 20,
+    marginBottom: 28,
   },
   grid: {
-    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 24,
-    paddingHorizontal: 24, paddingBottom: 30,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    alignContent: 'flex-start',
+    paddingBottom: 36,
   },
-  tile: { alignItems: 'center', width: 92 },
-  tileName: { marginTop: 12, fontSize: 13, fontFamily: fonts.sansBold, color: colors.textPrimary, textAlign: 'center' },
+  tile: {
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingBottom: 8,
+  },
+  initialsCircle: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initials: {
+    fontFamily: fonts.sansBold,
+    color: colors.goldBrightText,
+    letterSpacing: 1,
+  },
+  tileName: {
+    marginTop: 12,
+    fontSize: 13,
+    fontFamily: fonts.sansBold,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    lineHeight: 17,
+    width: '100%',
+  },
+  tileNameTablet: {
+    fontSize: 14,
+    marginTop: 14,
+    lineHeight: 18,
+  },
   lastUsedBadge: {
-    marginTop: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     backgroundColor: 'rgba(184,147,90,0.12)',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.borderGold20,
   },
-  tileLast: { fontSize: 8.5, color: colors.goldLight, fontFamily: fonts.sansExtraBold, textTransform: 'uppercase', letterSpacing: 0.8 },
-  empty: { color: colors.textMuted, fontSize: 13, textAlign: 'center', paddingHorizontal: 30 },
-  pinWrap: { flex: 1, alignItems: 'center', paddingTop: 10 },
+  tileLast: { fontSize: 9, color: colors.goldLight, fontFamily: fonts.sansExtraBold, textTransform: 'uppercase', letterSpacing: 0.8 },
+  empty: { color: colors.textMuted, fontSize: 13, textAlign: 'center', paddingHorizontal: 30, width: '100%' },
+  pinWrap: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center', paddingTop: 4, paddingBottom: 8 },
+  pinWrapLandscape: { flex: 1.2, paddingTop: 0, justifyContent: 'center' },
   changeUser: { marginBottom: 18 },
   changeUserText: { fontSize: 12.5, color: colors.gold, fontFamily: fonts.sansSemiBold },
-  pinPrompt: { fontSize: 14, fontFamily: fonts.sansBold, color: colors.textSecondary, marginBottom: 20 },
+  pinPrompt: { fontSize: 14, fontFamily: fonts.sansBold, color: colors.textSecondary, marginBottom: 20, textAlign: 'center', paddingHorizontal: 16 },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16 },
   errorText: { fontSize: 12.5, color: colors.danger, fontFamily: fonts.sansSemiBold },
   forgotPin: { marginTop: 20 },
   forgotPinText: { fontSize: 12, color: colors.textMuted, fontFamily: fonts.sansSemiBold },
-  clockWrap: { position: 'absolute', top: 8, right: 40, alignItems: 'flex-end' },
-  clockTime: { fontSize: 28, fontFamily: fonts.serifBold, color: colors.goldBrightText, letterSpacing: 1 },
+  clockWrap: { alignItems: 'center' },
+  clockTime: { fontSize: 22, fontFamily: fonts.serifBold, color: colors.goldBrightText, letterSpacing: 1 },
+  clockTimeTablet: {
+    fontSize: 28,
+  },
+  clockTimeCompact: {
+    fontSize: 18,
+  },
   clockDate: { fontSize: 11, fontFamily: fonts.sansBold, color: colors.gold, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 4 },
+  clockDateTablet: {
+    fontSize: 12,
+  },
   circle: { position: 'absolute', borderRadius: 9999 },
 });
