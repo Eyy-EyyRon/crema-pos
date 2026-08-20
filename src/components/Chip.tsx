@@ -7,14 +7,16 @@ interface ChipProps {
   label: string;
   active: boolean;
   onPress: () => void;
+  fill?: boolean;
 }
 
-export function Chip({ label, active, onPress }: ChipProps) {
+export function Chip({ label, active, onPress, fill }: ChipProps) {
   return (
     <Pressable
       onPress={() => { tapLight(); onPress(); }}
       style={({ pressed }) => [
         styles.base,
+        fill && styles.fill,
         active
           ? { backgroundColor: colors.gold, borderColor: colors.gold }
           : { backgroundColor: 'rgba(26,42,62,0.4)', borderColor: colors.borderGold12 },
@@ -27,10 +29,12 @@ export function Chip({ label, active, onPress }: ChipProps) {
       <Text
         style={[
           styles.label,
+          fill && styles.labelFill,
           active
             ? { color: colors.screenBg, fontFamily: fonts.sansBold }
             : { color: colors.textMuted, fontFamily: fonts.sansSemiBold },
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
@@ -44,8 +48,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     borderRadius: 20,
     borderWidth: 1,
+    flexShrink: 0,
+  },
+  fill: {
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 120,
+    alignItems: 'center',
   },
   label: {
     fontSize: 13,
+  },
+  labelFill: {
+    textAlign: 'center',
   },
 });
