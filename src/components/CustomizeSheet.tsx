@@ -12,24 +12,39 @@ export function CustomizeSheet(props: CustomizeSheetProps) {
   const { isCompact, height } = useBreakpoint();
   const insets = useSafeAreaInsets();
   const kb = useKeyboardOverlap();
-  const topGap = isCompact ? 8 : Math.max(48, Math.round(height * 0.08));
+
+  // Ensure the top gap respects the notch on phones, and gives ample breathing room on tablets
+  const topGap = isCompact
+    ? Math.max(insets.top + 16, 48)
+    : Math.max(80, Math.round(height * 0.1));
+
   const sheetMax = Math.max(280, height - topGap - kb);
+
+  // Responsive constraint: Full width on phones, capped width on tablets/landscape
+  const sheetMaxWidth = isCompact ? '100%' : 540;
+
   return (
     <View style={[styles.overlayContainer, { paddingBottom: kb }]} pointerEvents="box-none">
       <Pressable style={styles.overlay} onPress={props.onClose} />
-      <View
-        style={[
-          styles.sheet,
-          {
-            maxHeight: sheetMax,
-            paddingBottom: kb > 0 ? 8 : insets.bottom,
-          },
-        ]}
-      >
-        <View style={styles.handleWrap}>
-          <View style={styles.handle} />
+
+      {/* Wrapper to handle horizontal centering on large screens */}
+      <View style={styles.sheetWrapper} pointerEvents="box-none">
+        <View
+          style={[
+            styles.sheet,
+            {
+              maxHeight: sheetMax,
+              maxWidth: sheetMaxWidth,
+              // Add baseline bottom padding for tablets since they often have 0 bottom insets
+              paddingBottom: kb > 0 ? 8 : Math.max(insets.bottom, isCompact ? 0 : 24),
+            },
+          ]}
+        >
+          <View style={styles.handleWrap}>
+            <View style={styles.handle} />
+          </View>
+          <CustomizeContent {...props} fillHeight={false} />
         </View>
-        <CustomizeContent {...props} fillHeight={false} />
       </View>
     </View>
   );
@@ -53,6 +68,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: colors.overlay,
   },
+  sheetWrapper: {
+    width: '100%',
+    alignItems: 'center', // Centers the sheet horizontally on tablets
+    justifyContent: 'flex-end',
+  },
   sheet: {
     width: '100%',
     flexGrow: 0,
@@ -63,16 +83,23 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: colors.borderGold20,
     overflow: 'hidden',
+    // Added shadow/elevation so the sheet pops from the background when centered on a tablet
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
   },
   handleWrap: {
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 4,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   handle: {
-    width: 38,
-    height: 4,
-    borderRadius: 2,
+    width: 40,
+    height: 5,
+    borderRadius: 3,
     backgroundColor: '#2a3648',
+    opacity: 0.5, // Slight opacity makes handles look cleaner
   },
 });
