@@ -58,20 +58,7 @@ export function CustomizeContent({
   const isSmall   = width < 360;  // 320–359 px phones (iPhone SE 1st gen)
   const isTiny    = width < 340;  // very narrow
   const isLarge   = width >= 414; // iPhone Plus / Pro Max
-
-  // Safely calculate max scroll height to guarantee footer visibility
-  const topGap = isCompact ? 8 : Math.max(48, Math.round(height * 0.08));
-  const sheetMax = Math.max(280, height - topGap - kb);
   
-  // Overhead includes header (80px) + sheet handle (~20px) = safe buffer 120px
-  const headerEstimate = 120; 
-  
-  // Phone footer stacks the stepper (46) + gap (12) + button (54) + padding (36) = ~150px.
-  // We also must account for CustomizeSheet's paddingBottom (insets.bottom, ~35px).
-  // Total safe buffer = 200px (phone) / 0px (tablet).
-  const footerEstimate = isTablet ? 0 : 200;
-  
-  const scrollMax = Math.max(100, sheetMax - headerEstimate - footerEstimate);
   const addLabel = isEditing
     ? (qty > 1 ? `Update ${qty}×` : 'Update Item')
     : (qty > 1 ? `Add ${qty}× to Order` : 'Add to Order');
@@ -101,7 +88,7 @@ export function CustomizeContent({
 
       <ScrollView
         ref={scrollRef}
-        style={fillHeight ? styles.fill : { maxHeight: scrollMax }}
+        style={[fillHeight && styles.fill, { flexShrink: 1 }]}
         contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet, isCompact && { paddingBottom: 8 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -242,6 +229,7 @@ export function CustomizeContent({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.screenBg,
+    flexShrink: 1, // Enforce shrinking so ScrollView yields to the footer
   },
   fill: {
     flex: 1,
