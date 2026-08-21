@@ -74,6 +74,9 @@ export function CustomizeContent({
   const tightAdd    = isSmall;
   const ultraNarrow = isTiny;
 
+  // Dynamic button height based on screen width
+  const buttonHeight = isTiny ? 48 : isSmall ? 52 : isLarge ? 58 : 54;
+
   return (
     <View style={[styles.container, fillHeight && styles.containerFill]}>
       {isTablet && <View style={styles.topAccent} />}
@@ -182,7 +185,7 @@ export function CustomizeContent({
               styles.addBtn,
               !isTablet && styles.addBtnPhone,
               isTiny    && styles.addBtnUltraNarrow,
-              { opacity: addValid ? 1 : 0.4 },
+              { opacity: addValid ? 1 : 0.4, height: buttonHeight },
             ]}
             accessibilityRole="button"
             accessibilityLabel={addLabel}
@@ -405,7 +408,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderGold14,
     borderRadius: 13,
-    paddingVertical: 7,
+    paddingVertical: 8,
     paddingHorizontal: 10,
   },
   stepperPhone: {
@@ -432,9 +435,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 9,
-    paddingVertical: 15,
-    paddingHorizontal: 16,
+    gap: 10,
+    paddingVertical: 0,
+    paddingHorizontal: 14,
     borderRadius: 16,
     backgroundColor: colors.gold,
   },
@@ -445,47 +448,54 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     width: '100%',
     borderRadius: 14,
+    gap: 8,
+    paddingHorizontal: 12,
   },
   addBtnUltraNarrow: {
     gap: 6,
-    paddingVertical: 12,
     paddingHorizontal: 10,
+    borderRadius: 12,
   },
   addLabel: {
     // Shrinks when text is long; the price badge (flexShrink:0) always stays visible.
     flexShrink: 1,
-    flexGrow: 1,
     minWidth: 0,
-    fontSize: 14.5,
+    fontSize: 14,
     fontFamily: fonts.sansExtraBold,
     color: colors.screenBg,
+    textAlignVertical: 'center',
   },
   addLabelSmall: {
-    fontSize: 13.5,
+    fontSize: 13,
   },
   addLabelUltraNarrow: {
-    fontSize: 12.5,
+    fontSize: 12,
   },
   addTotalWrap: {
     // Never shrink — the price is the most important part of this button.
     flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(10,18,26,0.18)',
     borderRadius: 10,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    minHeight: 28,
   },
   addTotalWrapUltraNarrow: {
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 8,
+    minHeight: 24,
   },
   addTotal: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontFamily: fonts.sansExtraBold,
     color: colors.screenBg,
+    textAlign: 'center',
   },
   addTotalSmall: {
-    fontSize: 13,
+    fontSize: 12.5,
   },
   warnRow: {
     flexDirection: 'row',
