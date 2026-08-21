@@ -54,13 +54,25 @@ export function CustomizeContent({
   const { isTablet, isCompact, width, height } = useBreakpoint();
   const kb = useKeyboardOverlap();
   const scrollRef = useRef<ScrollView>(null);
-  const scrollMax = Math.max(120, Math.round((height - kb) * 0.42));
+
+  // ── Responsive sizing ──
+  // Phone footer is ~90-110px tall (stepper + button + padding).
+  // Leave that, plus a bit of breathing room, for the scroll area.
+  const footerEstimate = isCompact ? 90 : isTablet ? 0 : 112;
+  const scrollMax = Math.max(100, Math.round((height - kb) * 0.42) - footerEstimate);
+
+  const isSmall   = width < 360;  // 320–359 px phones (iPhone SE 1st gen)
+  const isTiny    = width < 340;  // very narrow
+  const isLarge   = width >= 414; // iPhone Plus / Pro Max
+
   const addLabel = isEditing
     ? (qty > 1 ? `Update ${qty}×` : 'Update Item')
     : (qty > 1 ? `Add ${qty}× to Order` : 'Add to Order');
   const addTotalStr = peso0(addUnitTotal * qty);
-  const tightAdd = width < 360;
-  const ultraNarrow = width < 340;
+
+  // Alias kept for compatibility
+  const tightAdd    = isSmall;
+  const ultraNarrow = isTiny;
 
   return (
     <View style={[styles.container, fillHeight && styles.containerFill]}>
@@ -130,28 +142,82 @@ export function CustomizeContent({
         />
       </ScrollView>
 
-      <View style={[styles.footer, isTablet && styles.footerTablet, isCompact && styles.footerCompact]}>
-        <View style={[styles.footerRow, !isTablet && styles.footerRowPhone, ultraNarrow && styles.footerRowPhoneUltraNarrow]}>
+      <View style={[
+        styles.footer,
+        isTablet  && styles.footerTablet,
+        isCompact && styles.footerCompact,
+        isLarge   && styles.footerLarge,
+      ]}>
+        {/* Qty stepper row — always full-width on phone, inline on tablet */}
+        <View style={[
+          styles.footerRow,
+          !isTablet && styles.footerRowPhone,
+          isTiny    && styles.footerRowPhoneUltraNarrow,
+        ]}>
+          {/* ── Quantity stepper ── */}
           <View style={[styles.stepper, !isTablet && styles.stepperPhone]}>
-            <Pressable onPress={() => { tapLight(); onDecQty(); }} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Decrease quantity">
-              <MinusIcon size={14} color={colors.textSecondary} />
+            <Pressable
+              onPress={() => { tapLight(); onDecQty(); }}
+              style={styles.stepBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Decrease quantity"
+            >
+              <MinusIcon size={isTiny ? 12 : 14} color={colors.textSecondary} />
             </Pressable>
-            <Text style={styles.qty}>{qty}</Text>
-            <Pressable onPress={() => { tapLight(); onIncQty(); }} style={[styles.stepBtn, { backgroundColor: colors.gold }]} accessibilityRole="button" accessibilityLabel="Increase quantity">
-              <PlusIcon size={14} color={colors.screenBg} strokeWidth={3.2} />
+            <Text style={[styles.qty, isTiny && { fontSize: 14 }]}>{qty}</Text>
+            <Pressable
+              onPress={() => { tapLight(); onIncQty(); }}
+              style={[styles.stepBtn, { backgroundColor: colors.gold }]}
+              accessibilityRole="button"
+              accessibilityLabel="Increase quantity"
+            >
+              <PlusIcon size={isTiny ? 12 : 14} color={colors.screenBg} strokeWidth={3.2} />
             </Pressable>
           </View>
+
+          {/* ── Add / Update button — full-width below stepper on phone ── */}
           <Pressable
             onPress={() => { if (addValid) { tapMedium(); onAdd(); } else { warning(); } }}
-            style={[styles.addBtn, !isTablet && styles.addBtnPhone, ultraNarrow && styles.addBtnUltraNarrow, { opacity: addValid ? 1 : 0.4 }]}
+            style={[
+              styles.addBtn,
+              !isTablet && styles.addBtnPhone,
+              isTiny    && styles.addBtnUltraNarrow,
+              { opacity: addValid ? 1 : 0.4 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={addLabel}
           >
-            <BagIcon size={tightAdd ? 15 : 17} color={colors.screenBg} strokeWidth={2} />
-            <Text style={[styles.addLabel, tightAdd && { fontSize: 13 }, ultraNarrow && styles.addLabelUltraNarrow]} numberOfLines={1}>{addLabel}</Text>
-            <View style={[styles.addTotalWrap, ultraNarrow && styles.addTotalWrapUltraNarrow]}>
-              <Text style={[styles.addTotal, tightAdd && { fontSize: 13 }]}>{addTotalStr}</Text>
+            <BagIcon
+              size={isTiny ? 14 : isSmall ? 15 : 17}
+              color={colors.screenBg}
+              strokeWidth={2}
+            />
+            {/* Label shrinks when space is tight; price badge never shrinks */}
+            <Text
+              style={[
+                styles.addLabel,
+                isSmall && styles.addLabelSmall,
+                isTiny  && styles.addLabelUltraNarrow,
+              ]}
+              numberOfLines={1}
+            >
+              {addLabel}
+            </Text>
+            <View style={[
+              styles.addTotalWrap,
+              isTiny && styles.addTotalWrapUltraNarrow,
+            ]}>
+              <Text style={[
+                styles.addTotal,
+                isSmall && styles.addTotalSmall,
+              ]}>
+                {addTotalStr}
+              </Text>
             </View>
           </Pressable>
         </View>
+
+        {/* Validation warning */}
         {!addValid && (
           <View style={styles.warnRow}>
             <AlertTriangleIcon size={13} color={colors.danger} strokeWidth={2} />
@@ -294,20 +360,27 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   footer: {
-    paddingTop: 12,
+    paddingTop: 14,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 22,
     borderTopWidth: 1,
     borderTopColor: 'rgba(184,147,90,0.1)',
     backgroundColor: colors.screenBg,
+    // Prevent the footer from being squished by flex siblings
+    flexShrink: 0,
   },
   footerTablet: {
     paddingHorizontal: 22,
+    paddingBottom: 24,
   },
   footerCompact: {
     paddingTop: 10,
     paddingBottom: 12,
     paddingHorizontal: 16,
+  },
+  footerLarge: {
+    paddingHorizontal: 24,
+    paddingBottom: 26,
   },
   footerRow: {
     flexDirection: 'row',
@@ -315,16 +388,14 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   // On phone, stack the qty stepper above a full-width Add button instead of squeezing both
-  // into one row — "Add to Order ₱175" plus the stepper never fits alongside it on a real
-  // barista phone (360-390px), so it either wrapped mid-word or got ellipsized. A full-width
-  // primary CTA is also just a better touch target than a squeezed inline button.
+  // into one row — the label + price badge never fit alongside the stepper at 360-390 px.
   footerRowPhone: {
     flexDirection: 'column',
     alignItems: 'flex-start',
     gap: 12,
   },
   footerRowPhoneUltraNarrow: {
-    gap: 9,
+    gap: 8,
   },
   stepper: {
     flexDirection: 'row',
@@ -352,7 +423,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: fonts.sansExtraBold,
     color: colors.textPrimary,
-    minWidth: 16,
+    minWidth: 20,
     textAlign: 'center',
   },
   addBtn: {
@@ -363,47 +434,58 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 9,
     paddingVertical: 15,
-    paddingHorizontal: 14,
-    borderRadius: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
     backgroundColor: colors.gold,
   },
   addBtnPhone: {
-    // In footerRowPhone's column layout, flex:1 above would grow along the column's main axis
-    // (height), not width — this makes it a full-width block instead.
+    // In column layout, flex:1 grows height not width — use alignSelf + width instead.
     flexGrow: 0,
     flexBasis: 'auto',
     alignSelf: 'stretch',
     width: '100%',
+    borderRadius: 14,
   },
   addBtnUltraNarrow: {
     gap: 6,
-    paddingVertical: 13,
-    paddingHorizontal: 11,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
   },
   addLabel: {
+    // Shrinks when text is long; the price badge (flexShrink:0) always stays visible.
     flexShrink: 1,
+    flexGrow: 1,
     minWidth: 0,
     fontSize: 14.5,
     fontFamily: fonts.sansExtraBold,
     color: colors.screenBg,
   },
+  addLabelSmall: {
+    fontSize: 13.5,
+  },
   addLabelUltraNarrow: {
-    fontSize: 13,
+    fontSize: 12.5,
   },
   addTotalWrap: {
-    backgroundColor: 'rgba(10,18,26,0.16)',
-    borderRadius: 9,
+    // Never shrink — the price is the most important part of this button.
+    flexShrink: 0,
+    backgroundColor: 'rgba(10,18,26,0.18)',
+    borderRadius: 10,
     paddingVertical: 5,
-    paddingHorizontal: 11,
+    paddingHorizontal: 12,
   },
   addTotalWrapUltraNarrow: {
     paddingVertical: 4,
     paddingHorizontal: 8,
+    borderRadius: 8,
   },
   addTotal: {
     fontSize: 14,
     fontFamily: fonts.sansExtraBold,
     color: colors.screenBg,
+  },
+  addTotalSmall: {
+    fontSize: 13,
   },
   warnRow: {
     flexDirection: 'row',
