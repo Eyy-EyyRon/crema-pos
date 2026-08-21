@@ -60,6 +60,7 @@ export function CustomizeContent({
     : (qty > 1 ? `Add ${qty}× to Order` : 'Add to Order');
   const addTotalStr = peso0(addUnitTotal * qty);
   const tightAdd = width < 360;
+  const ultraNarrow = width < 340;
 
   return (
     <View style={[styles.container, fillHeight && styles.containerFill]}>
@@ -130,7 +131,7 @@ export function CustomizeContent({
       </ScrollView>
 
       <View style={[styles.footer, isTablet && styles.footerTablet, isCompact && styles.footerCompact]}>
-        <View style={[styles.footerRow, !isTablet && styles.footerRowPhone]}>
+        <View style={[styles.footerRow, !isTablet && styles.footerRowPhone, ultraNarrow && styles.footerRowPhoneUltraNarrow]}>
           <View style={[styles.stepper, !isTablet && styles.stepperPhone]}>
             <Pressable onPress={() => { tapLight(); onDecQty(); }} style={styles.stepBtn} accessibilityRole="button" accessibilityLabel="Decrease quantity">
               <MinusIcon size={14} color={colors.textSecondary} />
@@ -142,11 +143,11 @@ export function CustomizeContent({
           </View>
           <Pressable
             onPress={() => { if (addValid) { tapMedium(); onAdd(); } else { warning(); } }}
-            style={[styles.addBtn, !isTablet && styles.addBtnPhone, { opacity: addValid ? 1 : 0.4 }]}
+            style={[styles.addBtn, !isTablet && styles.addBtnPhone, ultraNarrow && styles.addBtnUltraNarrow, { opacity: addValid ? 1 : 0.4 }]}
           >
             <BagIcon size={tightAdd ? 15 : 17} color={colors.screenBg} strokeWidth={2} />
-            <Text style={[styles.addLabel, tightAdd && { fontSize: 13 }]} numberOfLines={1}>{addLabel}</Text>
-            <View style={styles.addTotalWrap}>
+            <Text style={[styles.addLabel, tightAdd && { fontSize: 13 }, ultraNarrow && styles.addLabelUltraNarrow]} numberOfLines={1}>{addLabel}</Text>
+            <View style={[styles.addTotalWrap, ultraNarrow && styles.addTotalWrapUltraNarrow]}>
               <Text style={[styles.addTotal, tightAdd && { fontSize: 13 }]}>{addTotalStr}</Text>
             </View>
           </Pressable>
@@ -306,6 +307,7 @@ const styles = StyleSheet.create({
   footerCompact: {
     paddingTop: 10,
     paddingBottom: 12,
+    paddingHorizontal: 16,
   },
   footerRow: {
     flexDirection: 'row',
@@ -320,6 +322,9 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'flex-start',
     gap: 12,
+  },
+  footerRowPhoneUltraNarrow: {
+    gap: 9,
   },
   stepper: {
     flexDirection: 'row',
@@ -370,6 +375,11 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     width: '100%',
   },
+  addBtnUltraNarrow: {
+    gap: 6,
+    paddingVertical: 13,
+    paddingHorizontal: 11,
+  },
   addLabel: {
     flexShrink: 1,
     minWidth: 0,
@@ -377,11 +387,18 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sansExtraBold,
     color: colors.screenBg,
   },
+  addLabelUltraNarrow: {
+    fontSize: 13,
+  },
   addTotalWrap: {
     backgroundColor: 'rgba(10,18,26,0.16)',
     borderRadius: 9,
     paddingVertical: 5,
     paddingHorizontal: 11,
+  },
+  addTotalWrapUltraNarrow: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
   addTotal: {
     fontSize: 14,

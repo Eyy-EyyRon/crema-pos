@@ -15,7 +15,7 @@ import { TypeButton } from './TypeButton';
 // flex:1 field beside Find/Check will shove the button off a 320px screen unless the input
 // is allowed to shrink.
 const webInputReset: TextStyle = Platform.OS === 'web'
-  ? { outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' }
+  ? { outlineWidth: 0, outlineColor: 'transparent' }
   : {};
 
 function useCheckoutLayout() {
