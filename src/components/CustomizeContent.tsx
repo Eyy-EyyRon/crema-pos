@@ -58,7 +58,11 @@ export function CustomizeContent({
   const isSmall   = width < 360;  // 320–359 px phones (iPhone SE 1st gen)
   const isTiny    = width < 340;  // very narrow
   const isLarge   = width >= 414; // iPhone Plus / Pro Max
-  
+
+  // Deterministic footer height calculation for absolute positioning
+  // Tablet: ~90px, Phone: ~160px (stepper + gap + button + padding)
+  const footerHeight = isTablet ? 90 : (isTiny ? 140 : 160);
+
   const addLabel = isEditing
     ? (qty > 1 ? `Update ${qty}×` : 'Update Item')
     : (qty > 1 ? `Add ${qty}× to Order` : 'Add to Order');
@@ -137,6 +141,9 @@ export function CustomizeContent({
           onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80)}
           style={[styles.noteInput, isTablet && { height: 64 }]}
         />
+        
+        {/* Spacer to allow scrolling content past the absolutely-positioned footer */}
+        <View style={{ height: footerHeight }} />
       </ScrollView>
 
       <View style={[
@@ -144,6 +151,7 @@ export function CustomizeContent({
         isTablet  && styles.footerTablet,
         isCompact && styles.footerCompact,
         isLarge   && styles.footerLarge,
+        { position: 'absolute', bottom: 0, left: 0, right: 0 }
       ]}>
         {/* Qty stepper row — always full-width on phone, inline on tablet */}
         <View style={[
