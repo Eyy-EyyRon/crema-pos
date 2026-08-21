@@ -62,9 +62,15 @@ export function CustomizeContent({
   // Safely calculate max scroll height to guarantee footer visibility
   const topGap = isCompact ? 8 : Math.max(48, Math.round(height * 0.08));
   const sheetMax = Math.max(280, height - topGap - kb);
-  const headerEstimate = 80;
-  // Phone footer stacks the stepper and the button, requiring ~160px of safe space
-  const footerEstimate = isTablet ? 0 : (isTiny ? 140 : 160);
+  
+  // Overhead includes header (80px) + sheet handle (~20px) = safe buffer 120px
+  const headerEstimate = 120; 
+  
+  // Phone footer stacks the stepper (46) + gap (12) + button (54) + padding (36) = ~150px.
+  // We also must account for CustomizeSheet's paddingBottom (insets.bottom, ~35px).
+  // Total safe buffer = 200px (phone) / 0px (tablet).
+  const footerEstimate = isTablet ? 0 : 200;
+  
   const scrollMax = Math.max(100, sheetMax - headerEstimate - footerEstimate);
   const addLabel = isEditing
     ? (qty > 1 ? `Update ${qty}×` : 'Update Item')
