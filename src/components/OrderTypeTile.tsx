@@ -14,7 +14,7 @@ export function OrderTypeTile({ kind, variant = 'phone', onPress }: OrderTypeTil
   const tablet = variant === 'tablet';
   const isDineIn = kind === 'dine-in';
   const title = isDineIn ? 'Dine-In' : 'Takeout';
-  const subtitle = isDineIn ? 'Serve at the table · +5% service' : 'Grab and go · no service charge';
+  const subtitle = isDineIn ? 'Serve at the table' : 'Grab and go';
   const Icon = isDineIn ? CoffeeIcon : BagIcon;
 
   return (
@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     paddingVertical: 22,
     paddingHorizontal: 18,
-    flex: 1,
+    // Removed flex: 1 to prevent vertical stretching/overlapping in column layouts
   },
   iconCircle: {
     width: 48,

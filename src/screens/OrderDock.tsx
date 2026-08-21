@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 20,
-    paddingHorizontal: 22,
+    paddingHorizontal: 18,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(184,147,90,0.1)',
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   },
   headerTablet: {
     paddingTop: 24,
-    paddingHorizontal: 26,
+    paddingHorizontal: 22,
     paddingBottom: 18,
   },
   headerCompact: {
@@ -433,12 +433,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   scrollContent: {
-    padding: 16,
-    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   scrollContentTablet: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingBottom: 12,
   },
   sectionSpacing: {
@@ -447,12 +447,12 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
     borderTopColor: 'rgba(184,147,90,0.1)',
   },
   footerTablet: {
     paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
   },
 });

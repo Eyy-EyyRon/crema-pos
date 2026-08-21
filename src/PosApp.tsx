@@ -96,8 +96,9 @@ export function PosApp() {
   const allowGcash = storeSettings.checkoutAllowGcash;
   const allowGiftCard = storeSettings.checkoutAllowGiftCard;
   const allowSplitPayment = storeSettings.checkoutAllowSplitPayment;
-  const allowDineIn = storeSettings.checkoutAllowDineIn;
-  const allowTakeout = storeSettings.checkoutAllowTakeout;
+  // Ensure at least one order type is always available (fallback to both if store settings are not loaded properly)
+  const allowDineIn = storeSettings.checkoutAllowDineIn ?? true;
+  const allowTakeout = storeSettings.checkoutAllowTakeout ?? true;
   const allowDiscounts = storeSettings.checkoutAllowDiscounts;
   const allowLoyaltyRedemption = storeSettings.checkoutAllowLoyaltyRedemption;
   const customerNameMissing = !state.appendTargetOrderId && storeSettings.checkoutRequireCustomerName
@@ -400,8 +401,8 @@ export function PosApp() {
         <OrderTypeScreen
           variant="phone"
           orderNumber={state.todayOrderCount + 1}
-          onSelectDineIn={() => pos.selectType('dine-in')}
-          onSelectTakeout={() => pos.selectType('takeout')}
+          onSelectDineIn={allowDineIn ? () => pos.selectType('dine-in') : undefined}
+          onSelectTakeout={allowTakeout ? () => pos.selectType('takeout') : undefined}
         />
       )}
       {state.screen === 'menu' && (

@@ -17,11 +17,10 @@ export function OrderTypeScreen({
   onSelectTakeout?: () => void;
 }) {
   const orderLabel = `New Order · #${String(orderNumber).padStart(4, '0')}`;
-  const { isLandscape, gutter, isCompact, isTablet, width } = useBreakpoint();
+  const { gutter, isCompact, isTablet, width } = useBreakpoint();
   const insets = useSafeAreaInsets();
-  const sideBySide = variant === 'tablet' || isLandscape;
   const tileVariant = variant === 'tablet' || isTablet ? 'tablet' : 'phone';
-  const contentWidth = Math.min(width - gutter * 2, sideBySide ? 720 : 420);
+  const contentWidth = Math.min(width - gutter * 2, 420);
 
   return (
     <View
@@ -49,17 +48,17 @@ export function OrderTypeScreen({
         <View
           style={[
             styles.tiles,
-            sideBySide ? styles.tilesRow : styles.tilesCol,
+            styles.tilesCol,
             { width: contentWidth, maxWidth: '100%' },
           ]}
         >
           {onSelectDineIn && (
-            <View style={sideBySide ? styles.tileSlotRow : styles.tileSlot}>
+            <View style={styles.tileSlot}>
               <OrderTypeTile kind="dine-in" variant={tileVariant} onPress={onSelectDineIn} />
             </View>
           )}
           {onSelectTakeout && (
-            <View style={sideBySide ? styles.tileSlotRow : styles.tileSlot}>
+            <View style={styles.tileSlot}>
               <OrderTypeTile kind="takeout" variant={tileVariant} onPress={onSelectTakeout} />
             </View>
           )}
@@ -137,23 +136,31 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   tiles: {
-    gap: 14,
+    gap: 18,
     alignItems: 'center',
+    width: '100%',
+    flexDirection: 'column',
+    paddingHorizontal: 16,
   },
   tilesCol: {
-    flexDirection: 'column',
+    // Column layout for phone - already set in tiles
   },
   tilesRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'center',
-    gap: 16,
+    gap: 20,
+    paddingHorizontal: 0,
   },
   tileSlot: {
     width: '100%',
+    minHeight: 110,
+    flexShrink: 0,
   },
   tileSlotRow: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 120,
+    minHeight: 110,
+    flexShrink: 0,
   },
 });
