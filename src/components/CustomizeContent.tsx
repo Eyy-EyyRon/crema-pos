@@ -59,7 +59,13 @@ export function CustomizeContent({
   const isTiny    = width < 340;  // very narrow
   const isLarge   = width >= 414; // iPhone Plus / Pro Max
 
-
+  // Safely calculate max scroll height to guarantee footer visibility
+  const topGap = isCompact ? 8 : Math.max(48, Math.round(height * 0.08));
+  const sheetMax = Math.max(280, height - topGap - kb);
+  const headerEstimate = 80;
+  // Phone footer stacks the stepper and the button, requiring ~160px of safe space
+  const footerEstimate = isTablet ? 0 : (isTiny ? 140 : 160);
+  const scrollMax = Math.max(100, sheetMax - headerEstimate - footerEstimate);
   const addLabel = isEditing
     ? (qty > 1 ? `Update ${qty}×` : 'Update Item')
     : (qty > 1 ? `Add ${qty}× to Order` : 'Add to Order');
@@ -73,7 +79,7 @@ export function CustomizeContent({
   const buttonHeight = isTiny ? 48 : isSmall ? 52 : isLarge ? 58 : 54;
 
   return (
-    <View style={[styles.container, fillHeight ? styles.fill : styles.shrink]}>
+    <View style={[styles.container, fillHeight && styles.fill]}>
       {isTablet && <View style={styles.topAccent} />}
       <View style={[styles.header, isTablet && styles.headerTablet]}>
         <Shot label="·" style={{ width: isTablet ? 56 : 52, height: isTablet ? 56 : 52, borderRadius: isTablet ? 14 : 13, flexShrink: 0 }} />
@@ -89,7 +95,7 @@ export function CustomizeContent({
 
       <ScrollView
         ref={scrollRef}
-        style={fillHeight ? styles.fill : styles.shrink}
+        style={fillHeight ? styles.fill : { maxHeight: scrollMax }}
         contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet, isCompact && { paddingBottom: 8 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -233,9 +239,6 @@ const styles = StyleSheet.create({
   },
   fill: {
     flex: 1,
-  },
-  shrink: {
-    flexShrink: 1,
   },
   topAccent: {
     height: 4,
