@@ -51,7 +51,7 @@ export function CustomizeContent({
   isEditing = false,
   fillHeight = true,
 }: CustomizeContentProps) {
-  const { isTablet, isCompact, width } = useBreakpoint();
+  const { isTablet, isCompact, width, height } = useBreakpoint();
   const kb = useKeyboardOverlap();
   const scrollRef = useRef<ScrollView>(null);
 
