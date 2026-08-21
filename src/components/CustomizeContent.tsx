@@ -51,19 +51,14 @@ export function CustomizeContent({
   isEditing = false,
   fillHeight = true,
 }: CustomizeContentProps) {
-  const { isTablet, isCompact, width, height } = useBreakpoint();
+  const { isTablet, isCompact, width } = useBreakpoint();
   const kb = useKeyboardOverlap();
   const scrollRef = useRef<ScrollView>(null);
-
-  // ── Responsive sizing ──
-  // Phone footer is ~90-110px tall (stepper + button + padding).
-  // Leave that, plus a bit of breathing room, for the scroll area.
-  const footerEstimate = isCompact ? 90 : isTablet ? 0 : 112;
-  const scrollMax = Math.max(100, Math.round((height - kb) * 0.42) - footerEstimate);
 
   const isSmall   = width < 360;  // 320–359 px phones (iPhone SE 1st gen)
   const isTiny    = width < 340;  // very narrow
   const isLarge   = width >= 414; // iPhone Plus / Pro Max
+
 
   const addLabel = isEditing
     ? (qty > 1 ? `Update ${qty}×` : 'Update Item')
@@ -78,7 +73,7 @@ export function CustomizeContent({
   const buttonHeight = isTiny ? 48 : isSmall ? 52 : isLarge ? 58 : 54;
 
   return (
-    <View style={[styles.container, fillHeight && styles.containerFill]}>
+    <View style={styles.container}>
       {isTablet && <View style={styles.topAccent} />}
       <View style={[styles.header, isTablet && styles.headerTablet]}>
         <Shot label="·" style={{ width: isTablet ? 56 : 52, height: isTablet ? 56 : 52, borderRadius: isTablet ? 14 : 13, flexShrink: 0 }} />
@@ -94,7 +89,7 @@ export function CustomizeContent({
 
       <ScrollView
         ref={scrollRef}
-        style={fillHeight ? styles.scrollFill : { maxHeight: scrollMax }}
+        style={styles.scrollFill}
         contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet, isCompact && { paddingBottom: 8 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -234,10 +229,11 @@ export function CustomizeContent({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     backgroundColor: colors.screenBg,
   },
   containerFill: {
-    flex: 1,
+    // Kept for API compatibility — container is always flex:1 now.
   },
   topAccent: {
     height: 4,
