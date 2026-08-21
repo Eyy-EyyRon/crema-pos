@@ -30,7 +30,12 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "owner": "eyyyronne",
+    "extra": {
+      "eas": {
+        "projectId": "970251c9-4a2d-4609-869a-d10eadc51915"
+      }
+    },
+    "owner": "ahronees-team",
     "plugins": [
       "expo-image",
       "expo-sharing",
