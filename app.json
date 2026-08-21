@@ -14,7 +14,10 @@
       "versionCode": 4,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
-        "android.permission.REQUEST_INSTALL_PACKAGES"
+        "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.CAMERA"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -26,11 +29,6 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "7d7a9f8b-8f8e-4ee9-8324-a9ee99a72726"
-      }
     },
     "owner": "eyyyronne",
     "plugins": [
