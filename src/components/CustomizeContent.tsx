@@ -73,7 +73,7 @@ export function CustomizeContent({
   const buttonHeight = isTiny ? 48 : isSmall ? 52 : isLarge ? 58 : 54;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, fillHeight ? styles.fill : styles.shrink]}>
       {isTablet && <View style={styles.topAccent} />}
       <View style={[styles.header, isTablet && styles.headerTablet]}>
         <Shot label="·" style={{ width: isTablet ? 56 : 52, height: isTablet ? 56 : 52, borderRadius: isTablet ? 14 : 13, flexShrink: 0 }} />
@@ -89,7 +89,7 @@ export function CustomizeContent({
 
       <ScrollView
         ref={scrollRef}
-        style={styles.scrollFill}
+        style={fillHeight ? styles.fill : styles.shrink}
         contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet, isCompact && { paddingBottom: 8 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -229,11 +229,13 @@ export function CustomizeContent({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     backgroundColor: colors.screenBg,
   },
-  containerFill: {
-    // Kept for API compatibility — container is always flex:1 now.
+  fill: {
+    flex: 1,
+  },
+  shrink: {
+    flexShrink: 1,
   },
   topAccent: {
     height: 4,
@@ -280,9 +282,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.chipBg,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  scrollFill: {
-    flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 20,
