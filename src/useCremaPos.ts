@@ -251,7 +251,7 @@ interface PosState {
   avatarUploading: boolean;
 
   // live backend data
-  menuItems: { id: string; name: string; price: number; category: string; tax_rate_id: string | null }[];
+  menuItems: { id: string; name: string; price: number; category: string; tax_rate_id: string | null; is_active: boolean }[];
   categories: string[];
   discountsList: Discount[];
   modifierGroupsByItem: Record<string, ModGroupDef[]>;
@@ -756,7 +756,7 @@ export function useCremaPos() {
       { data: settings },
       { data: taxRatesData },
     ] = await Promise.all([
-      supabase.from('menu_items').select('*').neq('is_active', false),
+      supabase.from('menu_items').select('*'),
       supabase.from('menu_categories').select('name').order('sort_order', { ascending: true }),
       supabase.from('modifier_groups').select('*').order('sort_order', { ascending: true }),
       supabase.from('modifier_options').select('*').order('sort_order', { ascending: true }),
@@ -803,6 +803,7 @@ export function useCremaPos() {
       category: mi.category,
       image_url: mi.image_url,
       tax_rate_id: mi.tax_rate_id ?? null,
+      is_active: mi.is_active !== false,
     }));
 
     // Multi-tax-rate: store_settings.tax_rate stays the ONE authoritative "default rate" — same
@@ -2069,6 +2070,10 @@ export function useCremaPos() {
     const cartArr = state.cart.map((c) => ({ menuId: c.menuId, qty: c.qty }));
     const map: Record<string, MenuItemStock> = {};
     state.menuItems.forEach((m) => {
+      if (m.is_active === false) {
+        map[m.id] = { unavailable: true, qty: 0, low: false };
+        return;
+      }
       const hasRecipe = (state.recipesByItem[m.id]?.length ?? 0) > 0;
       if (!hasRecipe) {
         map[m.id] = { unavailable: false, qty: null, low: false };
@@ -2103,6 +2108,7 @@ export function useCremaPos() {
   const addValid = useMemo(() => {
     const modsOk = !selectedItemGroups.some((g) => g.required && !(state.selMods[g.id] || []).length);
     if (!modsOk) return false;
+    if (selectedItem && selectedItem.is_active === false) return false;
     if (selectedItem && isOutOfStock(selectedItem.id, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled)) return false;
     return true;
   }, [selectedItemGroups, state.selMods, selectedItem, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled]);

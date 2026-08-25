@@ -15,7 +15,7 @@ const PIN_HASH_TTL_MS = 12 * 60 * 60_000;
 const PROFILES_CACHE_TTL_MS = 24 * 60 * 60_000;
 
 export type CachedMenuData = {
-  menuItems: { id: string; name: string; price: number; category: string; tax_rate_id: string | null }[];
+  menuItems: { id: string; name: string; price: number; category: string; tax_rate_id: string | null; is_active: boolean }[];
   categories: string[];
   discountsList: Discount[];
   modifierGroupsByItem: Record<string, ModGroupDef[]>;

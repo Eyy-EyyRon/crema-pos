@@ -8,6 +8,7 @@ export interface MenuItem {
   price: number;
   category: string;
   image_url?: string | null;
+  is_active?: boolean;
 }
 
 export type ModOptionDef = [name: string, price: number];
