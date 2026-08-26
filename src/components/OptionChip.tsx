@@ -9,30 +9,34 @@ interface OptionChipProps {
   price: number;
   active: boolean;
   onPress: () => void;
+  /** Linked to a depleted ingredient via modifier_recipes — stays visible but unselectable, same treatment as an out-of-stock menu item. */
+  outOfStock?: boolean;
 }
 
-export function OptionChip({ name, price, active, onPress }: OptionChipProps) {
+export function OptionChip({ name, price, active, onPress, outOfStock = false }: OptionChipProps) {
   const showPrice = price !== 0;
   const priceStr = (price > 0 ? '+' : '') + peso0(price);
   return (
     <Pressable
-      onPress={() => { tapLight(); onPress(); }}
+      onPress={() => { if (outOfStock && !active) return; tapLight(); onPress(); }}
       style={({ pressed }) => [
         styles.base,
         {
           backgroundColor: active ? colors.chipBg : colors.cardBg,
           borderColor: active ? 'rgba(184,147,90,0.4)' : colors.borderGold12,
-          opacity: pressed ? 0.7 : 1,
+          opacity: outOfStock && !active ? 0.5 : pressed ? 0.7 : 1,
         },
       ]}
       accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={showPrice ? `${name}, ${priceStr}` : name}
+      accessibilityState={{ selected: active, disabled: outOfStock && !active }}
+      accessibilityLabel={outOfStock ? `${name}, out of stock` : showPrice ? `${name}, ${priceStr}` : name}
     >
       <Text style={[styles.label, { color: active ? colors.goldBrightText : colors.textSecondary }]}>{name}</Text>
-      {showPrice && (
+      {outOfStock ? (
+        <Text style={[styles.price, { color: colors.danger }]}>Out of stock</Text>
+      ) : showPrice ? (
         <Text style={[styles.price, { color: active ? colors.goldLight : colors.textMuted }]}>{priceStr}</Text>
-      )}
+      ) : null}
     </Pressable>
   );
 }

@@ -29,7 +29,7 @@ type HistoryOrder = {
   baristaId: string;
   items: QueueItemLine[];
   receiptItems: { qtyName: string; lineStr: string; modsStr?: string }[];
-  restoreItems: { menu_item_id: string; qty: number }[];
+  restoreItems: { menu_item_id: string; qty: number; modifiers_json?: string | null }[];
 };
 
 type DateRange = 'today' | 'week' | 'month' | 'all';
@@ -150,7 +150,7 @@ export function HistoryScreen({
         lineStr: peso0(Number(oi.unit_price ?? 0) * oi.qty),
         modsStr: modsDisplayString(oi.modifiers_json, oi.special_note),
       })),
-      restoreItems: (o.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty })),
+      restoreItems: (o.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty, modifiers_json: oi.modifiers_json })),
     }));
     setOrders(mapped);
     setLoading(false);

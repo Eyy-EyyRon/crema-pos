@@ -166,7 +166,7 @@ export type ActionOutboxEntry =
       detail: string;
       managerId: string;
       managerName: string;
-      restoreItems: { menu_item_id: string; qty: number }[];
+      restoreItems: { menu_item_id: string; qty: number; modifiers_json?: string | null }[];
       timestamp: string;
     };
 

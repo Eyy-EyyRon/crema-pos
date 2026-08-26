@@ -16,6 +16,7 @@ interface CustomizeContentProps {
   basePrice: number;
   groups: ModGroupDef[];
   selMods: SelectedMods;
+  outOfStockModifierIds?: Set<string>;
   onToggleMod: (g: ModGroupDef, opt: SelectedMod) => void;
   note: string;
   onNote: (v: string) => void;
@@ -38,6 +39,7 @@ export function CustomizeContent({
   basePrice,
   groups,
   selMods,
+  outOfStockModifierIds,
   onToggleMod,
   note,
   onNote,
@@ -62,6 +64,14 @@ export function CustomizeContent({
   // Deterministic footer height calculation for absolute positioning
   // Tablet: ~90px, Phone: ~160px (stepper + gap + button + padding)
   const footerHeight = isTablet ? 90 : (isTiny ? 140 : 160);
+
+  const missingRequiredGroup = groups.find((g) => g.required && !(selMods[g.id] || []).length);
+  const hasOutOfStockSelection = Object.values(selMods).flat().some((o) => o.id && outOfStockModifierIds?.has(o.id));
+  const invalidReason = missingRequiredGroup
+    ? 'Select all required options first'
+    : hasOutOfStockSelection
+    ? 'A selected option is out of stock — remove it to continue'
+    : 'This item is out of stock';
 
   const addLabel = isEditing
     ? (qty > 1 ? `Update ${qty}×` : 'Update Item')
@@ -116,15 +126,17 @@ export function CustomizeContent({
               )}
             </View>
             <View style={styles.optionsWrap}>
-              {g.options.map(([optName, optPrice]) => {
+              {g.options.map(([optId, optName, optPrice]) => {
                 const active = (selMods[g.id] || []).some((o) => o.name === optName);
+                const optOutOfStock = !!outOfStockModifierIds?.has(optId);
                 return (
                   <OptionChip
-                    key={optName}
+                    key={optId}
                     name={optName}
                     price={optPrice}
                     active={active}
-                    onPress={() => onToggleMod(g, { name: optName, p: optPrice })}
+                    outOfStock={optOutOfStock}
+                    onPress={() => onToggleMod(g, { id: optId, name: optName, p: optPrice })}
                   />
                 );
               })}
@@ -226,7 +238,7 @@ export function CustomizeContent({
         {!addValid && (
           <View style={styles.warnRow}>
             <AlertTriangleIcon size={13} color={colors.danger} strokeWidth={2} />
-            <Text style={styles.warnText}>Select all required options first</Text>
+            <Text style={styles.warnText}>{invalidReason}</Text>
           </View>
         )}
       </View>

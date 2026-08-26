@@ -20,6 +20,7 @@ export type CachedMenuData = {
   discountsList: Discount[];
   modifierGroupsByItem: Record<string, ModGroupDef[]>;
   recipesByItem: Record<string, RecipeRow[]>;
+  recipesByModifier: Record<string, RecipeRow[]>;
   ingredientStock: Record<string, number>;
   ingredientsList: { id: string; name: string; unit: string; current_stock: number }[];
   taxRateById: Record<string, number>;

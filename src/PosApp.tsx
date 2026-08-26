@@ -123,6 +123,7 @@ export function PosApp() {
         basePrice: pos.selectedItem.price,
         groups: pos.selectedItemGroups,
         selMods: state.selMods,
+        outOfStockModifierIds: pos.outOfStockModifierIds,
         onToggleMod: pos.toggleMod,
         note: state.note,
         onNote: (v: string) => pos.patch({ note: v }),

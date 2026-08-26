@@ -23,7 +23,11 @@ export type ModifierGroup = {
   options: ModifierOption[];
 };
 
-export type Modifier = { name: string; price: number };
+// `id` is the modifier_option_id — carried through so deductStockForOrderItems can look up
+// modifier_recipes for it. Optional because historical orders' stored modifiers_json predates
+// this field and won't have it; those just don't contribute to stock deduction, same as an
+// option with no modifier_recipes rows at all.
+export type Modifier = { id?: string; name: string; price: number };
 
 export type PayMethod = 'cash' | 'gcash' | 'maya' | 'card' | 'split' | 'gift_card';
 export type OrderType = 'dine-in' | 'takeout';
@@ -338,28 +342,53 @@ export async function submitPosOrder(
   return order.id;
 }
 
+function parseOrderItemModifiers(item: PosOrderItem): Modifier[] {
+  try {
+    return JSON.parse(item.modifiers_json || '[]');
+  } catch {
+    return [];
+  }
+}
+
 // Deduct inventory based on recipe & trigger low-stock alerts (non-fatal if it fails). Shared
 // by submitPosOrder above and addItemsToExistingOrder below, since adding items to an
 // already-queued order needs the exact same deduction/alert behavior a brand-new order gets.
 export async function deductStockForOrderItems(orderItems: PosOrderItem[]): Promise<void> {
   try {
     const menuIds = [...new Set(orderItems.map((i) => i.menu_item_id))];
-    const { data: recipes } = await supabase
-      .from('recipe_costing')
-      .select('menu_item_id, ingredient_id, recipe_qty')
-      .in('menu_item_id', menuIds);
+    const modifierIds = [...new Set(
+      orderItems.flatMap((item) => parseOrderItemModifiers(item).map((m) => m.id).filter(Boolean))
+    )] as string[];
 
-    if (recipes && recipes.length > 0) {
-      const deductions: Record<string, number> = {};
-      orderItems.forEach((item) => {
-        recipes
-          .filter((r: RecipeRow) => r.menu_item_id === item.menu_item_id)
-          .forEach((recipe: RecipeRow) => {
-            const qtyToDeduct = Number(recipe.recipe_qty) * Number(item.qty);
-            deductions[recipe.ingredient_id] = (deductions[recipe.ingredient_id] || 0) + qtyToDeduct;
+    const [{ data: recipes }, { data: modRecipes }] = await Promise.all([
+      supabase.from('recipe_costing').select('menu_item_id, ingredient_id, recipe_qty').in('menu_item_id', menuIds),
+      modifierIds.length > 0
+        ? supabase.from('modifier_recipes').select('modifier_option_id, ingredient_id, qty').in('modifier_option_id', modifierIds)
+        : Promise.resolve({ data: [] as { modifier_option_id: string; ingredient_id: string; qty: number }[] }),
+    ]);
+
+    const deductions: Record<string, number> = {};
+    (recipes ?? []).forEach((recipe: RecipeRow) => {
+      orderItems
+        .filter((item) => item.menu_item_id === recipe.menu_item_id)
+        .forEach((item) => {
+          const qtyToDeduct = Number(recipe.recipe_qty) * Number(item.qty);
+          deductions[recipe.ingredient_id] = (deductions[recipe.ingredient_id] || 0) + qtyToDeduct;
+        });
+    });
+    orderItems.forEach((item) => {
+      parseOrderItemModifiers(item).forEach((mod) => {
+        if (!mod.id) return;
+        (modRecipes ?? [])
+          .filter((r) => r.modifier_option_id === mod.id)
+          .forEach((r) => {
+            const qtyToDeduct = Number(r.qty) * Number(item.qty);
+            deductions[r.ingredient_id] = (deductions[r.ingredient_id] || 0) + qtyToDeduct;
           });
       });
+    });
 
+    if (Object.keys(deductions).length > 0) {
       // Crossings accumulate here instead of emailing per-ingredient — a single order that
       // depletes five ingredients at once sends one digest, not five separate emails.
       const lowStockCrossings: { ingredientName: string; currentStock: number; parLevel: number }[] = [];
@@ -471,24 +500,44 @@ export async function addItemsToExistingOrder(
 // Gives back the ingredient stock an order reserved at checkout — used on
 // void/refund from the queue or history screens. Shares the atomic RPC with
 // the deduct path above so a void can't race a concurrent checkout either.
-export async function restoreStockForOrderItems(orderItems: { menu_item_id: string; qty: number }[]) {
+export async function restoreStockForOrderItems(
+  orderItems: { menu_item_id: string; qty: number; modifiers_json?: string | null }[]
+) {
   const menuIds = [...new Set(orderItems.map((i) => i.menu_item_id).filter(Boolean))];
-  if (menuIds.length === 0) return;
+  const modifierIds = [...new Set(orderItems.flatMap((item) => {
+    try { return (JSON.parse(item.modifiers_json || '[]') as Modifier[]).map((m) => m.id).filter(Boolean); }
+    catch { return []; }
+  }))] as string[];
+  if (menuIds.length === 0 && modifierIds.length === 0) return;
 
-  const { data: recipes } = await supabase
-    .from('recipe_costing')
-    .select('menu_item_id, ingredient_id, recipe_qty')
-    .in('menu_item_id', menuIds);
-  if (!recipes || recipes.length === 0) return;
+  const [{ data: recipes }, { data: modRecipes }] = await Promise.all([
+    menuIds.length > 0
+      ? supabase.from('recipe_costing').select('menu_item_id, ingredient_id, recipe_qty').in('menu_item_id', menuIds)
+      : Promise.resolve({ data: [] as RecipeRow[] }),
+    modifierIds.length > 0
+      ? supabase.from('modifier_recipes').select('modifier_option_id, ingredient_id, qty').in('modifier_option_id', modifierIds)
+      : Promise.resolve({ data: [] as { modifier_option_id: string; ingredient_id: string; qty: number }[] }),
+  ]);
 
   const restorations: Record<string, number> = {};
   orderItems.forEach((item) => {
-    (recipes as RecipeRow[])
+    (recipes ?? [])
       .filter((r) => r.menu_item_id === item.menu_item_id)
       .forEach((recipe) => {
         const qtyToRestore = Number(recipe.recipe_qty) * Number(item.qty);
         restorations[recipe.ingredient_id] = (restorations[recipe.ingredient_id] || 0) + qtyToRestore;
       });
+    let mods: Modifier[] = [];
+    try { mods = JSON.parse(item.modifiers_json || '[]'); } catch { /* ignore malformed json */ }
+    mods.forEach((mod) => {
+      if (!mod.id) return;
+      (modRecipes ?? [])
+        .filter((r) => r.modifier_option_id === mod.id)
+        .forEach((r) => {
+          const qtyToRestore = Number(r.qty) * Number(item.qty);
+          restorations[r.ingredient_id] = (restorations[r.ingredient_id] || 0) + qtyToRestore;
+        });
+    });
   });
 
   for (const [ingredientId, amount] of Object.entries(restorations)) {

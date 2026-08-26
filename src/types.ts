@@ -11,7 +11,7 @@ export interface MenuItem {
   is_active?: boolean;
 }
 
-export type ModOptionDef = [name: string, price: number];
+export type ModOptionDef = [id: string, name: string, price: number];
 
 export interface ModGroupDef {
   id: string;
@@ -22,6 +22,7 @@ export interface ModGroupDef {
 }
 
 export interface SelectedMod {
+  id?: string;
   name: string;
   p: number;
 }
@@ -36,8 +37,8 @@ export interface CartItem {
   qty: number;
   mods: string[];
   note: string;
-  /** Structured {name, price} pairs for the real order_items.modifiers_json payload — `mods` above is the display-string version CartRow renders. */
-  modifiers: { name: string; price: number }[];
+  /** Structured {id, name, price} for the real order_items.modifiers_json payload — `mods` above is the display-string version CartRow renders. `id` is the modifier_option_id, used to deduct/restore its linked ingredient stock. */
+  modifiers: { id?: string; name: string; price: number }[];
 }
 
 export interface Discount {
@@ -78,7 +79,7 @@ export interface QueueEntry {
   items: QueueItemLine[];
   total: number;
   /** Line items keyed for stock-restore on void — not rendered by QueueCard. */
-  restoreItems: { menu_item_id: string; qty: number }[];
+  restoreItems: { menu_item_id: string; qty: number; modifiers_json?: string | null }[];
   /** True for an order still sitting in the local offline outbox — not yet a real Supabase row. */
   pendingSync?: boolean;
   /** Optional name given for the order (e.g. for takeout pickup calls) — not always present. */

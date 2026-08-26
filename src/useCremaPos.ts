@@ -256,6 +256,7 @@ interface PosState {
   discountsList: Discount[];
   modifierGroupsByItem: Record<string, ModGroupDef[]>;
   recipesByItem: Record<string, RecipeRow[]>;
+  recipesByModifier: Record<string, RecipeRow[]>;
   ingredientStock: Record<string, number>;
   ingredientsList: { id: string; name: string; unit: string; current_stock: number }[];
   /** Non-default tax rates a menu item can be explicitly assigned via tax_rate_id — a menu item
@@ -334,6 +335,7 @@ const initialState: PosState = {
   discountsList: [{ id: null, n: 'None', p: 0, type: 'percent', fixedAmount: null, minSpend: null, validFromHour: null, validToHour: null }],
   modifierGroupsByItem: {},
   recipesByItem: {},
+  recipesByModifier: {},
   ingredientStock: {},
   ingredientsList: [],
   taxRateById: {},
@@ -354,9 +356,9 @@ function selModsFromCartModifiers(
   const sel: SelectedMods = {};
   for (const g of groups) {
     const picked: SelectedMod[] = [];
-    for (const [optName, optPrice] of g.options) {
+    for (const [optId, optName, optPrice] of g.options) {
       const match = modifiers.find((m) => m.name === optName);
-      if (match) picked.push({ name: optName, p: match.price ?? optPrice });
+      if (match) picked.push({ id: optId, name: optName, p: match.price ?? optPrice });
     }
     if (picked.length) sel[g.id] = picked;
   }
@@ -751,6 +753,7 @@ export function useCremaPos() {
       { data: options },
       { data: itemMods },
       { data: recipes },
+      { data: modRecipes },
       { data: ingredients },
       { data: discountsData },
       { data: settings },
@@ -762,6 +765,7 @@ export function useCremaPos() {
       supabase.from('modifier_options').select('*').order('sort_order', { ascending: true }),
       supabase.from('menu_item_modifiers').select('menu_item_id, modifier_group_id'),
       supabase.from('recipe_costing').select('menu_item_id, ingredient_id, recipe_qty'),
+      supabase.from('modifier_recipes').select('modifier_option_id, ingredient_id, qty'),
       supabase.from('ingredients').select('id, name, unit, current_stock'),
       supabase.from('discounts').select('*').order('percentage', { ascending: false }),
       supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url, store_name, tagline, address, phone, tin, receipt_footer, loyalty_enabled, loyalty_php_per_point, loyalty_point_value_php, app_update_url, app_update_version, checkout_allow_cash, checkout_allow_gcash, checkout_allow_gift_card, checkout_allow_split_payment, checkout_allow_dine_in, checkout_allow_takeout, checkout_require_customer_name, checkout_allow_discounts, checkout_allow_loyalty_redemption').eq('id', 1).maybeSingle(),
@@ -779,7 +783,7 @@ export function useCremaPos() {
       name: g.name,
       required: !!g.is_required,
       multi: !!g.multi_select,
-      options: (optionsByGroup[g.id] ?? []).map((o: any) => [o.name, Number(o.price_adjustment)] as ModOptionDef),
+      options: (optionsByGroup[g.id] ?? []).map((o: any) => [o.id, o.name, Number(o.price_adjustment)] as ModOptionDef),
     }));
     const groupsById: Record<string, ModGroupDef> = Object.fromEntries(allGroupDefs.map((g) => [g.id, g]));
 
@@ -851,6 +855,9 @@ export function useCremaPos() {
     }));
 
     const recipesByItem = buildRecipesByItem((recipes ?? []) as RecipeRow[]);
+    const recipesByModifier = buildRecipesByItem(
+      ((modRecipes ?? []) as any[]).map((r) => ({ menu_item_id: r.modifier_option_id, ingredient_id: r.ingredient_id, recipe_qty: Number(r.qty) }))
+    );
 
     const resolvedStoreSettings = settings
       ? {
@@ -895,6 +902,7 @@ export function useCremaPos() {
       discountsList,
       modifierGroupsByItem,
       recipesByItem,
+      recipesByModifier,
       ingredientStock,
       ingredientsList,
       taxRateById,
@@ -927,6 +935,7 @@ export function useCremaPos() {
         discountsList,
         modifierGroupsByItem,
         recipesByItem,
+        recipesByModifier,
         ingredientStock,
         ingredientsList,
         taxRateById,
@@ -955,6 +964,7 @@ export function useCremaPos() {
         discountsList: cached.discountsList ?? s.discountsList,
         modifierGroupsByItem: cached.modifierGroupsByItem ?? s.modifierGroupsByItem,
         recipesByItem: cached.recipesByItem ?? s.recipesByItem,
+        recipesByModifier: cached.recipesByModifier ?? s.recipesByModifier,
         ingredientStock: cached.ingredientStock ?? s.ingredientStock,
         ingredientsList: cached.ingredientsList ?? s.ingredientsList,
         taxRateById: cached.taxRateById ?? s.taxRateById,
@@ -1001,7 +1011,7 @@ export function useCremaPos() {
         prepStatus: oi.prep_status ?? 'pending',
       })),
       total: Number(o.total ?? o.total_amount ?? 0),
-      restoreItems: (o.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty })),
+      restoreItems: (o.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty, modifiers_json: oi.modifiers_json })),
       customerName: o.customer_name ?? null,
       barista_id: o.barista_id,
     }));
@@ -1323,7 +1333,7 @@ export function useCremaPos() {
     // it could be stale if another device modified the order in the meantime.
     const { data: order, error: fetchErr } = await supabase
       .from('orders')
-      .select('total, total_amount, receipt_number, barista_id, order_items(menu_item_id, qty)')
+      .select('total, total_amount, receipt_number, barista_id, order_items(menu_item_id, qty, modifiers_json)')
       .eq('id', orderId)
       .single();
     if (fetchErr || !order) return { error: fetchErr?.message || 'Could not load the order to refund.' };
@@ -1358,7 +1368,7 @@ export function useCremaPos() {
     );
 
     if (isFull) {
-      const restoreItems = (order.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty }));
+      const restoreItems = (order.order_items ?? []).map((oi: any) => ({ menu_item_id: oi.menu_item_id, qty: oi.qty, modifiers_json: oi.modifiers_json }));
       if (restoreItems.length > 0) await restoreStockForOrderItems(restoreItems);
     }
     return {};
@@ -1501,11 +1511,16 @@ export function useCremaPos() {
   const toggleMod = useCallback((g: ModGroupDef, opt: SelectedMod) => {
     setState((s) => {
       const cur = s.selMods[g.id] || [];
+      const exists = cur.some((o) => o.name === opt.name);
+      // Allow removing an already-selected out-of-stock option, just not adding a new one.
+      if (!exists && opt.id && isOutOfStock(opt.id, s.recipesByModifier, s.ingredientStock, s.storeSettings.rushModeEnabled)) {
+        return s;
+      }
       let next: SelectedMod[];
       if (g.multi) {
-        next = cur.some((o) => o.name === opt.name) ? cur.filter((o) => o.name !== opt.name) : [...cur, opt];
+        next = exists ? cur.filter((o) => o.name !== opt.name) : [...cur, opt];
       } else {
-        next = cur.some((o) => o.name === opt.name) ? [] : [opt];
+        next = exists ? [] : [opt];
       }
       return { ...s, selMods: { ...s.selMods, [g.id]: next } };
     });
@@ -1521,7 +1536,7 @@ export function useCremaPos() {
       if (!valid) return s;
       const mods = Object.values(s.selMods).flat();
       const modNames = mods.map((m) => (m.p ? `${m.name} +₱${m.p}` : m.name));
-      const modifiers = mods.map((m) => ({ name: m.name, price: m.p }));
+      const modifiers = mods.map((m) => ({ id: m.id, name: m.name, price: m.p }));
       const unit = si.price + modTotal(s.selMods);
       const nextLine = {
         menuId: si.id,
@@ -2105,13 +2120,25 @@ export function useCremaPos() {
     [selectedItem, state.modifierGroupsByItem]
   );
 
+  // Modifier options (e.g. "Oat Milk") linked to a depleted ingredient via modifier_recipes —
+  // same isOutOfStock check menu items use, just keyed by option id instead of menu item id.
+  const outOfStockModifierIds = useMemo(() => {
+    const ids = new Set<string>();
+    Object.keys(state.recipesByModifier).forEach((optionId) => {
+      if (isOutOfStock(optionId, state.recipesByModifier, state.ingredientStock, state.storeSettings.rushModeEnabled)) ids.add(optionId);
+    });
+    return ids;
+  }, [state.recipesByModifier, state.ingredientStock, state.storeSettings.rushModeEnabled]);
+
   const addValid = useMemo(() => {
     const modsOk = !selectedItemGroups.some((g) => g.required && !(state.selMods[g.id] || []).length);
     if (!modsOk) return false;
     if (selectedItem && selectedItem.is_active === false) return false;
     if (selectedItem && isOutOfStock(selectedItem.id, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled)) return false;
+    const selectedModsOutOfStock = Object.values(state.selMods).flat().some((o) => o.id && outOfStockModifierIds.has(o.id));
+    if (selectedModsOutOfStock) return false;
     return true;
-  }, [selectedItemGroups, state.selMods, selectedItem, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled]);
+  }, [selectedItemGroups, state.selMods, selectedItem, state.recipesByItem, state.ingredientStock, state.storeSettings.rushModeEnabled, outOfStockModifierIds]);
 
   const addUnitTotal = useMemo(() => {
     if (!selectedItem) return 0;
@@ -2201,6 +2228,7 @@ export function useCremaPos() {
     filteredItems,
     selectedItem,
     selectedItemGroups,
+    outOfStockModifierIds,
     addValid,
     addUnitTotal,
     maxAddableForSelected,
