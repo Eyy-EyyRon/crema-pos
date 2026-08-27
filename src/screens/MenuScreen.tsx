@@ -30,6 +30,7 @@ export function MenuScreen({
   cartCount,
   cartTotal,
   onViewOrder,
+  popupName,
 }: {
   items: MenuItem[];
   cartQtyByMenuId: Record<string, number>;
@@ -49,13 +50,14 @@ export function MenuScreen({
   cartCount: number;
   cartTotal: number;
   onViewOrder: () => void;
+  popupName: string | null;
 }) {
   const { isTablet, gutter, isCompact } = useBreakpoint();
   const showCartBar = cartCount > 0;
   const insets = useSafeAreaInsets();
   return (
     <View style={styles.screen}>
-      <MenuHeader queueCount={queueCount} onQueue={onQueue} orderTypeLabel={orderTypeLabel} onChangeType={onChangeType} userName={userName} onAccount={onAccount} />
+      <MenuHeader queueCount={queueCount} onQueue={onQueue} orderTypeLabel={orderTypeLabel} onChangeType={onChangeType} userName={userName} onAccount={onAccount} popupName={popupName} />
       <SearchBar value={search} onChangeText={onSearch} />
       <CategoryRow categories={categories} active={selCat} onSelect={onSelectCat} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.gridScroll, { paddingHorizontal: gutter, paddingBottom: showCartBar ? 88 : 24 }]}>

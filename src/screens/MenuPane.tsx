@@ -25,6 +25,7 @@ export function MenuPane({
   onChangeType,
   userName,
   onAccount,
+  popupName,
 }: {
   items: MenuItem[];
   cartQtyByMenuId: Record<string, number>;
@@ -41,6 +42,7 @@ export function MenuPane({
   onChangeType: () => void;
   userName: string;
   onAccount: () => void;
+  popupName: string | null;
 }) {
   const { gutter, isCompact } = useBreakpoint();
   return (
@@ -53,6 +55,7 @@ export function MenuPane({
         onChangeType={onChangeType}
         userName={userName}
         onAccount={onAccount}
+        popupName={popupName}
       />
       <SearchBar value={search} onChangeText={onSearch} variant="tablet" />
       <CategoryRow categories={categories} active={selCat} onSelect={onSelectCat} variant="tablet" />

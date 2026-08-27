@@ -54,6 +54,7 @@ import {
   ModOptionDef,
   OrderType,
   PayMethod,
+  PopupContext,
   QueueEntry,
   Screen,
   SelectedMod,
@@ -263,6 +264,9 @@ interface PosState {
    *  left unassigned always resolves to storeSettings.taxRatePct, never a row from here. */
   taxRateById: Record<string, number>;
   storeSettings: StoreSettings;
+  /** This barista's active popup_staff assignment, resolved once at login (see
+   *  fetchMenuDataFromNetwork). Null when they have no active assignment — full main-store menu. */
+  popupContext: PopupContext | null;
 }
 
 const initialState: PosState = {
@@ -340,6 +344,7 @@ const initialState: PosState = {
   ingredientsList: [],
   taxRateById: {},
   storeSettings: DEFAULT_STORE_SETTINGS,
+  popupContext: null,
 };
 
 function modTotal(sel: SelectedMods): number {
@@ -728,7 +733,7 @@ export function useCremaPos() {
   // same tables/columns, so menu changes made from the web dashboard show up
   // here too.
   // ─────────────────────────────────────────────
-  const fetchMenuData = useCallback(async () => {
+  const fetchMenuData = useCallback(async (baristaId: string) => {
     // Same race the shift-fetch effect guards against: this fires the instant currentUser is
     // set on a fast-path login, which can be before the background real-session swap lands.
     // Under a stale/anon session, store_settings' RLS (authenticated-only) silently returns no
@@ -738,14 +743,14 @@ export function useCremaPos() {
     if (authSyncRef.current) await authSyncRef.current;
     const seq = ++menuFetchSeq.current;
     try {
-      await fetchMenuDataFromNetwork(seq);
+      await fetchMenuDataFromNetwork(seq, baristaId);
     } catch (e) {
       console.warn('Menu data fetch failed — falling back to cached data if available:', e);
       await hydrateMenuDataFromCache(seq);
     }
   }, []);
 
-  const fetchMenuDataFromNetwork = useCallback(async (seq: number) => {
+  const fetchMenuDataFromNetwork = useCallback(async (seq: number, baristaId: string) => {
     const [
       { data: items, error: itemsError },
       { data: cats },
@@ -810,6 +815,44 @@ export function useCremaPos() {
       is_active: mi.is_active !== false,
     }));
 
+    // POP-UP SCOPING (login-time only — see PopupContext's doc comment in types.ts). A barista
+    // with an active popup_staff row for this whole session sees only that pop-up's offered
+    // items (via popup_menu_items), at its price override where set, and checkout stamps
+    // popup_id on every order (see checkout() below). No active assignment => finalMenuItems is
+    // just menuItems, byte-identical to before this feature shipped. Can't join the Promise.all
+    // above since it depends on baristaId.
+    const { data: assignment } = await supabase
+      .from('popup_staff')
+      .select('popups(id, name, is_active, cogs_tracking_enabled)')
+      .eq('barista_id', baristaId)
+      .eq('is_active', true)
+      .maybeSingle();
+    // The client has no generated Database type, so postgrest-js's select() type inference can't
+    // know popup_staff.popup_id -> popups.id is a to-one FK and defaults nested embeds to an
+    // array shape. At runtime PostgREST still returns a single object for a to-one embed (same
+    // as every other untyped .select() call in this file) — cast through unknown to bridge that.
+    const assignedPopup = assignment?.popups as unknown as { id: string; name: string; is_active: boolean; cogs_tracking_enabled: boolean } | null;
+    const popupContext: PopupContext | null = assignedPopup?.is_active
+      ? { id: assignedPopup.id, name: assignedPopup.name, cogsTrackingEnabled: assignedPopup.cogs_tracking_enabled }
+      : null;
+
+    // popup_menu_items is a linking/override table, not a data copy — is_active=false or a
+    // missing row means "not offered at this popup"; price_override null means "use the base
+    // menu_items.price". Deliberately doesn't narrow modifierGroupsByItem/recipesByItem/
+    // recipesByModifier/ingredientStock below — those stay keyed off the full item set since
+    // they're only ever looked up for items that end up visible.
+    let finalMenuItems = menuItems;
+    if (popupContext) {
+      const { data: pmiRows } = await supabase
+        .from('popup_menu_items')
+        .select('menu_item_id, is_active, price_override')
+        .eq('popup_id', popupContext.id);
+      const pmiById = new Map((pmiRows ?? []).map((r: any) => [r.menu_item_id, r]));
+      finalMenuItems = menuItems
+        .filter((mi) => { const pmi = pmiById.get(mi.id); return pmi && pmi.is_active !== false; })
+        .map((mi) => { const pmi = pmiById.get(mi.id)!; return pmi.price_override != null ? { ...mi, price: Number(pmi.price_override) } : mi; });
+    }
+
     // Multi-tax-rate: store_settings.tax_rate stays the ONE authoritative "default rate" — same
     // field Settings has always edited — so there's no second place a manager needs to update
     // it and no drift risk between two sources of truth. tax_rates only supplies ADDITIONAL,
@@ -821,7 +864,7 @@ export function useCremaPos() {
 
     const categories = mergeMenuCategories(
       (cats ?? []).map((c: any) => c.name),
-      menuItems.map((m) => m.category),
+      finalMenuItems.map((m) => m.category),
     );
 
     // Always keep a synthetic 0% "None" entry first regardless of what's in
@@ -897,7 +940,7 @@ export function useCremaPos() {
     // Refresh the offline cache on every successful fetch (fire-and-forget —
     // a cache write failing shouldn't block the live UI update below).
     writeMenuCache({
-      menuItems,
+      menuItems: finalMenuItems,
       categories,
       discountsList,
       modifierGroupsByItem,
@@ -907,6 +950,7 @@ export function useCremaPos() {
       ingredientsList,
       taxRateById,
       storeSettings: resolvedStoreSettings ?? DEFAULT_STORE_SETTINGS,
+      popupContext,
     }).catch(() => {});
 
     setState((s) => {
@@ -930,7 +974,7 @@ export function useCremaPos() {
 
       return {
         ...s,
-        menuItems,
+        menuItems: finalMenuItems,
         categories,
         discountsList,
         modifierGroupsByItem,
@@ -945,6 +989,7 @@ export function useCremaPos() {
         splitEnabled: rs.checkoutAllowSplitPayment ? s.splitEnabled : false,
         discountName: rs.checkoutAllowDiscounts ? s.discountName : 'None',
         redeemPoints: rs.checkoutAllowLoyaltyRedemption ? s.redeemPoints : '',
+        popupContext,
       };
     });
   }, []);
@@ -968,6 +1013,7 @@ export function useCremaPos() {
         ingredientStock: cached.ingredientStock ?? s.ingredientStock,
         ingredientsList: cached.ingredientsList ?? s.ingredientsList,
         taxRateById: cached.taxRateById ?? s.taxRateById,
+        popupContext: cached.popupContext ?? s.popupContext,
         // Spread onto DEFAULT_STORE_SETTINGS, not just `?? s.storeSettings` — a cache written
         // by an older app version (before a new StoreSettings field existed) would otherwise
         // resolve that field to undefined/falsy instead of its real default.
@@ -980,12 +1026,13 @@ export function useCremaPos() {
 
   useEffect(() => {
     if (!state.currentUser) return;
-    fetchMenuData();
+    const baristaId = state.currentUser.id;
+    fetchMenuData(baristaId);
     const channel = supabase
       .channel('crema_pos_menu_ingredients')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ingredients' }, fetchMenuData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, fetchMenuData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'store_settings' }, fetchMenuData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ingredients' }, () => fetchMenuData(baristaId))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, () => fetchMenuData(baristaId))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'store_settings' }, () => fetchMenuData(baristaId))
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -1407,9 +1454,9 @@ export function useCremaPos() {
     const ingredientName = state.ingredientsList.find((i) => i.id === ingredientId)?.name ?? ingredientId.slice(0, 8);
     logActivity(manager.id, 'stock_adjusted', `${delta > 0 ? '+' : ''}${delta} ${ingredientName} adjusted by manager ${manager.full_name} — ${reason.trim()}`);
 
-    await fetchMenuData();
+    if (state.currentUser) await fetchMenuData(state.currentUser.id);
     return {};
-  }, [state.ingredientsList, fetchMenuData]);
+  }, [state.ingredientsList, state.currentUser, fetchMenuData]);
 
   // Puts the register into "add to an already-queued order" mode instead of building a new
   // order — for something like "customer adds one more cookie" after the ticket's already
@@ -1928,6 +1975,7 @@ export function useCremaPos() {
       loyalty_points_redeemed: pointsRedeemed,
       gift_card_code: giftCardCode,
       receipt_email: receiptEmail,
+      popup_id: state.popupContext?.id ?? null,
     };
     const paymentSplit: PaymentSplitComponent[] | undefined = isSplit
       ? [
@@ -2021,7 +2069,7 @@ export function useCremaPos() {
 
     patch({ success, screen: 'success', checkoutBusy: false, checkoutError: null, todayOrderCount: isAppend ? state.todayOrderCount : nextTodayCount });
     fetchQueue();
-  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.splitEnabled, state.splitCashAmount, state.splitGcashAmount, state.gcashReference, state.gcashConfirmed, state.gcashProofUrl, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, state.selectedCustomer, state.giftCardCode, state.receiptEmail, state.discountName, state.discountsList, state.todayOrderCount, redeemPointsNum, maxRedeemablePoints, phpPerPoint, amountDue, totals, patch, fetchQueue]);
+  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.splitEnabled, state.splitCashAmount, state.splitGcashAmount, state.gcashReference, state.gcashConfirmed, state.gcashProofUrl, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, state.selectedCustomer, state.giftCardCode, state.receiptEmail, state.discountName, state.discountsList, state.todayOrderCount, state.popupContext, redeemPointsNum, maxRedeemablePoints, phpPerPoint, amountDue, totals, patch, fetchQueue]);
 
   const done = useCallback(() => {
     clearPendingUndo();

@@ -1,10 +1,39 @@
-import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeftIcon, CoffeeIcon, SettingsIcon } from '../icons';
+import { ChevronLeftIcon, CoffeeIcon, MapPinIcon, SettingsIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
 import { useBreakpoint } from '../breakpoints';
 import { colors, fonts } from '../theme';
+
+// A barista working a pop-up sees this above everything else in the header, every screen, for
+// the whole session — it's the one thing standing between them and ringing up the wrong menu at
+// the wrong prices. A solid-filled banner (not a subtle outlined pill, like the rest of the
+// header's chips) earns that attention, with a one-time slide/fade-in on mount to catch the eye
+// right when a shift starts, then it just sits there, calm and unmissable, for the rest of it.
+function PopupBanner({ popupName }: { popupName: string }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, { toValue: 1, duration: 420, useNativeDriver: true }).start();
+  }, [anim]);
+  return (
+    <Animated.View
+      style={[
+        styles.popupBanner,
+        { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }] },
+      ]}
+      accessibilityRole="text"
+      accessibilityLabel={`Serving pop-up location: ${popupName}`}
+    >
+      <View style={styles.popupBannerBar} />
+      <MapPinIcon size={14} color={colors.popup} strokeWidth={2} />
+      <View style={styles.popupBannerTextCol}>
+        <Text style={styles.popupBannerLabel}>Serving pop-up</Text>
+        <Text style={styles.popupBannerName} numberOfLines={1}>{popupName}</Text>
+      </View>
+    </Animated.View>
+  );
+}
 
 const logo = require('../../assets/images/crema.jpg');
 
@@ -23,6 +52,7 @@ export function MenuHeader({
   userName,
   onAccount,
   variant = 'phone',
+  popupName,
 }: {
   queueCount: number;
   onQueue: () => void;
@@ -31,12 +61,18 @@ export function MenuHeader({
   userName: string;
   onAccount: () => void;
   variant?: 'phone' | 'tablet';
+  /** This barista's login-scoped pop-up assignment (see PopupContext), if any — rendered as a
+   *  solid banner above everything else in the header (see PopupBanner below). Never
+   *  interactive: unlike order type, this is resolved once at login and can't be changed
+   *  mid-session (see useCremaPos's fetchMenuData). */
+  popupName?: string | null;
 }) {
   const tablet = variant === 'tablet';
   const insets = useSafeAreaInsets();
   const { gutter, isCompact } = useBreakpoint();
   return (
     <View style={[styles.wrap, { paddingTop: insets.top + (isCompact ? 8 : 14), paddingHorizontal: gutter }, tablet && styles.wrapTablet]}>
+      {popupName && <PopupBanner popupName={popupName} />}
       <View style={styles.topRow}>
         <Pressable
           style={({ pressed }) => [styles.brandRow, pressed && { opacity: 0.7 }]}
@@ -241,6 +277,49 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
     backgroundColor: colors.success,
+  },
+  // Solid-filled, full-width, and sits above everything else in the header — read-only (this is
+  // resolved once at login, see PopupContext's doc comment in types.ts, and can't be changed
+  // mid-session), but far more visually assertive than any of the outlined chips below it, since
+  // getting this wrong means the wrong menu at the wrong prices.
+  popupBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.popupBg,
+    borderWidth: 1,
+    borderColor: colors.popupBorder,
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 13,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  popupBannerBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: colors.popup,
+  },
+  popupBannerTextCol: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 2,
+  },
+  popupBannerLabel: {
+    fontSize: 9.5,
+    fontFamily: fonts.sansExtraBold,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.popup,
+  },
+  popupBannerName: {
+    fontSize: 13.5,
+    fontFamily: fonts.sansBold,
+    color: colors.textPrimary,
+    marginTop: 1,
   },
   typePillText: {
     fontSize: 12.5,

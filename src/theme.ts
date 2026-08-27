@@ -42,6 +42,15 @@ export const colors = {
   overlay: 'rgba(4,8,14,0.72)',
   overlayStrong: 'rgba(4,8,14,0.8)',
 
+  // Pop-up-mode accent — a barista working a temporary pop-up location instead of the main
+  // store. Deliberately a distinct hue from gold/success/danger so it can't be mistaken for a
+  // normal-operation state; this is the one signal on screen that changes what menu/prices a
+  // barista is looking at, so it earns its own color rather than reusing an existing one.
+  popup: '#9B8AD6',
+  popupBg: 'rgba(155,138,214,0.16)',
+  popupBgStrong: 'rgba(155,138,214,0.22)',
+  popupBorder: 'rgba(155,138,214,0.4)',
+
   // Aliases so components ported from CafePOS (PinPad, VoidModal) can use
   // their original token names without per-line rewrites — same colors,
   // just spelled differently in that codebase.

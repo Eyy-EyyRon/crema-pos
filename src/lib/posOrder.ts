@@ -269,6 +269,9 @@ export type PosOrderData = {
   gift_card_code?: string | null;
   receipt_email?: string | null;
   receipt_phone?: string | null;
+  /** Set from this barista's login-time popup_staff assignment (see useCremaPos's
+   *  fetchMenuDataFromNetwork) — null when they have no active pop-up assignment. */
+  popup_id?: string | null;
 };
 
 export type PosOrderItem = {

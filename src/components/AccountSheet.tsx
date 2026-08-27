@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { CalendarIcon, ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon, WifiOffIcon, LockIcon } from '../icons';
+import { CalendarIcon, ClockIcon, LogOutIcon, ReceiptIcon, UserIcon, XIcon, ImageIcon, WifiOffIcon, LockIcon, MapPinIcon } from '../icons';
 import { tapLight, warning } from '../lib/haptics';
 import { useBreakpoint } from '../breakpoints';
 import { colors, fonts } from '../theme';
@@ -28,6 +28,7 @@ export function AccountSheet({
   onUploadAvatar,
   onOpenOutbox,
   onOpenStockAdjust,
+  popupName,
 }: {
   visible: boolean;
   user: UserProfile;
@@ -42,6 +43,8 @@ export function AccountSheet({
   onUploadAvatar: () => void;
   onOpenOutbox: () => void;
   onOpenStockAdjust: () => void;
+  /** This barista's login-scoped pop-up assignment (see PopupContext), if any. */
+  popupName?: string | null;
 }) {
   useEffect(() => {
     if (!visible) return;
@@ -79,6 +82,16 @@ export function AccountSheet({
         </View>
 
         <ScrollView style={{ maxHeight: bodyMax }} contentContainerStyle={s.body} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+          {popupName && (
+            <View style={s.popupCard}>
+              <MapPinIcon size={15} color={colors.popup} strokeWidth={2} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.popupCardLabel}>Serving pop-up</Text>
+                <Text style={s.popupCardName} numberOfLines={1}>{popupName}</Text>
+              </View>
+            </View>
+          )}
+
           {shift && (
             <View style={s.shiftRow}>
               <ClockIcon size={13} color={colors.textMuted} strokeWidth={2} />
@@ -214,6 +227,19 @@ const s = StyleSheet.create({
   },
   name: { fontSize: 14.5, fontFamily: fonts.sansExtraBold, color: colors.textPrimary },
   role: { fontSize: 11.5, color: colors.textMuted, marginTop: 1 },
+  // Same treatment as MenuHeader's PopupBanner (Header.tsx) — a barista opening this drawer
+  // mid-shift should get the same unmissable "you're not at the main store" reminder, not a
+  // line of text easy to skim past.
+  popupCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 9,
+    backgroundColor: colors.popupBg, borderWidth: 1, borderColor: colors.popupBorder,
+    borderRadius: 10, padding: 10, marginBottom: 12,
+  },
+  popupCardLabel: {
+    fontSize: 9, fontFamily: fonts.sansExtraBold, letterSpacing: 1, textTransform: 'uppercase',
+    color: colors.popup,
+  },
+  popupCardName: { fontSize: 12.5, fontFamily: fonts.sansBold, color: colors.textPrimary, marginTop: 1 },
   closeBtn: {
     width: 28, height: 28, borderRadius: 9, backgroundColor: colors.chipBg,
     alignItems: 'center', justifyContent: 'center',

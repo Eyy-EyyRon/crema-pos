@@ -127,3 +127,14 @@ export interface ShiftScheduleEntry {
   scheduled_end: string;
   notes: string | null;
 }
+
+// Resolved once at login time from this barista's active popup_staff row (see useCremaPos's
+// fetchMenuDataFromNetwork) — scopes the whole session to one pop-up's menu/pricing and stamps
+// every submitted order with popup_id. Null means no active assignment: full main-store menu,
+// unchanged behavior. Deliberately NOT re-resolved mid-session — a manager reassignment only
+// takes effect on the barista's next login.
+export interface PopupContext {
+  id: string;
+  name: string;
+  cogsTrackingEnabled: boolean;
+}

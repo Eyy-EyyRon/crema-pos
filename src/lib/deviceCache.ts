@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Discount, ModGroupDef, UserProfile } from '../types';
 import { RecipeRow } from './posOrder';
 
+type CachedPopupContext = { id: string; name: string; cogsTrackingEnabled: boolean } | null;
+
 // Device-local caches for a staffed register. Versioned blobs so a schema change cannot
 // hydrate garbage; TTLs so PIN hashes and a week-old menu snapshot don't live forever.
 
@@ -9,7 +11,7 @@ const MENU_DATA_CACHE_KEY = 'crema_menu_data_cache';
 const PROFILES_CACHE_KEY = 'crema_profiles_cache';
 const PIN_HASH_KEY_PREFIX = 'crema_pin_hash_';
 
-const MENU_CACHE_VERSION = 2;
+const MENU_CACHE_VERSION = 3;
 const MENU_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60_000;
 const PIN_HASH_TTL_MS = 12 * 60 * 60_000;
 const PROFILES_CACHE_TTL_MS = 24 * 60 * 60_000;
@@ -25,6 +27,7 @@ export type CachedMenuData = {
   ingredientsList: { id: string; name: string; unit: string; current_stock: number }[];
   taxRateById: Record<string, number>;
   storeSettings: Record<string, unknown>;
+  popupContext: CachedPopupContext;
 };
 
 type Envelope<T> = { v: number; cachedAt: number; payload: T };

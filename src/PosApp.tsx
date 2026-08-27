@@ -107,6 +107,7 @@ export function PosApp() {
   const canPay = state.cart.length > 0 && !pos.shortfall && !pos.gcashUnconfirmed && !pos.splitAmountMismatch
     && giftCardReady && !state.gcashProofUploading && !customerNameMissing;
   const userName = currentUser.full_name;
+  const popupName = state.popupContext?.name ?? null;
   const receiptStoreInfo = {
     storeName: state.storeSettings.storeName,
     tagline: state.storeSettings.tagline,
@@ -253,6 +254,7 @@ export function PosApp() {
         upcomingShifts={state.upcomingShifts}
         uploading={state.avatarUploading}
         outboxCount={state.outboxCount}
+        popupName={popupName}
         onClose={() => pos.patch({ showAccount: false })}
         onHistory={() => pos.patch({ showAccount: false, screen: 'history' })}
         onLock={() => { pos.patch({ showAccount: false }); pos.lockPos(); }}
@@ -347,6 +349,7 @@ export function PosApp() {
               onChangeType={() => pos.patch({ screen: 'orderType' })}
               userName={userName}
               onAccount={() => pos.patch({ showAccount: true })}
+              popupName={popupName}
             />
             <OrderDock {...checkoutSharedProps} cartCount={pos.cartCount} />
           </View>
@@ -426,6 +429,7 @@ export function PosApp() {
           cartCount={pos.cartCount}
           cartTotal={pos.totals.total}
           onViewOrder={() => pos.patch({ screen: 'checkout' })}
+          popupName={popupName}
         />
       )}
       {state.screen === 'checkout' && (
