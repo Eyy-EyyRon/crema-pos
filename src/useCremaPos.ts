@@ -53,6 +53,7 @@ import {
   ModGroupDef,
   ModOptionDef,
   OrderType,
+  orderTypeLabel as toOrderTypeLabel,
   PayMethod,
   PopupContext,
   QueueEntry,
@@ -91,6 +92,7 @@ interface StoreSettings {
   checkoutAllowSplitPayment: boolean;
   checkoutAllowDineIn: boolean;
   checkoutAllowTakeout: boolean;
+  checkoutAllowDelivery: boolean;
   checkoutRequireCustomerName: boolean;
   checkoutAllowDiscounts: boolean;
   checkoutAllowLoyaltyRedemption: boolean;
@@ -119,6 +121,7 @@ const DEFAULT_STORE_SETTINGS: StoreSettings = {
   checkoutAllowSplitPayment: true,
   checkoutAllowDineIn: true,
   checkoutAllowTakeout: true,
+  checkoutAllowDelivery: true,
   checkoutRequireCustomerName: false,
   checkoutAllowDiscounts: true,
   checkoutAllowLoyaltyRedemption: true,
@@ -172,6 +175,8 @@ interface PosState {
   /** Set briefly when a NEW order lands in the queue that this terminal's barista didn't place. */
   newOrderAlert: { orderNo: string } | null;
   orderType: OrderType;
+  /** Required only when orderType === 'delivery' — see deliveryAddressMissing gate in PosApp.tsx. */
+  deliveryAddress: string;
   selCat: string;
   search: string;
   selItemId: string | null;
@@ -186,6 +191,13 @@ interface PosState {
   splitEnabled: boolean;
   splitCashAmount: string;
   splitGcashAmount: string;
+  /** Gift card leg of a split payment — a THIRD leg alongside cash/GCash above, not the exclusive
+   *  gift-card payMethod path (giftCardCode/giftCardBalance/etc. below stay that one's own state). */
+  splitGiftCardAmount: string;
+  splitGiftCardCode: string;
+  splitGiftCardBalance: number | null;
+  splitGiftCardChecking: boolean;
+  splitGiftCardError: string | null;
   discountName: string;
   customerName: string;
   /** Phone number typed into the checkout customer-lookup field — not yet confirmed against the customers table. */
@@ -277,6 +289,7 @@ const initialState: PosState = {
   outboxCount: 0,
   newOrderAlert: null,
   orderType: 'dine-in',
+  deliveryAddress: '',
   selCat: 'All',
   search: '',
   selItemId: null,
@@ -289,6 +302,11 @@ const initialState: PosState = {
   splitEnabled: false,
   splitCashAmount: '',
   splitGcashAmount: '',
+  splitGiftCardAmount: '',
+  splitGiftCardCode: '',
+  splitGiftCardBalance: null,
+  splitGiftCardChecking: false,
+  splitGiftCardError: null,
   discountName: 'None',
   customerName: '',
   customerPhone: '',
@@ -773,7 +791,7 @@ export function useCremaPos() {
       supabase.from('modifier_recipes').select('modifier_option_id, ingredient_id, qty'),
       supabase.from('ingredients').select('id, name, unit, current_stock'),
       supabase.from('discounts').select('*').order('percentage', { ascending: false }),
-      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url, store_name, tagline, address, phone, tin, receipt_footer, loyalty_enabled, loyalty_php_per_point, loyalty_point_value_php, app_update_url, app_update_version, checkout_allow_cash, checkout_allow_gcash, checkout_allow_gift_card, checkout_allow_split_payment, checkout_allow_dine_in, checkout_allow_takeout, checkout_require_customer_name, checkout_allow_discounts, checkout_allow_loyalty_redemption').eq('id', 1).maybeSingle(),
+      supabase.from('store_settings').select('tax_rate, is_tax_inclusive, service_charge_pct, rush_mode_enabled, gcash_qr_url, store_name, tagline, address, phone, tin, receipt_footer, loyalty_enabled, loyalty_php_per_point, loyalty_point_value_php, app_update_url, app_update_version, checkout_allow_cash, checkout_allow_gcash, checkout_allow_gift_card, checkout_allow_split_payment, checkout_allow_dine_in, checkout_allow_takeout, checkout_allow_delivery, checkout_require_customer_name, checkout_allow_discounts, checkout_allow_loyalty_redemption').eq('id', 1).maybeSingle(),
       supabase.from('tax_rates').select('id, rate, is_default'),
     ]);
     if (itemsError) throw itemsError;
@@ -926,6 +944,7 @@ export function useCremaPos() {
           checkoutAllowSplitPayment: settings.checkout_allow_split_payment ?? DEFAULT_STORE_SETTINGS.checkoutAllowSplitPayment,
           checkoutAllowDineIn: settings.checkout_allow_dine_in ?? DEFAULT_STORE_SETTINGS.checkoutAllowDineIn,
           checkoutAllowTakeout: settings.checkout_allow_takeout ?? DEFAULT_STORE_SETTINGS.checkoutAllowTakeout,
+          checkoutAllowDelivery: settings.checkout_allow_delivery ?? DEFAULT_STORE_SETTINGS.checkoutAllowDelivery,
           checkoutRequireCustomerName: settings.checkout_require_customer_name ?? DEFAULT_STORE_SETTINGS.checkoutRequireCustomerName,
           checkoutAllowDiscounts: settings.checkout_allow_discounts ?? DEFAULT_STORE_SETTINGS.checkoutAllowDiscounts,
           checkoutAllowLoyaltyRedemption: settings.checkout_allow_loyalty_redemption ?? DEFAULT_STORE_SETTINGS.checkoutAllowLoyaltyRedemption,
@@ -969,8 +988,12 @@ export function useCremaPos() {
       }
 
       let orderType = s.orderType;
-      if (orderType === 'dine-in' && !rs.checkoutAllowDineIn) orderType = 'takeout';
-      else if (orderType === 'takeout' && !rs.checkoutAllowTakeout) orderType = 'dine-in';
+      const orderTypeAllowed = orderType === 'dine-in' ? rs.checkoutAllowDineIn
+        : orderType === 'takeout' ? rs.checkoutAllowTakeout
+        : rs.checkoutAllowDelivery;
+      if (!orderTypeAllowed) {
+        orderType = rs.checkoutAllowDineIn ? 'dine-in' : rs.checkoutAllowTakeout ? 'takeout' : rs.checkoutAllowDelivery ? 'delivery' : 'dine-in';
+      }
 
       return {
         ...s,
@@ -1048,7 +1071,7 @@ export function useCremaPos() {
     rows.map((o) => ({
       id: o.id,
       no: formatOrderNo(o.receipt_number ?? o.id.slice(0, 8).toUpperCase()),
-      type: o.order_type === 'takeout' ? 'Takeout' : 'Dine-In',
+      type: toOrderTypeLabel(o.order_type),
       mins: elapsedMinutes(o.created_at),
       items: (o.order_items ?? []).map((oi: any) => ({
         id: oi.id,
@@ -1067,7 +1090,7 @@ export function useCremaPos() {
     entries.map((e) => ({
       id: e.id,
       no: formatOrderNo(e.orderData.receipt_number),
-      type: e.orderData.order_type === 'takeout' ? 'Takeout' : 'Dine-In',
+      type: toOrderTypeLabel(e.orderData.order_type),
       mins: elapsedMinutes(e.timestamp),
       items: e.displayItems.map((d) => ({ name: d.name, qty: d.qty, mods: d.mods })),
       total: e.orderData.total,
@@ -1467,7 +1490,8 @@ export function useCremaPos() {
       ...s,
       appendTargetOrderId: ticket.id,
       appendTargetOrderNo: ticket.no,
-      orderType: ticket.type === 'Takeout' ? 'takeout' : 'dine-in',
+      orderType: ticket.type === 'Takeout' ? 'takeout' : ticket.type === 'Delivery' ? 'delivery' : 'dine-in',
+      deliveryAddress: '',
       cart: [],
       selMods: {},
       qty: 1,
@@ -1478,6 +1502,11 @@ export function useCremaPos() {
       splitEnabled: false,
       splitCashAmount: '',
       splitGcashAmount: '',
+      splitGiftCardAmount: '',
+      splitGiftCardCode: '',
+      splitGiftCardBalance: null,
+      splitGiftCardChecking: false,
+      splitGiftCardError: null,
       gcashReference: '',
       gcashConfirmed: false,
       gcashProofUri: null,
@@ -1840,6 +1869,21 @@ export function useCremaPos() {
     }
   }, [state.giftCardCode, patch]);
 
+  // Same balance check as above, for the gift-card LEG of a split payment (Cash + GCash + Gift
+  // Card) — a separate code/balance/checking/error slice of state (splitGiftCard*) since a split
+  // order's gift card is independent of the exclusive gift-card payMethod path.
+  const checkSplitGiftCardBalanceAction = useCallback(async () => {
+    const code = state.splitGiftCardCode.trim();
+    if (!code) return;
+    patch({ splitGiftCardChecking: true, splitGiftCardError: null });
+    const result = await checkGiftCardBalance(code);
+    if (!result || !result.isActive) {
+      patch({ splitGiftCardChecking: false, splitGiftCardBalance: null, splitGiftCardError: 'Gift card not found or inactive.' });
+    } else {
+      patch({ splitGiftCardChecking: false, splitGiftCardBalance: result.balance, splitGiftCardError: null });
+    }
+  }, [state.splitGiftCardCode, patch]);
+
   // Unlike a loyalty card, a gift card's QR encodes the bare code with no prefix (see the
   // Share modal in cafe-web-dashboard's gift-cards page) — there's no format to validate beyond
   // "did the camera decode something at all".
@@ -1899,12 +1943,22 @@ export function useCremaPos() {
       return;
     }
 
+    // Defense-in-depth behind the canPay gate in PosApp.tsx (deliveryAddressMissing) — same
+    // append carve-out as the customer-name check above.
+    if (!isAppend && state.orderType === 'delivery' && !state.deliveryAddress.trim()) {
+      patch({ checkoutBusy: false, checkoutError: 'Delivery address is required to check out.' });
+      return;
+    }
+
     // Split payment isn't offered on an append/top-up — keeping that flow to a single method
     // avoids compounding two deliberately-scoped-down features (append + split) at once.
     const isSplit = state.splitEnabled && !isAppend;
     const splitCashAmt = isSplit ? Number(state.splitCashAmount) || 0 : 0;
     const splitGcashAmt = isSplit ? Number(state.splitGcashAmount) || 0 : 0;
-    if (isSplit && Math.abs(splitCashAmt + splitGcashAmt - totals.total) > 0.01) {
+    // Gift card is a THIRD leg of split payment alongside cash/GCash — see splitGiftCardAmount's
+    // doc comment in PosState above.
+    const splitGiftCardAmt = isSplit ? Number(state.splitGiftCardAmount) || 0 : 0;
+    if (isSplit && Math.abs(splitCashAmt + splitGcashAmt + splitGiftCardAmt - totals.total) > 0.01) {
       patch({ checkoutBusy: false, checkoutError: `Split amounts must add up to ${peso(totals.total)}.` });
       return;
     }
@@ -1921,10 +1975,12 @@ export function useCremaPos() {
     }
 
     // Gift cards are exclusive-payment-method-only for v1 (see redeem_gift_card() migration
-    // comment) — not offered on a split or an append/top-up. The debit is an online-only RPC
-    // (no offline outbox path for it), so it's required up front, same as append above.
+    // comment) — not offered on an append/top-up, but now also reachable as a split leg
+    // (splitGiftCardAmt above). Either path debits via the same redeem_gift_card() RPC, which
+    // has no offline-outbox fallback, so both are required up front, same as append above.
     const isGiftCard = !isAppend && !isSplit && state.payMethod === 'gift_card';
-    if (isGiftCard && !online) {
+    const giftCardRpcInvolved = isGiftCard || (isSplit && splitGiftCardAmt > 0);
+    if (giftCardRpcInvolved && !online) {
       patch({ checkoutBusy: false, checkoutError: 'Paying with a gift card requires an internet connection. Please reconnect and try again.' });
       return;
     }
@@ -1949,6 +2005,8 @@ export function useCremaPos() {
       ? 0
       : Math.floor(chargeAmount / phpPerPoint);
     const giftCardCode = isGiftCard ? state.giftCardCode.trim() : null;
+    // Split leg's own code — independent of giftCardCode above (the exclusive-payMethod path).
+    const splitGiftCardCodeFinal = isSplit && splitGiftCardAmt > 0 ? state.splitGiftCardCode.trim() : null;
     const receiptEmail = state.receiptEmail.trim() || null;
 
     const orderData: PosOrderData = {
@@ -1959,6 +2017,7 @@ export function useCremaPos() {
       barista_id: state.currentUser.id,
       status: 'pending',
       order_type: state.orderType,
+      delivery_address: !isAppend && state.orderType === 'delivery' ? state.deliveryAddress.trim() : null,
       customer_name: state.customerName.trim() || state.selectedCustomer?.fullName || null,
       discount_name: state.discountName !== 'None' ? state.discountName : null,
       discount_id: state.discountsList.find((d) => d.n === state.discountName)?.id ?? null,
@@ -1973,7 +2032,9 @@ export function useCremaPos() {
       customer_id: customerId,
       loyalty_points_earned: pointsEarned,
       loyalty_points_redeemed: pointsRedeemed,
-      gift_card_code: giftCardCode,
+      // Falls back to the split leg's code when there's no exclusive gift-card payment, so a
+      // split order's redemption still shows up on the order row (matching cafe-web-dashboard).
+      gift_card_code: giftCardCode ?? splitGiftCardCodeFinal,
       receipt_email: receiptEmail,
       popup_id: state.popupContext?.id ?? null,
     };
@@ -1981,6 +2042,7 @@ export function useCremaPos() {
       ? [
           ...(splitCashAmt > 0 ? [{ method: 'cash' as PayMethod, amount: splitCashAmt }] : []),
           ...(splitGcashAmt > 0 ? [{ method: 'gcash' as PayMethod, amount: splitGcashAmt }] : []),
+          ...(splitGiftCardAmt > 0 ? [{ method: 'gift_card' as PayMethod, amount: splitGiftCardAmt }] : []),
         ]
       : undefined;
     const orderItems: PosOrderItem[] = state.cart.map((c) => ({
@@ -2011,6 +2073,17 @@ export function useCremaPos() {
         return;
       }
     }
+    // Split gift-card leg — debited alongside (never instead of) the exclusive debit above; the
+    // two are mutually exclusive in practice (isGiftCard implies !isSplit) but each is its own
+    // guarded RPC call, same non-double-debit tradeoff documented above.
+    if (splitGiftCardCodeFinal) {
+      try {
+        await redeemGiftCard(splitGiftCardCodeFinal, splitGiftCardAmt);
+      } catch (e: any) {
+        patch({ checkoutBusy: false, checkoutError: e?.message || 'Gift card redemption failed.' });
+        return;
+      }
+    }
 
     try {
       if (isAppend) {
@@ -2035,7 +2108,9 @@ export function useCremaPos() {
     const success: SuccessInfo = {
       no: isAppend ? state.appendTargetOrderNo! : receiptNumber,
       total: chargeAmount,
-      method: isSplit ? `Split (Cash ${peso0(splitCashAmt)} + GCash ${peso0(splitGcashAmt)})` : isGiftCard ? 'Gift Card' : isCash ? 'Cash' : 'GCash',
+      method: isSplit
+        ? `Split (Cash ${peso0(splitCashAmt)} + GCash ${peso0(splitGcashAmt)}${splitGiftCardAmt > 0 ? ` + Gift Card ${peso0(splitGiftCardAmt)}` : ''})`
+        : isGiftCard ? 'Gift Card' : isCash ? 'Cash' : 'GCash',
       items,
       showChange: isCash && change >= 0,
       change,
@@ -2055,7 +2130,7 @@ export function useCremaPos() {
       applyLoyaltyPoints(customerId, pointsEarned, pointsRedeemed).catch((e) => console.error('Failed to apply loyalty points:', e));
     }
     if (receiptEmail) {
-      const orderTypeLabel = state.orderType === 'dine-in' ? 'Dine-In' : 'Takeout';
+      const orderTypeLabel = toOrderTypeLabel(state.orderType);
       const store = state.storeSettings;
       sendReceiptEmail(receiptEmail, success, orderTypeLabel, {
         storeName: store.storeName,
@@ -2069,7 +2144,7 @@ export function useCremaPos() {
 
     patch({ success, screen: 'success', checkoutBusy: false, checkoutError: null, todayOrderCount: isAppend ? state.todayOrderCount : nextTodayCount });
     fetchQueue();
-  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.splitEnabled, state.splitCashAmount, state.splitGcashAmount, state.gcashReference, state.gcashConfirmed, state.gcashProofUrl, state.orderType, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, state.selectedCustomer, state.giftCardCode, state.receiptEmail, state.discountName, state.discountsList, state.todayOrderCount, state.popupContext, redeemPointsNum, maxRedeemablePoints, phpPerPoint, amountDue, totals, patch, fetchQueue]);
+  }, [state.currentUser, state.cart, state.tendered, state.payMethod, state.splitEnabled, state.splitCashAmount, state.splitGcashAmount, state.splitGiftCardAmount, state.splitGiftCardCode, state.gcashReference, state.gcashConfirmed, state.gcashProofUrl, state.orderType, state.deliveryAddress, state.storeSettings, state.customerName, state.checkoutBusy, state.appendTargetOrderId, state.appendTargetOrderNo, state.selectedCustomer, state.giftCardCode, state.receiptEmail, state.discountName, state.discountsList, state.todayOrderCount, state.popupContext, redeemPointsNum, maxRedeemablePoints, phpPerPoint, amountDue, totals, patch, fetchQueue]);
 
   const done = useCallback(() => {
     clearPendingUndo();
@@ -2084,8 +2159,14 @@ export function useCremaPos() {
       splitEnabled: false,
       splitCashAmount: '',
       splitGcashAmount: '',
+      splitGiftCardAmount: '',
+      splitGiftCardCode: '',
+      splitGiftCardBalance: null,
+      splitGiftCardChecking: false,
+      splitGiftCardError: null,
       discountName: 'None',
       customerName: '',
+      deliveryAddress: '',
       payMethod: 'cash',
       success: null,
       selCat: 'All',
@@ -2216,12 +2297,21 @@ export function useCremaPos() {
   // split payment — see PosApp.tsx), so amountDue === totals.total whenever splitEnabled.
   const change = tenderNum !== null ? tenderNum - amountDue : null;
   const shortfall = !state.splitEnabled && state.payMethod === 'cash' && tenderNum !== null && tenderNum < amountDue;
+  const splitGiftCardAmt = state.splitEnabled ? (Number(state.splitGiftCardAmount) || 0) : 0;
   const splitAmountMismatch = state.splitEnabled
-    && Math.abs((Number(state.splitCashAmount) || 0) + (Number(state.splitGcashAmount) || 0) - totals.total) > 0.01;
+    && Math.abs((Number(state.splitCashAmount) || 0) + (Number(state.splitGcashAmount) || 0) + splitGiftCardAmt - totals.total) > 0.01;
   const gcashUnconfirmed = (state.splitEnabled ? (Number(state.splitGcashAmount) || 0) > 0 : state.payMethod === 'gcash')
     && !state.gcashConfirmed;
   const giftCardInsufficient = !state.splitEnabled && state.payMethod === 'gift_card'
     && (state.giftCardBalance === null || state.giftCardBalance < amountDue);
+  // Split leg's own sufficiency check — independent of giftCardInsufficient above (the exclusive
+  // payMethod path). False (i.e. "fine") whenever the leg amount is 0, so it never blocks
+  // checkout for an order that isn't using a gift card leg at all.
+  const splitGiftCardInsufficient = splitGiftCardAmt > 0
+    && (!state.splitGiftCardCode.trim() || state.splitGiftCardBalance === null || state.splitGiftCardBalance < splitGiftCardAmt);
+  // An append/top-up has no Order Type section of its own (see AppendOrderBanner), so this only
+  // ever applies to a fresh order — same carve-out customerNameMissing uses in PosApp.tsx.
+  const deliveryAddressMissing = !state.appendTargetOrderId && state.orderType === 'delivery' && !state.deliveryAddress.trim();
   const cartCount = state.cart.reduce((s, c) => s + c.qty, 0);
 
   const { appUpdateUrl, appUpdateVersion } = state.storeSettings;
@@ -2271,6 +2361,8 @@ export function useCremaPos() {
     clearSelectedCustomer,
     checkGiftCardBalanceAction,
     giftCardInsufficient,
+    checkSplitGiftCardBalanceAction,
+    splitGiftCardInsufficient,
     cartQtyByMenuId,
     stockByMenuId,
     filteredItems,
@@ -2285,6 +2377,7 @@ export function useCremaPos() {
     shortfall,
     gcashUnconfirmed,
     splitAmountMismatch,
+    deliveryAddressMissing,
     cartCount,
     categories: state.categories,
     discounts: state.discountsList,

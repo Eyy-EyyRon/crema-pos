@@ -28,6 +28,7 @@ import { QueueScreen } from './screens/QueueScreen';
 import { SuccessScreen } from './screens/SuccessScreen';
 import { useBreakpoint } from './breakpoints';
 import { colors } from './theme';
+import { orderTypeLabel as toOrderTypeLabel } from './types';
 import { useCremaPos } from './useCremaPos';
 
 function Splash() {
@@ -83,7 +84,7 @@ export function PosApp() {
   const undoRemovedItem = pos.pendingUndo ? { name: pos.pendingUndo.item.name, qty: pos.pendingUndo.item.qty } : null;
 
   const currentUser = state.currentUser;
-  const orderTypeLabel = state.orderType === 'dine-in' ? 'Dine-In' : 'Takeout';
+  const orderTypeLabel = toOrderTypeLabel(state.orderType);
   const giftCardReady = state.splitEnabled || state.payMethod !== 'gift_card'
     || (!!state.giftCardCode.trim() && !pos.giftCardInsufficient);
 
@@ -99,13 +100,15 @@ export function PosApp() {
   // Ensure at least one order type is always available (fallback to both if store settings are not loaded properly)
   const allowDineIn = storeSettings.checkoutAllowDineIn ?? true;
   const allowTakeout = storeSettings.checkoutAllowTakeout ?? true;
+  const allowDelivery = storeSettings.checkoutAllowDelivery ?? true;
   const allowDiscounts = storeSettings.checkoutAllowDiscounts;
   const allowLoyaltyRedemption = storeSettings.checkoutAllowLoyaltyRedemption;
   const customerNameMissing = !state.appendTargetOrderId && storeSettings.checkoutRequireCustomerName
     && !state.customerName.trim() && !state.selectedCustomer?.fullName;
 
   const canPay = state.cart.length > 0 && !pos.shortfall && !pos.gcashUnconfirmed && !pos.splitAmountMismatch
-    && giftCardReady && !state.gcashProofUploading && !customerNameMissing;
+    && giftCardReady && !pos.splitGiftCardInsufficient && !state.gcashProofUploading && !customerNameMissing
+    && !pos.deliveryAddressMissing;
   const userName = currentUser.full_name;
   const popupName = state.popupContext?.name ?? null;
   const receiptStoreInfo = {
@@ -148,9 +151,12 @@ export function PosApp() {
     orderType: state.orderType,
     onSelectDineIn: allowDineIn ? () => pos.selectType('dine-in') : undefined,
     onSelectTakeout: allowTakeout ? () => pos.selectType('takeout') : undefined,
+    onSelectDelivery: allowDelivery ? () => pos.selectType('delivery') : undefined,
     customerName: state.customerName,
     onChangeCustomerName: (v: string) => pos.patch({ customerName: v }),
     customerNameRequired: storeSettings.checkoutRequireCustomerName,
+    deliveryAddress: state.deliveryAddress,
+    onChangeDeliveryAddress: (v: string) => pos.patch({ deliveryAddress: v }),
     discounts: pos.eligibleDiscounts,
     discountName: state.discountName,
     discountPct: pos.discountPct,
@@ -168,6 +174,7 @@ export function PosApp() {
     giftCardChecking: state.giftCardChecking,
     giftCardBalance: state.giftCardBalance,
     giftCardError: state.giftCardError,
+    allowGiftCard,
     customerPhone: state.customerPhone,
     onChangeCustomerPhone: (v: string) => pos.patch({ customerPhone: v, customerLookupStatus: 'idle' }),
     onLookupCustomer: pos.lookupCustomer,
@@ -220,6 +227,7 @@ export function PosApp() {
     onToggleSplit: allowSplitPayment ? () => pos.patch({
       splitEnabled: !state.splitEnabled,
       splitCashAmount: '', splitGcashAmount: '',
+      splitGiftCardAmount: '', splitGiftCardCode: '', splitGiftCardBalance: null, splitGiftCardChecking: false, splitGiftCardError: null,
       gcashReference: '', gcashConfirmed: false,
       gcashProofUri: null, gcashProofUrl: null, gcashProofUploading: false,
       redeemPoints: '',
@@ -228,6 +236,14 @@ export function PosApp() {
     onChangeSplitCashAmount: (v: string) => pos.patch({ splitCashAmount: v }),
     splitGcashAmount: state.splitGcashAmount,
     onChangeSplitGcashAmount: (v: string) => pos.patch({ splitGcashAmount: v }),
+    splitGiftCardAmount: state.splitGiftCardAmount,
+    onChangeSplitGiftCardAmount: (v: string) => pos.patch({ splitGiftCardAmount: v }),
+    splitGiftCardCode: state.splitGiftCardCode,
+    onChangeSplitGiftCardCode: (v: string) => pos.patch({ splitGiftCardCode: v, splitGiftCardBalance: null, splitGiftCardError: null }),
+    onCheckSplitGiftCardBalance: pos.checkSplitGiftCardBalanceAction,
+    splitGiftCardChecking: state.splitGiftCardChecking,
+    splitGiftCardBalance: state.splitGiftCardBalance,
+    splitGiftCardError: state.splitGiftCardError,
     splitAmountMismatch: pos.splitAmountMismatch,
     subtotal: pos.totals.sub,
     discount: pos.totals.disc,
@@ -330,6 +346,7 @@ export function PosApp() {
             orderNumber={state.todayOrderCount + 1}
             onSelectDineIn={allowDineIn ? () => pos.selectType('dine-in') : undefined}
             onSelectTakeout={allowTakeout ? () => pos.selectType('takeout') : undefined}
+            onSelectDelivery={allowDelivery ? () => pos.selectType('delivery') : undefined}
           />
         ) : (
           <View style={styles.tabletMain}>
@@ -407,6 +424,7 @@ export function PosApp() {
           orderNumber={state.todayOrderCount + 1}
           onSelectDineIn={allowDineIn ? () => pos.selectType('dine-in') : undefined}
           onSelectTakeout={allowTakeout ? () => pos.selectType('takeout') : undefined}
+          onSelectDelivery={allowDelivery ? () => pos.selectType('delivery') : undefined}
         />
       )}
       {state.screen === 'menu' && (

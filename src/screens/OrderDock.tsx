@@ -8,6 +8,7 @@ import {
   CashTenderBlock,
   CheckoutErrorBanner,
   CustomerNameField,
+  DeliveryAddressField,
   DiscountRow,
   GcashConfirmBlock,
   GiftCardPaymentBlock,
@@ -34,9 +35,12 @@ interface OrderDockProps {
   orderType: OrderType;
   onSelectDineIn?: () => void;
   onSelectTakeout?: () => void;
+  onSelectDelivery?: () => void;
   customerName: string;
   onChangeCustomerName: (v: string) => void;
   customerNameRequired: boolean;
+  deliveryAddress: string;
+  onChangeDeliveryAddress: (v: string) => void;
   discounts: Discount[];
   discountName: string;
   discountPct: number;
@@ -62,12 +66,21 @@ interface OrderDockProps {
   giftCardBalance: number | null;
   giftCardError: string | null;
   onOpenGiftCardScanner: () => void;
+  allowGiftCard: boolean;
   splitEnabled: boolean;
   onToggleSplit?: () => void;
   splitCashAmount: string;
   onChangeSplitCashAmount: (v: string) => void;
   splitGcashAmount: string;
   onChangeSplitGcashAmount: (v: string) => void;
+  splitGiftCardAmount: string;
+  onChangeSplitGiftCardAmount: (v: string) => void;
+  splitGiftCardCode: string;
+  onChangeSplitGiftCardCode: (v: string) => void;
+  onCheckSplitGiftCardBalance: () => void;
+  splitGiftCardChecking: boolean;
+  splitGiftCardBalance: number | null;
+  splitGiftCardError: string | null;
   splitAmountMismatch: boolean;
   tendered: string;
   onChangeTendered: (v: string) => void;
@@ -106,9 +119,12 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
     orderType,
     onSelectDineIn,
     onSelectTakeout,
+    onSelectDelivery,
     customerName,
     onChangeCustomerName,
     customerNameRequired,
+    deliveryAddress,
+    onChangeDeliveryAddress,
     discounts,
     discountName,
     discountPct,
@@ -134,12 +150,21 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
     giftCardBalance,
     giftCardError,
     onOpenGiftCardScanner,
+    allowGiftCard,
     splitEnabled,
     onToggleSplit,
     splitCashAmount,
     onChangeSplitCashAmount,
     splitGcashAmount,
     onChangeSplitGcashAmount,
+    splitGiftCardAmount,
+    onChangeSplitGiftCardAmount,
+    splitGiftCardCode,
+    onChangeSplitGiftCardCode,
+    onCheckSplitGiftCardBalance,
+    splitGiftCardChecking,
+    splitGiftCardBalance,
+    splitGiftCardError,
     splitAmountMismatch,
     tendered,
     onChangeTendered,
@@ -213,7 +238,14 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
             ) : (
               <>
                 <SectionLabel style={styles.sectionSpacing}>Order Type</SectionLabel>
-                <OrderTypeRow orderType={orderType} onSelectDineIn={onSelectDineIn} onSelectTakeout={onSelectTakeout} gap={9} />
+                <OrderTypeRow orderType={orderType} onSelectDineIn={onSelectDineIn} onSelectTakeout={onSelectTakeout} onSelectDelivery={onSelectDelivery} gap={9} />
+
+                {orderType === 'delivery' && (
+                  <>
+                    <SectionLabel style={styles.sectionSpacing}>Delivery Address</SectionLabel>
+                    <DeliveryAddressField value={deliveryAddress} onChangeText={onChangeDeliveryAddress} />
+                  </>
+                )}
 
                 <SectionLabel style={styles.sectionSpacing}>Name for Order</SectionLabel>
                 <CustomerNameField value={customerName} onChangeText={onChangeCustomerName} required={customerNameRequired} />
@@ -250,6 +282,15 @@ export const OrderDock = React.forwardRef<ScrollView, OrderDockProps>(function O
                   gcashAmount={splitGcashAmount}
                   onChangeGcashAmount={onChangeSplitGcashAmount}
                   mismatch={splitAmountMismatch}
+                  allowGiftCard={allowGiftCard}
+                  giftCardAmount={splitGiftCardAmount}
+                  onChangeGiftCardAmount={onChangeSplitGiftCardAmount}
+                  giftCardCode={splitGiftCardCode}
+                  onChangeGiftCardCode={onChangeSplitGiftCardCode}
+                  onCheckGiftCardBalance={onCheckSplitGiftCardBalance}
+                  giftCardChecking={splitGiftCardChecking}
+                  giftCardBalance={splitGiftCardBalance}
+                  giftCardError={splitGiftCardError}
                 />
                 {Number(splitGcashAmount) > 0 && (
                   <>

@@ -8,6 +8,7 @@ import {
   CheckoutErrorBanner,
   CustomerLoyaltyBlock,
   CustomerNameField,
+  DeliveryAddressField,
   DiscountRow,
   GcashConfirmBlock,
   GiftCardPaymentBlock,
@@ -36,9 +37,12 @@ interface CheckoutScreenProps {
   orderType: OrderType;
   onSelectDineIn?: () => void;
   onSelectTakeout?: () => void;
+  onSelectDelivery?: () => void;
   customerName: string;
   onChangeCustomerName: (v: string) => void;
   customerNameRequired: boolean;
+  deliveryAddress: string;
+  onChangeDeliveryAddress: (v: string) => void;
   discounts: Discount[];
   discountName: string;
   discountPct: number;
@@ -57,6 +61,7 @@ interface CheckoutScreenProps {
   giftCardBalance: number | null;
   giftCardError: string | null;
   onOpenGiftCardScanner: () => void;
+  allowGiftCard: boolean;
   customerPhone: string;
   onChangeCustomerPhone: (v: string) => void;
   onLookupCustomer: () => void;
@@ -99,6 +104,14 @@ interface CheckoutScreenProps {
   onChangeSplitCashAmount: (v: string) => void;
   splitGcashAmount: string;
   onChangeSplitGcashAmount: (v: string) => void;
+  splitGiftCardAmount: string;
+  onChangeSplitGiftCardAmount: (v: string) => void;
+  splitGiftCardCode: string;
+  onChangeSplitGiftCardCode: (v: string) => void;
+  onCheckSplitGiftCardBalance: () => void;
+  splitGiftCardChecking: boolean;
+  splitGiftCardBalance: number | null;
+  splitGiftCardError: string | null;
   splitAmountMismatch: boolean;
   tendered: string;
   onChangeTendered: (v: string) => void;
@@ -137,9 +150,12 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     orderType,
     onSelectDineIn,
     onSelectTakeout,
+    onSelectDelivery,
     customerName,
     onChangeCustomerName,
     customerNameRequired,
+    deliveryAddress,
+    onChangeDeliveryAddress,
     discounts,
     discountName,
     discountPct,
@@ -158,6 +174,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     giftCardBalance,
     giftCardError,
     onOpenGiftCardScanner,
+    allowGiftCard,
     customerPhone,
     onChangeCustomerPhone,
     onLookupCustomer,
@@ -200,6 +217,14 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     onChangeSplitCashAmount,
     splitGcashAmount,
     onChangeSplitGcashAmount,
+    splitGiftCardAmount,
+    onChangeSplitGiftCardAmount,
+    splitGiftCardCode,
+    onChangeSplitGiftCardCode,
+    onCheckSplitGiftCardBalance,
+    splitGiftCardChecking,
+    splitGiftCardBalance,
+    splitGiftCardError,
     splitAmountMismatch,
     tendered,
     onChangeTendered,
@@ -258,7 +283,14 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         ) : (
           <>
             <SectionLabel style={styles.sectionSpacing}>Order Type</SectionLabel>
-            <OrderTypeRow orderType={orderType} onSelectDineIn={onSelectDineIn} onSelectTakeout={onSelectTakeout} />
+            <OrderTypeRow orderType={orderType} onSelectDineIn={onSelectDineIn} onSelectTakeout={onSelectTakeout} onSelectDelivery={onSelectDelivery} />
+
+            {orderType === 'delivery' && (
+              <>
+                <SectionLabel style={styles.sectionSpacing}>Delivery Address</SectionLabel>
+                <DeliveryAddressField value={deliveryAddress} onChangeText={onChangeDeliveryAddress} />
+              </>
+            )}
 
             <SectionLabel style={styles.sectionSpacing}>Name for Order</SectionLabel>
             <CustomerNameField value={customerName} onChangeText={onChangeCustomerName} required={customerNameRequired} />
@@ -321,6 +353,15 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
               gcashAmount={splitGcashAmount}
               onChangeGcashAmount={onChangeSplitGcashAmount}
               mismatch={splitAmountMismatch}
+              allowGiftCard={allowGiftCard}
+              giftCardAmount={splitGiftCardAmount}
+              onChangeGiftCardAmount={onChangeSplitGiftCardAmount}
+              giftCardCode={splitGiftCardCode}
+              onChangeGiftCardCode={onChangeSplitGiftCardCode}
+              onCheckGiftCardBalance={onCheckSplitGiftCardBalance}
+              giftCardChecking={splitGiftCardChecking}
+              giftCardBalance={splitGiftCardBalance}
+              giftCardError={splitGiftCardError}
             />
             {Number(splitGcashAmount) > 0 && (
               <>

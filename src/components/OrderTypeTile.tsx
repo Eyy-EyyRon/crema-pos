@@ -1,21 +1,36 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { BagIcon, ChevronRightIcon, CoffeeIcon } from '../icons';
+import { BagIcon, ChevronRightIcon, CoffeeIcon, MapPinIcon } from '../icons';
 import { tapMedium } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 
 interface OrderTypeTileProps {
-  kind: 'dine-in' | 'takeout';
+  kind: 'dine-in' | 'takeout' | 'delivery';
   variant?: 'phone' | 'tablet';
   onPress: () => void;
 }
 
+const TITLES: Record<OrderTypeTileProps['kind'], string> = {
+  'dine-in': 'Dine-In',
+  takeout: 'Takeout',
+  delivery: 'Delivery',
+};
+const SUBTITLES: Record<OrderTypeTileProps['kind'], string> = {
+  'dine-in': 'Serve at the table',
+  takeout: 'Grab and go',
+  delivery: 'Rider picks up and delivers',
+};
+const ICONS: Record<OrderTypeTileProps['kind'], typeof CoffeeIcon> = {
+  'dine-in': CoffeeIcon,
+  takeout: BagIcon,
+  delivery: MapPinIcon,
+};
+
 export function OrderTypeTile({ kind, variant = 'phone', onPress }: OrderTypeTileProps) {
   const tablet = variant === 'tablet';
-  const isDineIn = kind === 'dine-in';
-  const title = isDineIn ? 'Dine-In' : 'Takeout';
-  const subtitle = isDineIn ? 'Serve at the table' : 'Grab and go';
-  const Icon = isDineIn ? CoffeeIcon : BagIcon;
+  const title = TITLES[kind];
+  const subtitle = SUBTITLES[kind];
+  const Icon = ICONS[kind];
 
   return (
     <Pressable

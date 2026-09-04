@@ -10,11 +10,13 @@ export function OrderTypeScreen({
   orderNumber,
   onSelectDineIn,
   onSelectTakeout,
+  onSelectDelivery,
 }: {
   variant?: 'phone' | 'tablet';
   orderNumber: number;
   onSelectDineIn?: () => void;
   onSelectTakeout?: () => void;
+  onSelectDelivery?: () => void;
 }) {
   const orderLabel = `New Order · #${String(orderNumber).padStart(4, '0')}`;
   const { gutter, isCompact, isTablet, width } = useBreakpoint();
@@ -60,6 +62,11 @@ export function OrderTypeScreen({
           {onSelectTakeout && (
             <View style={styles.tileSlot}>
               <OrderTypeTile kind="takeout" variant={tileVariant} onPress={onSelectTakeout} />
+            </View>
+          )}
+          {onSelectDelivery && (
+            <View style={styles.tileSlot}>
+              <OrderTypeTile kind="delivery" variant={tileVariant} onPress={onSelectDelivery} />
             </View>
           )}
         </View>

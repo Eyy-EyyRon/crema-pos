@@ -1,14 +1,20 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
-import { BagIcon, CoffeeIcon } from '../icons';
+import { BagIcon, CoffeeIcon, MapPinIcon } from '../icons';
 import { tapLight } from '../lib/haptics';
 import { colors, fonts } from '../theme';
 
 interface TypeButtonProps {
-  kind: 'dine-in' | 'takeout';
+  kind: 'dine-in' | 'takeout' | 'delivery';
   active: boolean;
   onPress: () => void;
 }
+
+const LABELS: Record<TypeButtonProps['kind'], string> = {
+  'dine-in': 'Dine-In',
+  takeout: 'Takeout',
+  delivery: 'Delivery',
+};
 
 export function TypeButton({ kind, active, onPress }: TypeButtonProps) {
   const iconColor = active ? colors.goldLight : colors.textMuted;
@@ -25,11 +31,13 @@ export function TypeButton({ kind, active, onPress }: TypeButtonProps) {
       ]}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      accessibilityLabel={`${kind === 'dine-in' ? 'Dine-In' : 'Takeout'} order type`}
+      accessibilityLabel={`${LABELS[kind]} order type`}
     >
-      {kind === 'dine-in' ? <CoffeeIcon size={17} color={iconColor} /> : <BagIcon size={17} color={iconColor} />}
+      {kind === 'dine-in' && <CoffeeIcon size={17} color={iconColor} />}
+      {kind === 'takeout' && <BagIcon size={17} color={iconColor} />}
+      {kind === 'delivery' && <MapPinIcon size={17} color={iconColor} />}
       <Text style={[styles.label, { color: active ? colors.goldBrightText : colors.textMuted }]} numberOfLines={1}>
-        {kind === 'dine-in' ? 'Dine-In' : 'Takeout'}
+        {LABELS[kind]}
       </Text>
     </Pressable>
   );

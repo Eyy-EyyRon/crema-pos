@@ -30,7 +30,7 @@ export type ModifierGroup = {
 export type Modifier = { id?: string; name: string; price: number };
 
 export type PayMethod = 'cash' | 'gcash' | 'maya' | 'card' | 'split' | 'gift_card';
-export type OrderType = 'dine-in' | 'takeout';
+export type OrderType = 'dine-in' | 'takeout' | 'delivery';
 
 // ─────────────────────────────────────────────
 // STOCK HELPERS (ported from cafe-web-dashboard/lib/posOrder.ts, itself
@@ -252,6 +252,7 @@ export type PosOrderData = {
   barista_id: string;
   status: 'pending';
   order_type: OrderType;
+  delivery_address?: string | null;
   customer_name?: string | null;
   discount_name?: string | null;
   discount_id?: string | null;

@@ -83,17 +83,46 @@ export function OrderTypeRow({
   orderType,
   onSelectDineIn,
   onSelectTakeout,
+  onSelectDelivery,
   gap = 10,
 }: {
   orderType: OrderType;
   onSelectDineIn?: () => void;
   onSelectTakeout?: () => void;
+  onSelectDelivery?: () => void;
   gap?: number;
 }) {
   return (
     <View style={[styles.choiceRow, { gap }]}>
       {onSelectDineIn && <TypeButton kind="dine-in" active={orderType === 'dine-in'} onPress={onSelectDineIn} />}
       {onSelectTakeout && <TypeButton kind="takeout" active={orderType === 'takeout'} onPress={onSelectTakeout} />}
+      {onSelectDelivery && <TypeButton kind="delivery" active={orderType === 'delivery'} onPress={onSelectDelivery} />}
+    </View>
+  );
+}
+
+// Shown only when the current order type is delivery — required, since a rider needs somewhere
+// to actually take the order (see deliveryAddressMissing's checkout-blocking gate in PosApp.tsx).
+export function DeliveryAddressField({
+  value,
+  onChangeText,
+}: {
+  value: string;
+  onChangeText: (v: string) => void;
+}) {
+  const { fieldFont } = useCheckoutLayout();
+  return (
+    <View style={styles.nameInputRow}>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder="Delivery address (required)"
+        placeholderTextColor={colors.textMuted}
+        style={[styles.nameInput, webInputReset, { fontSize: fieldFont }]}
+        multiline
+        numberOfLines={2}
+        underlineColorAndroid="transparent"
+      />
     </View>
   );
 }
@@ -198,7 +227,7 @@ export function PaymentMethodRow({
       )}
       {onToggleSplit && (
         <Pressable onPress={onToggleSplit} style={styles.splitToggleLink}>
-          <Text style={styles.splitToggleLinkText}>{splitEnabled ? '✕ Cancel split payment' : 'Split between Cash + GCash'}</Text>
+          <Text style={styles.splitToggleLinkText}>{splitEnabled ? '✕ Cancel split payment' : 'Split Payment'}</Text>
         </Pressable>
       )}
     </View>
@@ -215,6 +244,15 @@ export function SplitPaymentBlock({
   gcashAmount,
   onChangeGcashAmount,
   mismatch,
+  allowGiftCard,
+  giftCardAmount,
+  onChangeGiftCardAmount,
+  giftCardCode,
+  onChangeGiftCardCode,
+  onCheckGiftCardBalance,
+  giftCardChecking,
+  giftCardBalance,
+  giftCardError,
 }: {
   total: number;
   cashAmount: string;
@@ -222,9 +260,23 @@ export function SplitPaymentBlock({
   gcashAmount: string;
   onChangeGcashAmount: (v: string) => void;
   mismatch: boolean;
+  /** Gift card as a THIRD leg of the split, alongside cash + GCash above — gated on the same
+   *  checkoutAllowGiftCard flag that gates the exclusive GiftCardPaymentBlock. Omitted entirely
+   *  (all these left undefined) when the store doesn't offer gift cards at all. */
+  allowGiftCard?: boolean;
+  giftCardAmount?: string;
+  onChangeGiftCardAmount?: (v: string) => void;
+  giftCardCode?: string;
+  onChangeGiftCardCode?: (v: string) => void;
+  onCheckGiftCardBalance?: () => void;
+  giftCardChecking?: boolean;
+  giftCardBalance?: number | null;
+  giftCardError?: string | null;
 }) {
-  const remaining = total - (Number(cashAmount) || 0) - (Number(gcashAmount) || 0);
-  const { fieldFont } = useCheckoutLayout();
+  const giftCardAmt = Number(giftCardAmount) || 0;
+  const remaining = total - (Number(cashAmount) || 0) - (Number(gcashAmount) || 0) - giftCardAmt;
+  const { fieldFont, actionPadH, stackActions } = useCheckoutLayout();
+  const giftCardInsufficient = giftCardBalance != null && giftCardBalance < giftCardAmt;
   return (
     <View>
       <Text style={styles.splitAmountLabel}>Cash Amount</Text>
@@ -253,6 +305,53 @@ export function SplitPaymentBlock({
           underlineColorAndroid="transparent"
         />
       </TenderActionRow>
+      {allowGiftCard && onChangeGiftCardAmount && (
+        <>
+          <Text style={[styles.splitAmountLabel, { marginTop: 12 }]}>Gift Card Amount</Text>
+          <TenderActionRow>
+            <Text style={[styles.pesoSign, { fontSize: fieldFont }]}>₱</Text>
+            <TextInput
+              value={giftCardAmount}
+              onChangeText={(v) => onChangeGiftCardAmount(v.replace(/[^0-9.]/g, ''))}
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              style={[styles.tenderInput, webInputReset, { fontSize: fieldFont }]}
+              underlineColorAndroid="transparent"
+            />
+          </TenderActionRow>
+          {giftCardAmt > 0 && onChangeGiftCardCode && (
+            <View style={{ marginTop: 10 }}>
+              <TenderActionRow
+                action={
+                  <Pressable
+                    onPress={() => { tapMedium(); onCheckGiftCardBalance?.(); }}
+                    style={[styles.tenderActionBtn, { paddingHorizontal: actionPadH }, stackActions && styles.tenderActionBtnStacked]}
+                  >
+                    {giftCardChecking ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <Text style={styles.quickCashText}>Check</Text>}
+                  </Pressable>
+                }
+              >
+                <TextInput
+                  value={giftCardCode}
+                  onChangeText={(v) => onChangeGiftCardCode(v.toUpperCase())}
+                  placeholder="Gift Card Code"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="characters"
+                  style={[styles.tenderInput, webInputReset, { fontSize: fieldFont }]}
+                  underlineColorAndroid="transparent"
+                />
+              </TenderActionRow>
+              {giftCardBalance != null && (
+                <Text style={[styles.tenderMsg, { color: giftCardInsufficient ? colors.danger : colors.success }]}>
+                  {giftCardInsufficient ? `Card balance ${peso(giftCardBalance)} is short of ${peso(giftCardAmt)}` : `Card balance: ${peso(giftCardBalance)}`}
+                </Text>
+              )}
+              {!!giftCardError && <Text style={[styles.tenderMsg, { color: colors.danger }]}>{giftCardError}</Text>}
+            </View>
+          )}
+        </>
+      )}
       {mismatch && (
         <Text style={styles.splitMismatchText}>
           {remaining > 0 ? `${peso(remaining)} remaining` : `${peso(Math.abs(remaining))} over the total`}

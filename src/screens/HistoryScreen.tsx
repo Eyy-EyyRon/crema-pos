@@ -12,14 +12,14 @@ import { modsDisplayString } from '../lib/posOrder';
 import { printReceipt, ReceiptStoreInfo } from '../lib/receipt';
 import { supabase } from '../lib/supabase';
 import { colors, fonts } from '../theme';
-import { QueueItemLine } from '../types';
+import { orderTypeLabel, QueueItemLine } from '../types';
 import { useBreakpoint } from '../breakpoints';
 
 type HistoryOrder = {
   id: string;
   no: string;
   status: string;
-  orderType: 'dine-in' | 'takeout';
+  orderType: 'dine-in' | 'takeout' | 'delivery';
   createdAt: string;
   total: number;
   paymentMethod: string;
@@ -173,7 +173,7 @@ export function HistoryScreen({
           customerName: o.customerName,
           gcashReference: o.paymentMethod === 'gcash' ? o.gcashReference : null,
         },
-        o.orderType === 'takeout' ? 'Takeout' : 'Dine-In',
+        orderTypeLabel(o.orderType),
         storeInfo,
         new Date(o.createdAt)
       );
@@ -206,7 +206,7 @@ export function HistoryScreen({
   }, [orders, search]);
 
   const voidableTarget = voidTarget
-    ? { id: voidTarget.id, no: voidTarget.no, type: (voidTarget.orderType === 'takeout' ? 'Takeout' : 'Dine-In') as 'Dine-In' | 'Takeout', mins: 0, items: voidTarget.items, total: voidTarget.total, restoreItems: voidTarget.restoreItems, barista_id: voidTarget.baristaId }
+    ? { id: voidTarget.id, no: voidTarget.no, type: orderTypeLabel(voidTarget.orderType), mins: 0, items: voidTarget.items, total: voidTarget.total, restoreItems: voidTarget.restoreItems, barista_id: voidTarget.baristaId }
     : null;
 
   return (

@@ -1,6 +1,14 @@
-export type OrderType = 'dine-in' | 'takeout';
+export type OrderType = 'dine-in' | 'takeout' | 'delivery';
 export type PayMethod = 'cash' | 'gcash' | 'split' | 'gift_card';
 export type Screen = 'orderType' | 'menu' | 'checkout' | 'success' | 'queue' | 'history';
+
+// Shared forward mapping from the lowercase OrderType wire value to the Title-Case label this
+// app displays everywhere (queue badges, receipt/success views, the header pill) — also exactly
+// the shape QueueEntry.type below uses, so the same helper builds a QueueEntry from an order row.
+// Single source of truth so a display label can't drift out of sync between call sites.
+export function orderTypeLabel(t: OrderType): 'Dine-In' | 'Takeout' | 'Delivery' {
+  return t === 'takeout' ? 'Takeout' : t === 'delivery' ? 'Delivery' : 'Dine-In';
+}
 
 export interface MenuItem {
   id: string;
@@ -74,7 +82,7 @@ export interface QueueItemLine {
 export interface QueueEntry {
   id: string;
   no: string;
-  type: 'Dine-In' | 'Takeout';
+  type: 'Dine-In' | 'Takeout' | 'Delivery';
   mins: number;
   items: QueueItemLine[];
   total: number;
